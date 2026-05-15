@@ -1,0 +1,42 @@
+# Path to your Lightroom Classic catalog (.lrcat file)
+catalog = "~/Pictures/ClassicLibrary/ClassicLibrary.lrcat"
+
+# Immich server URL and API key (generate at Immich → Account Settings → API Keys)
+immich_url = "http://localhost:2283"
+api_key = "your-api-key-here"
+
+# Immich user IDs to share every synced album with (optional)
+# share_albums_with = ["user-uuid-here"]
+
+# Map Lightroom folder paths to Immich original paths.
+# lr_path is stripped and replaced with immich_path.
+# Multiple mappings supported — first match wins.
+[[path_map]]
+lr_path = ""
+immich_path = "/external/images/raw/"
+
+[exclude]
+# Lightroom collection parent IDs to skip (find via `lrimmich status --verbose`)
+parent_ids = []
+# Glob patterns matched against full collection names (e.g. "_tmp/*")
+name_patterns = []
+
+[sync]
+# Toggle each sync domain on or off
+albums = true
+favorites = true
+ratings = true
+tags = true
+
+[favorites]
+# "collections" = only favorite assets that belong to synced collections
+# "all" = favorite every resolved asset with pick flag
+scope = "collections"
+
+[safety]
+# Block album deletion when more than this many albums would be removed
+delete_threshold = 100
+# Block asset removal when it exceeds this percentage of an album's assets
+remove_percent_limit = 50
+# Set true to never delete albums, regardless of other settings
+disable_deletes = false
