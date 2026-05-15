@@ -1,0 +1,41 @@
+[project]
+name = "lrimmich"
+version = "0.1.0"
+description = "Sync Lightroom Classic catalogs to Immich"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.13.4",
+    "rich>=15.0.0",
+    "typer>=0.25.1",
+]
+
+[project.scripts]
+lrimmich = "lrimmich.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pyrefly>=1.0.0",
+    "pytest>=9.0.3",
+    "respx>=0.23.1",
+    "ruff>=0.15.13",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyrefly]
+project_includes = ["src"]

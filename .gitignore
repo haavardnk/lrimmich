@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.so
+dist/
+*.egg-info/
+.venv/
+.env
+.python-version
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+state.db
+lr_immich_sync.py
