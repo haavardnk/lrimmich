@@ -104,8 +104,21 @@ def resolve(
 def doctor(
     config: ConfigOption = None,
 ) -> None:
-    typer.echo("doctor: not implemented")
-    raise typer.Exit(1)
+    from lrimmich.doctor import run_doctor
+    from lrimmich.immich import ImmichClient
+    from lrimmich.state import StateDB
+
+    cfg = load_config(config)
+    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    state = StateDB()
+    report = run_doctor(cfg, client, state)
+    for check in report.checks:
+        status = "OK" if check.ok else "FAIL"
+        typer.echo(f"[{status}] {check.name}: {check.message}")
+    state.close()
+    client.close()
+    if not report.all_ok:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -113,8 +126,28 @@ def adopt(
     config: ConfigOption = None,
     apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
 ) -> None:
-    typer.echo("adopt: not implemented")
-    raise typer.Exit(1)
+    from lrimmich.adopt import apply_adopt, find_adopt_candidates
+    from lrimmich.catalog import read_collections
+    from lrimmich.immich import ImmichClient
+    from lrimmich.state import StateDB
+
+    cfg = load_config(config)
+    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    state = StateDB()
+    collections = read_collections(cfg.catalog, cfg.exclude)
+    candidates = find_adopt_candidates(collections, client, state)
+    for c in candidates:
+        tag = " [CONFLICT]" if c.conflict else ""
+        typer.echo(f"{c.collection_name} -> {c.immich_album_id}{tag}")
+    if not candidates:
+        typer.echo("No albums to adopt")
+    elif apply:
+        adopted = apply_adopt(candidates, state)
+        typer.echo(f"Adopted {adopted} albums")
+    else:
+        typer.echo("Run with --apply to commit")
+    state.close()
+    client.close()
 
 
 @config_app.command("init")
