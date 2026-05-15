@@ -49,6 +49,7 @@ def plan_album_sync(
     safety: SafetyConfig | None = None,
     force: bool = False,
     no_delete: bool = False,
+    skip_empty: bool = True,
 ) -> list[AlbumAction]:
     safety = safety or SafetyConfig()
     share_with = share_with or []
@@ -58,6 +59,12 @@ def plan_album_sync(
     for collection in collections:
         asset_ids = [resolved[rp] for rp in collection.relative_paths if rp in resolved]
         ownership = state.get_album_ownership(collection.id)
+
+        if skip_empty and not asset_ids:
+            if ownership is None:
+                continue
+            lr_ids.discard(collection.id)
+            continue
 
         if ownership is None:
             actions.append(

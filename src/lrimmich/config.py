@@ -25,6 +25,7 @@ class SyncConfig(BaseConfig):
     favorites: bool = True
     ratings: bool = True
     tags: bool = True
+    skip_empty: bool = True
 
 
 class FavoritesConfig(BaseConfig):

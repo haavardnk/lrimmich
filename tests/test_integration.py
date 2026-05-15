@@ -1,0 +1,157 @@
+from pathlib import Path
+
+import httpx
+import pytest
+import respx
+
+from lrimmich.config import Config
+from lrimmich.immich import ImmichClient
+from lrimmich.orchestrator import run_sync
+from lrimmich.state import StateDB
+from tests.fixtures.catalog_factory import CatalogBuilder
+
+IMMICH_URL = "http://immich.test"
+API = IMMICH_URL + "/api"
+
+
+@pytest.fixture()
+def state(tmp_path: Path) -> StateDB:
+    return StateDB(tmp_path / "state.db")
+
+
+@pytest.fixture()
+def client() -> ImmichClient:
+    return ImmichClient(IMMICH_URL, "test-key")
+
+
+@pytest.fixture()
+def catalog(tmp_path: Path) -> Path:
+    builder = CatalogBuilder(tmp_path / "test.lrcat")
+    builder.add_collection(1, "Vacation")
+    builder.add_image(1, "beach.jpg", "photos/", pick=1)
+    builder.add_image(2, "mountain.jpg", "photos/")
+    builder.add_collection_image(1, 1)
+    builder.add_collection_image(1, 2)
+    return builder.build()
+
+
+@pytest.fixture()
+def cfg(catalog: Path) -> Config:
+    return Config(
+        catalog=catalog,
+        immich_url=IMMICH_URL,
+        api_key="test-key",
+    )
+
+
+def _mock_folders(asset_map: dict[str, str]) -> None:
+    folder_assets = [
+        {"id": aid, "originalPath": f"photos/{fn}"} for fn, aid in asset_map.items()
+    ]
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(json=folder_assets)
+
+
+def _mock_album_crud() -> dict[str, list[dict[str, str]]]:
+    albums: dict[str, list[dict[str, str]]] = {}
+
+    def create_handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        data = json.loads(request.content.decode())
+        album_id = f"imm-{len(albums) + 1}"
+        asset_ids = data.get("assetIds", [])
+        albums[album_id] = [{"id": aid} for aid in asset_ids]
+        return httpx.Response(200, json={"id": album_id})
+
+    def get_handler(request: httpx.Request, route: respx.Route) -> httpx.Response:
+        album_id = str(request.url).split("/albums/")[-1]
+        assets = albums.get(album_id, [])
+        return httpx.Response(
+            200,
+            json={
+                "assets": assets,
+                "albumUsers": [],
+            },
+        )
+
+    respx.post(f"{API}/albums").mock(side_effect=create_handler)
+    respx.get(url__regex=rf"{API}/albums/imm-\d+$").mock(side_effect=get_handler)
+    respx.put(f"{API}/assets").mock(return_value=httpx.Response(200, json=None))
+    return albums
+
+
+@respx.mock
+def test_status_then_sync_idempotency(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
+    _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
+    _mock_album_crud()
+
+    status1 = run_sync(cfg, client, state, dry_run=True)
+    assert status1.has_drift
+    assert status1.albums_created == 1
+
+    run_sync(cfg, client, state, dry_run=False)
+
+    status2 = run_sync(cfg, client, state, dry_run=True)
+    assert status2.albums_created == 0
+    assert status2.albums_renamed == 0
+    assert status2.albums_deleted == 0
+    assert status2.assets_added == 0
+    assert status2.assets_removed == 0
+
+
+@respx.mock
+def test_drift_detection(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+    _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
+    _mock_album_crud()
+
+    summary = run_sync(cfg, client, state, dry_run=True)
+
+    assert summary.has_drift
+    assert summary.albums_created > 0
+    assert summary.favorites.favorited > 0
+
+
+@respx.mock
+def test_audit_log_entries(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+    _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
+    _mock_album_crud()
+
+    run_sync(cfg, client, state, dry_run=False)
+
+    logs = state.get_audit_log()
+    actions = {log["action"] for log in logs}
+    assert "create_album" in actions
+    assert "sync_favorites" in actions
+
+
+@respx.mock
+def test_sync_json_shape_stable(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
+    _mock_folders({})
+
+    s1 = run_sync(cfg, client, state, dry_run=True)
+    s2 = run_sync(cfg, client, state, dry_run=True)
+
+    d1 = s1.to_dict()
+    d2 = s2.to_dict()
+    assert set(d1.keys()) == set(d2.keys())
+    assert d1 == d2
+
+
+@respx.mock
+def test_multi_domain_orchestration(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
+    _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
+    _mock_album_crud()
+
+    summary = run_sync(cfg, client, state, dry_run=False)
+
+    assert not summary.errors
+    assert state.get_album_ownership(1) is not None
+    logs = state.get_audit_log()
+    assert len(logs) >= 2

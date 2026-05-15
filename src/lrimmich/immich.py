@@ -150,3 +150,9 @@ class ImmichClient:
         if not asset_ids:
             return
         self._request("PUT", f"/tags/{tag_id}/assets", {"ids": asset_ids})
+
+    def get_folder_paths(self) -> list[str]:
+        return self._request("GET", "/view/folder/unique-paths") or []
+
+    def get_folder_assets(self, path: str) -> list[dict[str, Any]]:
+        return self._request("GET", f"/view/folder?path={path}") or []

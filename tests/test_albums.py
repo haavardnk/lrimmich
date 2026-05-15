@@ -58,11 +58,38 @@ def test_create_new_album(state: StateDB, client: ImmichClient) -> None:
 
 
 @respx.mock
+def test_skip_empty_collection(state: StateDB, client: ImmichClient) -> None:
+    col = _col(id=10, full_name="Empty")
+    resolved: dict[str, str] = {}
+
+    actions = plan_album_sync([col], resolved, state, client, skip_empty=True)
+    assert len(actions) == 0
+
+    actions = plan_album_sync([col], resolved, state, client, skip_empty=False)
+    assert len(actions) == 1
+    assert actions[0].kind == "create"
+
+
+@respx.mock
+def test_skip_empty_deletes_owned_album(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "album-1", "NowEmpty")
+    col = _col(id=10, full_name="NowEmpty")
+    resolved: dict[str, str] = {}
+
+    actions = plan_album_sync([col], resolved, state, client, skip_empty=True)
+    assert len(actions) == 1
+    assert actions[0].kind == "delete"
+    assert actions[0].immich_album_id == "album-1"
+
+
+@respx.mock
 def test_create_and_share(state: StateDB, client: ImmichClient) -> None:
     col = _col(id=10, full_name="Shared")
     resolved: dict[str, str] = {}
 
-    actions = plan_album_sync([col], resolved, state, client, share_with=["user-1"])
+    actions = plan_album_sync(
+        [col], resolved, state, client, share_with=["user-1"], skip_empty=False
+    )
 
     assert len(actions) == 2
     assert actions[0].kind == "create"
@@ -154,7 +181,7 @@ def test_rename_detection(state: StateDB, client: ImmichClient) -> None:
     )
 
     col = _col(id=10, full_name="NewName")
-    actions = plan_album_sync([col], {}, state, client)
+    actions = plan_album_sync([col], {}, state, client, skip_empty=False)
 
     assert any(a.kind == "rename" and a.album_name == "NewName" for a in actions)
 

@@ -27,6 +27,8 @@ albums = true
 favorites = true
 ratings = true
 tags = true
+# Skip creating albums for collections with no resolved assets
+skip_empty = true
 
 [favorites]
 # "collections" = only favorite assets that belong to synced collections

@@ -1,4 +1,3 @@
-import httpx
 import pytest
 import respx
 
@@ -37,20 +36,23 @@ def test_map_path_multi_root() -> None:
     assert map_path("other/c.jpg", path_map) == "other/c.jpg"
 
 
+IMMICH_URL = "http://immich.test"
+API = f"{IMMICH_URL}/api"
+
+
+def _mock_folders(folders: list[str], assets: dict[str, list[dict[str, str]]]) -> None:
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=folders)
+    for folder, items in assets.items():
+        respx.get(f"{API}/view/folder", params={"path": folder}).respond(
+            json=[{"id": a["id"], "originalPath": a["originalPath"]} for a in items]
+        )
+
+
 @respx.mock
-def test_single_match(client: ImmichClient, base_url: str) -> None:
-    respx.post(f"{base_url}/api/search/metadata").respond(
-        json={
-            "assets": {
-                "items": [
-                    {
-                        "id": "asset-1",
-                        "originalPath": "/ext/a.jpg",
-                        "isTrashed": False,
-                    }
-                ]
-            }
-        }
+def test_single_match(client: ImmichClient) -> None:
+    _mock_folders(
+        ["/ext"],
+        {"/ext": [{"id": "asset-1", "originalPath": "/ext/a.jpg"}]},
     )
     path_map = [PathMapping(lr_path="", immich_path="/ext/")]
     result = resolve_paths({"a.jpg"}, path_map, client)
@@ -58,24 +60,13 @@ def test_single_match(client: ImmichClient, base_url: str) -> None:
 
 
 @respx.mock
-def test_ambiguous_match(client: ImmichClient, base_url: str) -> None:
-    respx.post(f"{base_url}/api/search/metadata").respond(
-        json={
-            "assets": {
-                "items": [
-                    {
-                        "id": "wrong",
-                        "originalPath": "/ext/other/a.jpg",
-                        "isTrashed": False,
-                    },
-                    {
-                        "id": "correct",
-                        "originalPath": "/ext/2024/a.jpg",
-                        "isTrashed": False,
-                    },
-                ]
-            }
-        }
+def test_ambiguous_match(client: ImmichClient) -> None:
+    _mock_folders(
+        ["/ext/other", "/ext/2024"],
+        {
+            "/ext/other": [{"id": "wrong", "originalPath": "/ext/other/a.jpg"}],
+            "/ext/2024": [{"id": "correct", "originalPath": "/ext/2024/a.jpg"}],
+        },
     )
     path_map = [PathMapping(lr_path="", immich_path="/ext/")]
     result = resolve_paths({"2024/a.jpg"}, path_map, client)
@@ -83,19 +74,13 @@ def test_ambiguous_match(client: ImmichClient, base_url: str) -> None:
 
 
 @respx.mock
-def test_trashed_asset_filtered(client: ImmichClient, base_url: str) -> None:
-    respx.post(f"{base_url}/api/search/metadata").respond(
-        json={
-            "assets": {
-                "items": [
-                    {
-                        "id": "trashed",
-                        "originalPath": "/ext/a.jpg",
-                        "isTrashed": True,
-                    }
-                ]
-            }
-        }
+def test_trashed_asset_filtered(client: ImmichClient) -> None:
+    _mock_folders(
+        ["/ext"],
+        {"/ext": [{"id": "trashed", "originalPath": "/ext/a.jpg", "isTrashed": True}]},
+    )
+    respx.get(f"{API}/view/folder", params={"path": "/ext"}).respond(
+        json=[{"id": "trashed", "originalPath": "/ext/a.jpg", "isTrashed": True}]
     )
     path_map = [PathMapping(lr_path="", immich_path="/ext/")]
     result = resolve_paths({"a.jpg"}, path_map, client)
@@ -103,50 +88,22 @@ def test_trashed_asset_filtered(client: ImmichClient, base_url: str) -> None:
 
 
 @respx.mock
-def test_unmatched(client: ImmichClient, base_url: str) -> None:
-    respx.post(f"{base_url}/api/search/metadata").respond(
-        json={"assets": {"items": []}}
-    )
+def test_unmatched(client: ImmichClient) -> None:
+    _mock_folders(["/ext"], {"/ext": []})
     path_map = [PathMapping(lr_path="", immich_path="/ext/")]
     result = resolve_paths({"missing.jpg"}, path_map, client)
     assert result == {}
 
 
 @respx.mock
-def test_multi_root_resolve(client: ImmichClient, base_url: str) -> None:
-    def _respond(request: httpx.Request) -> httpx.Response:
-        body = request.content.decode()
-        if "photo.jpg" in body:
-            return httpx.Response(
-                200,
-                json={
-                    "assets": {
-                        "items": [
-                            {
-                                "id": "a1",
-                                "originalPath": "/raw/photo.jpg",
-                                "isTrashed": False,
-                            }
-                        ]
-                    }
-                },
-            )
-        return httpx.Response(
-            200,
-            json={
-                "assets": {
-                    "items": [
-                        {
-                            "id": "a2",
-                            "originalPath": "/jpeg/render.jpg",
-                            "isTrashed": False,
-                        }
-                    ]
-                }
-            },
-        )
-
-    respx.post(f"{base_url}/api/search/metadata").mock(side_effect=_respond)
+def test_multi_root_resolve(client: ImmichClient) -> None:
+    _mock_folders(
+        ["/raw", "/jpeg"],
+        {
+            "/raw": [{"id": "a1", "originalPath": "/raw/photo.jpg"}],
+            "/jpeg": [{"id": "a2", "originalPath": "/jpeg/render.jpg"}],
+        },
+    )
     path_map = [
         PathMapping(lr_path="raw/", immich_path="/raw/"),
         PathMapping(lr_path="jpeg/", immich_path="/jpeg/"),
@@ -156,27 +113,27 @@ def test_multi_root_resolve(client: ImmichClient, base_url: str) -> None:
 
 
 @respx.mock
-def test_deduplicates_filename_searches(client: ImmichClient, base_url: str) -> None:
-    route = respx.post(f"{base_url}/api/search/metadata")
-    route.respond(
-        json={
-            "assets": {
-                "items": [
-                    {
-                        "id": "a1",
-                        "originalPath": "/ext/dir1/same.jpg",
-                        "isTrashed": False,
-                    },
-                    {
-                        "id": "a2",
-                        "originalPath": "/ext/dir2/same.jpg",
-                        "isTrashed": False,
-                    },
-                ]
-            }
-        }
+def test_irrelevant_folders_skipped(client: ImmichClient) -> None:
+    respx.get(f"{API}/view/folder/unique-paths").respond(
+        json=["/ext/photos", "/other/videos"]
+    )
+    respx.get(f"{API}/view/folder", params={"path": "/ext/photos"}).respond(
+        json=[{"id": "a1", "originalPath": "/ext/photos/a.jpg"}]
+    )
+    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
+    result = resolve_paths({"photos/a.jpg"}, path_map, client)
+    assert result == {"photos/a.jpg": "a1"}
+
+
+@respx.mock
+def test_same_filename_different_folders(client: ImmichClient) -> None:
+    _mock_folders(
+        ["/ext/dir1", "/ext/dir2"],
+        {
+            "/ext/dir1": [{"id": "a1", "originalPath": "/ext/dir1/same.jpg"}],
+            "/ext/dir2": [{"id": "a2", "originalPath": "/ext/dir2/same.jpg"}],
+        },
     )
     path_map = [PathMapping(lr_path="", immich_path="/ext/")]
     result = resolve_paths({"dir1/same.jpg", "dir2/same.jpg"}, path_map, client)
     assert result == {"dir1/same.jpg": "a1", "dir2/same.jpg": "a2"}
-    assert route.call_count == 1

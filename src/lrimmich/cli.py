@@ -1,11 +1,19 @@
+import json
 from importlib import resources
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import lrimmich
+from lrimmich.adopt import apply_adopt, find_adopt_candidates
+from lrimmich.catalog import read_collections
 from lrimmich.config import DEFAULT_CONFIG_PATH, load_config
+from lrimmich.doctor import run_doctor
+from lrimmich.immich import ImmichClient
+from lrimmich.orchestrator import run_sync
+from lrimmich.state import StateDB
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
 sync_app = typer.Typer(name="sync", no_args_is_help=True)
@@ -39,8 +47,55 @@ def sync_all(
     force: ForceOption = False,
     no_delete: NoDeleteOption = False,
 ) -> None:
-    typer.echo("sync: not implemented")
-    raise typer.Exit(1)
+    cfg = load_config(config)
+    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    state = StateDB()
+    show_progress = not quiet and not json_output
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+        disable=not show_progress,
+    ) as progress:
+        task = progress.add_task("Starting...", total=None)
+
+        def on_status(msg: str) -> None:
+            progress.update(task, description=msg)
+
+        def on_progress(current: int, total: int) -> None:
+            progress.update(task, description=f"Resolving paths... {current}/{total}")
+
+        summary = run_sync(
+            cfg,
+            client,
+            state,
+            dry_run=dry_run,
+            force=force,
+            no_delete=no_delete,
+            on_status=on_status,
+            on_progress=on_progress,
+        )
+    if json_output:
+        typer.echo(json.dumps(summary.to_dict(), indent=2))
+    elif not quiet:
+        if dry_run:
+            typer.echo("[dry-run] No changes applied")
+        typer.echo(
+            f"albums: +{summary.albums_created} "
+            f"~{summary.albums_renamed} "
+            f"-{summary.albums_deleted}"
+        )
+        typer.echo(f"assets: +{summary.assets_added} -{summary.assets_removed}")
+        typer.echo(
+            f"favorites: +{summary.favorites.favorited} "
+            f"-{summary.favorites.unfavorited}"
+        )
+        for err in summary.errors:
+            typer.echo(f"ERROR: {err}", err=True)
+    state.close()
+    client.close()
+    if summary.errors:
+        raise typer.Exit(1)
 
 
 @sync_app.command()
@@ -88,8 +143,53 @@ def status(
     verbose: VerboseOption = 0,
     quiet: QuietOption = False,
 ) -> None:
-    typer.echo("status: not implemented")
-    raise typer.Exit(1)
+    cfg = load_config(config)
+    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    state = StateDB()
+    show_progress = not quiet and not json_output
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+        disable=not show_progress,
+    ) as progress:
+        task = progress.add_task("Starting...", total=None)
+
+        def on_status(msg: str) -> None:
+            progress.update(task, description=msg)
+
+        def on_progress(current: int, total: int) -> None:
+            progress.update(task, description=f"Resolving paths... {current}/{total}")
+
+        summary = run_sync(
+            cfg,
+            client,
+            state,
+            dry_run=True,
+            on_status=on_status,
+            on_progress=on_progress,
+        )
+    if json_output:
+        typer.echo(json.dumps(summary.to_dict(), indent=2))
+    elif not quiet:
+        if summary.has_drift:
+            typer.echo("Drift detected:")
+        else:
+            typer.echo("No drift")
+        typer.echo(
+            f"albums: +{summary.albums_created} "
+            f"~{summary.albums_renamed} "
+            f"-{summary.albums_deleted}"
+        )
+        typer.echo(f"assets: +{summary.assets_added} -{summary.assets_removed}")
+        typer.echo(
+            f"favorites: +{summary.favorites.favorited} "
+            f"-{summary.favorites.unfavorited}"
+        )
+    state.close()
+    client.close()
+    if summary.has_drift:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -104,10 +204,6 @@ def resolve(
 def doctor(
     config: ConfigOption = None,
 ) -> None:
-    from lrimmich.doctor import run_doctor
-    from lrimmich.immich import ImmichClient
-    from lrimmich.state import StateDB
-
     cfg = load_config(config)
     client = ImmichClient(cfg.immich_url, cfg.api_key)
     state = StateDB()
@@ -126,11 +222,6 @@ def adopt(
     config: ConfigOption = None,
     apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
 ) -> None:
-    from lrimmich.adopt import apply_adopt, find_adopt_candidates
-    from lrimmich.catalog import read_collections
-    from lrimmich.immich import ImmichClient
-    from lrimmich.state import StateDB
-
     cfg = load_config(config)
     client = ImmichClient(cfg.immich_url, cfg.api_key)
     state = StateDB()

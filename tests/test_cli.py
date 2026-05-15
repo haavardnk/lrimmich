@@ -73,33 +73,7 @@ def test_config_init_already_exists(
     assert result.exit_code == 1
 
 
-def test_sync_all_stub() -> None:
-    result = runner.invoke(app, ["sync", "all"])
+def test_sync_albums_stub() -> None:
+    result = runner.invoke(app, ["sync", "albums"])
     assert result.exit_code == 1
     assert "not implemented" in result.output
-
-
-def test_status_stub() -> None:
-    result = runner.invoke(app, ["status"])
-    assert result.exit_code == 1
-    assert "not implemented" in result.output
-
-
-def test_json_flag_accepted() -> None:
-    result = runner.invoke(app, ["sync", "all", "--json"])
-    assert result.exit_code == 1
-
-
-def test_dry_run_flag_accepted() -> None:
-    result = runner.invoke(app, ["sync", "albums", "--dry-run"])
-    assert result.exit_code == 1
-
-
-def test_force_flag_accepted() -> None:
-    result = runner.invoke(app, ["sync", "albums", "--force"])
-    assert result.exit_code == 1
-
-
-def test_no_delete_flag_accepted() -> None:
-    result = runner.invoke(app, ["sync", "albums", "--no-delete"])
-    assert result.exit_code == 1

@@ -87,17 +87,16 @@ def check_path_map(
         if not row:
             return CheckResult("path_map", False, "No files in catalog")
         relative_path = row["pathFromRoot"] + row["idx_filename"]
-        filename = row["idx_filename"]
         expected = map_path(relative_path, path_map)
-        results = client.search_metadata(filename)
-        for asset in results:
-            orig = asset.get("originalPath", "")
-            if orig == expected:
+        expected_folder = expected.rsplit("/", 1)[0]
+        assets = client.get_folder_assets(expected_folder)
+        for asset in assets:
+            if asset.get("originalPath", "") == expected:
                 return CheckResult("path_map", True, f"Verified: {expected}")
         return CheckResult(
             "path_map",
             False,
-            f"File '{filename}' found but no path matched (expected {expected})",
+            f"No asset matched (expected {expected})",
         )
     except Exception as e:
         return CheckResult("path_map", False, str(e))

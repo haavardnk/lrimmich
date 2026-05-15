@@ -98,14 +98,10 @@ def test_check_api_permissions_fail(client: ImmichClient) -> None:
 
 @respx.mock
 def test_check_path_map_pass(catalog: Path, client: ImmichClient) -> None:
-    respx.post(f"{API}/search/metadata").mock(
+    respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "assets": {
-                    "items": [{"id": "a1", "originalPath": "/ext/photos/img.jpg"}]
-                }
-            },
+            json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
     mappings = [PathMapping(lr_path="", immich_path="/ext/")]
@@ -115,11 +111,8 @@ def test_check_path_map_pass(catalog: Path, client: ImmichClient) -> None:
 
 @respx.mock
 def test_check_path_map_no_assets(catalog: Path, client: ImmichClient) -> None:
-    respx.post(f"{API}/search/metadata").mock(
-        return_value=httpx.Response(
-            200,
-            json={"assets": {"items": []}},
-        )
+    respx.get(f"{API}/view/folder").mock(
+        return_value=httpx.Response(200, json=[]),
     )
     mappings = [PathMapping(lr_path="", immich_path="/ext/")]
     result = check_path_map(mappings, catalog, client)
@@ -146,14 +139,10 @@ def test_run_doctor_all_pass(
     )
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(200, json=[]))
     respx.get(f"{API}/tags").mock(return_value=httpx.Response(200, json=[]))
-    respx.post(f"{API}/search/metadata").mock(
+    respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "assets": {
-                    "items": [{"id": "a1", "originalPath": "/ext/photos/img.jpg"}]
-                }
-            },
+            json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
     cfg = Config(
