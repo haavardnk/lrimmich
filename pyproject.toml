@@ -39,3 +39,4 @@ testpaths = ["tests"]
 
 [tool.pyrefly]
 project_includes = ["src"]
+python_interpreter = ".venv/bin/python"
