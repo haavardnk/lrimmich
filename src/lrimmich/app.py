@@ -1,3 +1,4 @@
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
 
@@ -10,7 +11,30 @@ from lrimmich.sync.orchestrator import run_sync
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config, SyncConfig, load_config
 
-app = typer.Typer(name="lrimmich", no_args_is_help=True)
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"lrimmich {version('lrimmich')}")
+        raise typer.Exit()
+
+
+app = typer.Typer(
+    name="lrimmich",
+    no_args_is_help=True,
+    callback=lambda version: None,
+)
+
+
+@app.callback()
+def _main(
+    version: Annotated[
+        bool,
+        typer.Option("--version", "-V", callback=_version_callback, is_eager=True),
+    ] = False,
+) -> None:
+    pass
+
+
 config_app = typer.Typer(name="config", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 

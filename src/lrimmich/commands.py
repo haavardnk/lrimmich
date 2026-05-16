@@ -2,6 +2,7 @@ import json
 import os
 import platform
 import subprocess
+from datetime import UTC
 from importlib import resources
 from typing import Annotated
 
@@ -22,7 +23,7 @@ from lrimmich.app import (
 )
 from lrimmich.clients.catalog import read_collections
 from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
+from lrimmich.clients.state import DEFAULT_STATE_PATH, StateDB
 from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.utils.config import DEFAULT_CONFIG_PATH, load_config
 from lrimmich.utils.doctor import DoctorReport, run_doctor
@@ -166,3 +167,44 @@ def config_edit(config: ConfigOption = None) -> None:
         subprocess.call(["open", str(path)])
     else:
         subprocess.call(["xdg-open", str(path)])
+
+
+@app.command()
+def log(
+    limit: Annotated[int, typer.Option("--limit", "-n")] = 20,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    state = StateDB(DEFAULT_STATE_PATH)
+    try:
+        entries = state.get_audit_log(limit=limit)
+    finally:
+        state.close()
+    if not entries:
+        typer.echo("No log entries.")
+        return
+    if json_output:
+        typer.echo(json.dumps(entries, indent=2))
+        return
+    from datetime import datetime
+
+    for e in reversed(entries):
+        ts = datetime.fromtimestamp(e["ts"], tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+        payload = json.loads(e["payload_json"]) if e.get("payload_json") else {}
+        detail = " ".join(f"{k}={v}" for k, v in payload.items())
+        typer.echo(f"{ts}  {e['action']:<25} {detail}")
+
+
+@app.command()
+def reset(
+    force: Annotated[bool, typer.Option("--force", "-f")] = False,
+) -> None:
+    if not DEFAULT_STATE_PATH.exists():
+        typer.echo("No state database found.")
+        return
+    if not force:
+        typer.confirm(
+            f"Delete {DEFAULT_STATE_PATH}? Next sync will rebuild from scratch.",
+            abort=True,
+        )
+    DEFAULT_STATE_PATH.unlink()
+    typer.echo("State cleared.")

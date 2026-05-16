@@ -93,6 +93,77 @@ def test_config_edit_missing_file(tmp_path: Path) -> None:
     assert "not found" in result.output
 
 
+def test_version_flag() -> None:
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert "lrimmich" in result.output
+
+
+def test_log_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", tmp_path / "state.db")
+    result = runner.invoke(app, ["log"])
+    assert result.exit_code == 0
+    assert "No log entries" in result.output
+
+
+def test_log_shows_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from lrimmich.clients.state import StateDB
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    state = StateDB(db_path)
+    state.append_audit_log("sync_albums", "albums", payload={"created": 3})
+    state.close()
+    result = runner.invoke(app, ["log"])
+    assert result.exit_code == 0
+    assert "sync_albums" in result.output
+    assert "created=3" in result.output
+
+
+def test_log_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    from lrimmich.clients.state import StateDB
+
+    db_path = tmp_path / "state.db"
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    state = StateDB(db_path)
+    state.append_audit_log("sync_albums", "albums")
+    state.close()
+    result = runner.invoke(app, ["log", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert len(data) == 1
+    assert data[0]["action"] == "sync_albums"
+
+
+def test_reset_deletes_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "state.db"
+    db_path.write_text("fake")
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    result = runner.invoke(app, ["reset", "--force"])
+    assert result.exit_code == 0
+    assert "State cleared" in result.output
+    assert not db_path.exists()
+
+
+def test_reset_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", tmp_path / "nope.db")
+    result = runner.invoke(app, ["reset", "--force"])
+    assert result.exit_code == 0
+    assert "No state database" in result.output
+
+
+def test_reset_prompts_without_force(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "state.db"
+    db_path.write_text("fake")
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    runner.invoke(app, ["reset"], input="n\n")
+    assert db_path.exists()
+
+
 def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
