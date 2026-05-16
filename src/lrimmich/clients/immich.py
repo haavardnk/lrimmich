@@ -1,12 +1,15 @@
-import time
 from typing import Any, Self
 
 import httpx
+import stamina
 
 CHUNK_SIZE = 1000
 MAX_RETRIES = 3
-RETRY_BACKOFF = 1.0
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+
+class _RetryableStatusError(httpx.HTTPStatusError):
+    pass
 
 
 class ImmichClient:
@@ -23,6 +26,7 @@ class ImmichClient:
     def __exit__(self, *args: object) -> None:
         self.close()
 
+    @stamina.retry(on=_RetryableStatusError, attempts=MAX_RETRIES)
     def _request(
         self,
         method: str,
@@ -30,28 +34,17 @@ class ImmichClient:
         json: dict[str, Any] | None = None,
         params: dict[str, str] | None = None,
     ) -> Any:
-        last_exc: httpx.HTTPStatusError | None = None
-        for attempt in range(MAX_RETRIES):
-            response = self._client.request(method, path, json=json, params=params)
-            if response.status_code in RETRYABLE_STATUSES:
-                last_exc = self._make_status_error(response)
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_BACKOFF * (2**attempt))
-                continue
-            response.raise_for_status()
-            if not response.content:
-                return None
-            return response.json()
-        if last_exc is not None:
-            raise last_exc
-        raise RuntimeError("unreachable: no retries attempted")
-
-    def _make_status_error(self, response: httpx.Response) -> httpx.HTTPStatusError:
-        return httpx.HTTPStatusError(
-            message=f"{response.status_code}",
-            request=response.request,
-            response=response,
-        )
+        response = self._client.request(method, path, json=json, params=params)
+        if response.status_code in RETRYABLE_STATUSES:
+            raise _RetryableStatusError(
+                message=f"{response.status_code}",
+                request=response.request,
+                response=response,
+            )
+        response.raise_for_status()
+        if not response.content:
+            return None
+        return response.json()
 
     def close(self) -> None:
         self._client.close()
