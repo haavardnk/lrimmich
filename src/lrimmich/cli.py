@@ -9,10 +9,10 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 import lrimmich
 from lrimmich.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.catalog import read_collections
-from lrimmich.config import DEFAULT_CONFIG_PATH, load_config
+from lrimmich.config import DEFAULT_CONFIG_PATH, SyncConfig, load_config
 from lrimmich.doctor import run_doctor
 from lrimmich.immich import ImmichClient
-from lrimmich.orchestrator import run_sync
+from lrimmich.orchestrator import SyncSummary, run_sync
 from lrimmich.state import StateDB
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
@@ -29,12 +29,37 @@ DryRunOption = Annotated[
     bool, typer.Option("--dry-run", help="Preview without changes.")
 ]
 JsonOption = Annotated[bool, typer.Option("--json", help="Output as JSON.")]
-VerboseOption = Annotated[
-    int, typer.Option("--verbose", "-v", count=True, help="Increase verbosity.")
-]
 QuietOption = Annotated[bool, typer.Option("--quiet", "-q", help="Suppress output.")]
 ForceOption = Annotated[bool, typer.Option("--force", help="Skip safety guards.")]
 NoDeleteOption = Annotated[bool, typer.Option("--no-delete", help="Skip all deletes.")]
+
+
+def _print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
+    typer.echo(
+        f"albums: +{summary.albums_created} "
+        f"~{summary.albums_renamed} "
+        f"-{summary.albums_deleted}"
+    )
+    typer.echo(f"assets: +{summary.assets_added} -{summary.assets_removed}")
+    if sync.albums:
+        typer.echo(f"covers: +{summary.covers.set} -{summary.covers.cleared}")
+    if sync.favorites:
+        typer.echo(
+            f"favorites: +{summary.favorites.favorited} "
+            f"-{summary.favorites.unfavorited}"
+        )
+    if sync.ratings:
+        typer.echo(f"ratings: +{summary.ratings.set} -{summary.ratings.cleared}")
+    if sync.rejects:
+        typer.echo(
+            f"rejects: +{summary.rejects.archived} -{summary.rejects.unarchived}"
+        )
+    if sync.tags:
+        typer.echo(
+            f"color_labels: +{summary.color_labels.tagged} "
+            f"-{summary.color_labels.untagged}"
+        )
+        typer.echo(f"keywords: +{summary.keywords.tagged} -{summary.keywords.untagged}")
 
 
 @sync_app.command("all")
@@ -42,7 +67,6 @@ def sync_all(
     config: ConfigOption = None,
     dry_run: DryRunOption = False,
     json_output: JsonOption = False,
-    verbose: VerboseOption = 0,
     quiet: QuietOption = False,
     force: ForceOption = False,
     no_delete: NoDeleteOption = False,
@@ -80,16 +104,7 @@ def sync_all(
     elif not quiet:
         if dry_run:
             typer.echo("[dry-run] No changes applied")
-        typer.echo(
-            f"albums: +{summary.albums_created} "
-            f"~{summary.albums_renamed} "
-            f"-{summary.albums_deleted}"
-        )
-        typer.echo(f"assets: +{summary.assets_added} -{summary.assets_removed}")
-        typer.echo(
-            f"favorites: +{summary.favorites.favorited} "
-            f"-{summary.favorites.unfavorited}"
-        )
+        _print_summary(summary, cfg.sync)
         for err in summary.errors:
             typer.echo(f"ERROR: {err}", err=True)
     state.close()
@@ -98,49 +113,10 @@ def sync_all(
         raise typer.Exit(1)
 
 
-@sync_app.command()
-def albums(
-    config: ConfigOption = None,
-    dry_run: DryRunOption = False,
-    force: ForceOption = False,
-    no_delete: NoDeleteOption = False,
-) -> None:
-    typer.echo("sync albums: not implemented")
-    raise typer.Exit(1)
-
-
-@sync_app.command()
-def favorites(
-    config: ConfigOption = None,
-    dry_run: DryRunOption = False,
-) -> None:
-    typer.echo("sync favorites: not implemented")
-    raise typer.Exit(1)
-
-
-@sync_app.command()
-def ratings(
-    config: ConfigOption = None,
-    dry_run: DryRunOption = False,
-) -> None:
-    typer.echo("sync ratings: not implemented")
-    raise typer.Exit(1)
-
-
-@sync_app.command()
-def tags(
-    config: ConfigOption = None,
-    dry_run: DryRunOption = False,
-) -> None:
-    typer.echo("sync tags: not implemented")
-    raise typer.Exit(1)
-
-
 @app.command()
 def status(
     config: ConfigOption = None,
     json_output: JsonOption = False,
-    verbose: VerboseOption = 0,
     quiet: QuietOption = False,
 ) -> None:
     cfg = load_config(config)
@@ -176,16 +152,7 @@ def status(
             typer.echo("Drift detected:")
         else:
             typer.echo("No drift")
-        typer.echo(
-            f"albums: +{summary.albums_created} "
-            f"~{summary.albums_renamed} "
-            f"-{summary.albums_deleted}"
-        )
-        typer.echo(f"assets: +{summary.assets_added} -{summary.assets_removed}")
-        typer.echo(
-            f"favorites: +{summary.favorites.favorited} "
-            f"-{summary.favorites.unfavorited}"
-        )
+        _print_summary(summary, cfg.sync)
     state.close()
     client.close()
     if summary.has_drift:

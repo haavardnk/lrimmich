@@ -68,11 +68,11 @@ def test_defaults(config_file: Path) -> None:
     cfg = load_config(config_file)
     assert cfg.sync.albums is True
     assert cfg.sync.ratings is True
-    assert cfg.favorites.scope == "collections"
+    assert cfg.sync.scope == "collections"
     assert cfg.safety.delete_threshold == 100
 
 
-def test_invalid_favorites_scope(tmp_path: Path) -> None:
+def test_invalid_sync_scope(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
 [lightroom]
@@ -83,7 +83,7 @@ url = "http://localhost:2283"
 api_key = "testkey123456"
 library_path = "/immich/"
 
-[favorites]
+[sync]
 scope = "invalid"
 """)
     with pytest.raises(ValidationError):

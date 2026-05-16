@@ -97,6 +97,38 @@ def read_collections(
     return collections
 
 
+def read_collection_covers(catalog: Path) -> dict[int, str]:
+    conn = _connect(catalog)
+    rows = conn.execute("""
+        SELECT ci.collection,
+               af.pathFromRoot || lf.idx_filename AS path,
+               COALESCE(ai.rating, 0) AS rating,
+               COALESCE(ai.pick, 0) AS pick
+        FROM AgLibraryCollectionImage ci
+        JOIN Adobe_images ai ON ci.image = ai.id_local
+        JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
+        JOIN AgLibraryFolder af ON lf.folder = af.id_local
+    """).fetchall()
+
+    best: dict[int, tuple[str, int, int]] = {}
+    for r in rows:
+        col_id: int = r["collection"]
+        path: str = r["path"]
+        rating: int = r["rating"]
+        pick: int = r["pick"]
+        prev = best.get(col_id)
+        if prev is None or (rating, pick) > (prev[1], prev[2]):
+            best[col_id] = (path, rating, pick)
+
+    result: dict[int, str] = {}
+    for col_id, (path, rating, pick) in best.items():
+        if rating > 0 or pick > 0:
+            result[col_id] = path
+
+    conn.close()
+    return result
+
+
 def read_flagged_images(catalog: Path) -> set[str]:
     conn = _connect(catalog)
     rows = conn.execute("""

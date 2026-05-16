@@ -1,5 +1,6 @@
 import tomllib
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -22,17 +23,7 @@ class SyncConfig(BaseConfig):
     tags: bool = True
     rejects: bool = False
     skip_empty: bool = True
-
-
-class FavoritesConfig(BaseConfig):
-    scope: str = "collections"
-
-    @field_validator("scope")
-    @classmethod
-    def validate_scope(cls, v: str) -> str:
-        if v not in ("collections", "all"):
-            raise ValueError("scope must be 'collections' or 'all'")
-        return v
+    scope: Literal["collections", "all"] = "collections"
 
 
 class LightroomConfig(BaseConfig):
@@ -63,7 +54,6 @@ class Config(BaseConfig):
     immich: ImmichConfig
     exclude: ExcludeConfig = ExcludeConfig()
     sync: SyncConfig = SyncConfig()
-    favorites: FavoritesConfig = FavoritesConfig()
     safety: SafetyConfig = SafetyConfig()
 
 

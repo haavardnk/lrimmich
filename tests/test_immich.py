@@ -58,7 +58,7 @@ def test_update_album(client: ImmichClient, api_url: str) -> None:
     respx.patch(f"{api_url}/albums/a1").mock(
         return_value=httpx.Response(200, json={"id": "a1", "albumName": "Renamed"})
     )
-    result = client.update_album("a1", "Renamed")
+    result = client.update_album("a1", albumName="Renamed")
     assert result["albumName"] == "Renamed"
 
 

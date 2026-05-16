@@ -12,3 +12,4 @@ dist/
 .coverage
 state.db
 lr_immich_sync.py
+PLAN.md

@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS album_ownership (
     last_synced_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS synced_ratings (
+    asset_id TEXT PRIMARY KEY,
+    rating INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS synced_covers (
+    immich_album_id TEXT PRIMARY KEY,
+    asset_id TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts INTEGER NOT NULL,
@@ -144,6 +154,36 @@ class StateDB:
             "DELETE FROM album_ownership WHERE lr_collection_id = ?",
             (lr_collection_id,),
         )
+        self._conn.commit()
+
+    def get_synced_ratings(self) -> dict[str, int]:
+        rows = self._conn.execute(
+            "SELECT asset_id, rating FROM synced_ratings"
+        ).fetchall()
+        return {r["asset_id"]: r["rating"] for r in rows}
+
+    def replace_synced_ratings(self, ratings: dict[str, int]) -> None:
+        self._conn.execute("DELETE FROM synced_ratings")
+        for asset_id, rating in ratings.items():
+            self._conn.execute(
+                "INSERT INTO synced_ratings(asset_id, rating) VALUES (?, ?)",
+                (asset_id, rating),
+            )
+        self._conn.commit()
+
+    def get_synced_covers(self) -> dict[str, str]:
+        rows = self._conn.execute(
+            "SELECT immich_album_id, asset_id FROM synced_covers"
+        ).fetchall()
+        return {r["immich_album_id"]: r["asset_id"] for r in rows}
+
+    def replace_synced_covers(self, covers: dict[str, str]) -> None:
+        self._conn.execute("DELETE FROM synced_covers")
+        for album_id, asset_id in covers.items():
+            self._conn.execute(
+                "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
+                (album_id, asset_id),
+            )
         self._conn.commit()
 
     def append_audit_log(

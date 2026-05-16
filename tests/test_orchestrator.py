@@ -48,6 +48,8 @@ def test_dry_run_no_mutations(
     respx.get(f"{API}/view/folder").respond(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "created"})
 
     summary = run_sync(cfg, client, state, dry_run=True)
 

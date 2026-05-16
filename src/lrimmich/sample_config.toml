@@ -28,10 +28,8 @@ ratings = true
 tags = true
 # Skip creating albums for collections with no resolved assets
 skip_empty = true
-
-[favorites]
-# "collections" = only favorite assets that belong to synced collections
-# "all" = favorite every resolved asset with pick flag
+# "collections" = only sync metadata for assets in synced collections
+# "all" = sync metadata for every resolved asset in the catalog
 scope = "collections"
 
 [safety]

@@ -16,10 +16,6 @@ runner = CliRunner()
         ["--help"],
         ["sync", "--help"],
         ["sync", "all", "--help"],
-        ["sync", "albums", "--help"],
-        ["sync", "favorites", "--help"],
-        ["sync", "ratings", "--help"],
-        ["sync", "tags", "--help"],
         ["status", "--help"],
         ["resolve", "--help"],
         ["doctor", "--help"],
@@ -74,9 +70,3 @@ def test_config_init_already_exists(
     monkeypatch.setattr("lrimmich.cli.DEFAULT_CONFIG_PATH", target)
     result = runner.invoke(app, ["config", "init"])
     assert result.exit_code == 1
-
-
-def test_sync_albums_stub() -> None:
-    result = runner.invoke(app, ["sync", "albums"])
-    assert result.exit_code == 1
-    assert "not implemented" in result.output

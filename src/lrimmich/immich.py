@@ -71,8 +71,8 @@ class ImmichClient:
             payload["assetIds"] = asset_ids
         return self._request("POST", "/albums", payload)
 
-    def update_album(self, album_id: str, name: str) -> dict[str, Any]:
-        return self._request("PATCH", f"/albums/{album_id}", {"albumName": name})
+    def update_album(self, album_id: str, **fields: Any) -> dict[str, Any]:
+        return self._request("PATCH", f"/albums/{album_id}", fields)
 
     def delete_album(self, album_id: str) -> None:
         self._request("DELETE", f"/albums/{album_id}")
@@ -150,6 +150,11 @@ class ImmichClient:
         if not asset_ids:
             return
         self._request("PUT", f"/tags/{tag_id}/assets", {"ids": asset_ids})
+
+    def untag_assets(self, tag_id: str, asset_ids: list[str]) -> None:
+        if not asset_ids:
+            return
+        self._request("DELETE", f"/tags/{tag_id}/assets", {"ids": asset_ids})
 
     def get_folder_paths(self) -> list[str]:
         return self._request("GET", "/view/folder/unique-paths") or []

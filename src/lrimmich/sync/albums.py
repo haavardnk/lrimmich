@@ -195,7 +195,9 @@ def apply_album_sync(
 
             case "rename":
                 if action.immich_album_id:
-                    client.update_album(action.immich_album_id, action.album_name)
+                    client.update_album(
+                        action.immich_album_id, albumName=action.album_name
+                    )
                     state.upsert_album_ownership(
                         action.lr_collection_id,
                         action.immich_album_id,

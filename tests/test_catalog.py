@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from lrimmich.catalog import (
+    read_collection_covers,
     read_collections,
     read_color_labels,
     read_flagged_images,
@@ -255,3 +256,45 @@ def test_keywords_multiple_images(catalog_path: Path) -> None:
 def test_no_keywords(catalog_path: Path) -> None:
     CatalogBuilder(catalog_path).add_image(1, "a.jpg", "raw/").build()
     assert read_keywords(catalog_path) == {}
+
+
+def test_cover_highest_rated(catalog_path: Path) -> None:
+    (
+        CatalogBuilder(catalog_path)
+        .add_collection(1, "Travel")
+        .add_image(1, "a.jpg", "raw/", rating=3)
+        .add_image(2, "b.jpg", "raw/", rating=5)
+        .add_image(3, "c.jpg", "raw/", pick=1)
+        .add_collection_image(1, 1)
+        .add_collection_image(1, 2)
+        .add_collection_image(1, 3)
+        .build()
+    )
+    covers = read_collection_covers(catalog_path)
+    assert covers[1] == "raw/b.jpg"
+
+
+def test_cover_fallback_to_pick(catalog_path: Path) -> None:
+    (
+        CatalogBuilder(catalog_path)
+        .add_collection(1, "Travel")
+        .add_image(1, "a.jpg", "raw/")
+        .add_image(2, "b.jpg", "raw/", pick=1)
+        .add_collection_image(1, 1)
+        .add_collection_image(1, 2)
+        .build()
+    )
+    covers = read_collection_covers(catalog_path)
+    assert covers[1] == "raw/b.jpg"
+
+
+def test_cover_no_candidate(catalog_path: Path) -> None:
+    (
+        CatalogBuilder(catalog_path)
+        .add_collection(1, "Travel")
+        .add_image(1, "a.jpg", "raw/")
+        .add_collection_image(1, 1)
+        .build()
+    )
+    covers = read_collection_covers(catalog_path)
+    assert 1 not in covers
