@@ -1,4 +1,7 @@
 import json
+import os
+import platform
+import subprocess
 from importlib import resources
 from typing import Annotated
 
@@ -148,3 +151,18 @@ def config_show(
     redacted["immich"]["api_key"] = "***"
     for key, value in redacted.items():
         typer.echo(f"{key}: {value}")
+
+
+@config_app.command("edit")
+def config_edit(config: ConfigOption = None) -> None:
+    path = config or DEFAULT_CONFIG_PATH
+    if not path.exists():
+        typer.echo(f"Config not found: {path}\nRun 'lrimmich config init' first.")
+        raise typer.Exit(1)
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if editor:
+        subprocess.call([editor, str(path)])
+    elif platform.system() == "Darwin":
+        subprocess.call(["open", str(path)])
+    else:
+        subprocess.call(["xdg-open", str(path)])

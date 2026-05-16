@@ -49,6 +49,7 @@ lrimmich adopt             # claim existing Immich albums by name match
 lrimmich install-service   # generate launchd/systemd unit for periodic sync
 lrimmich uninstall-service # remove service files
 lrimmich config show       # print resolved config (secrets redacted)
+lrimmich config edit       # open config in your default editor
 ```
 
 ### Watch

@@ -76,6 +76,23 @@ def test_config_init_already_exists(
     assert result.exit_code == 1
 
 
+def test_config_edit_opens_editor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = tmp_path / "config.toml"
+    cfg.write_text("[lightroom]\n")
+    monkeypatch.setenv("EDITOR", "true")
+    monkeypatch.delenv("VISUAL", raising=False)
+    result = runner.invoke(app, ["config", "edit", "--config", str(cfg)])
+    assert result.exit_code == 0
+
+
+def test_config_edit_missing_file(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["config", "edit", "--config", str(tmp_path / "nope")])
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
 def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
