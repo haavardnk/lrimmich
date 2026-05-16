@@ -110,7 +110,7 @@ class ImmichClient:
                 {"albumUsers": album_users},
             )
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 400:
+            if e.response.status_code == 400 and "already" in e.response.text.lower():
                 return
             raise
 

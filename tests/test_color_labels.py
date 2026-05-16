@@ -27,7 +27,7 @@ def state(tmp_path: Path) -> StateDB:
     return StateDB(tmp_path / "state.db")
 
 
-TAG_MAP = {"Red": "t-red", "Blue": "t-blue", "Green": "t-green"}
+TAG_MAP = {"red": "t-red", "blue": "t-blue", "green": "t-green"}
 
 
 def test_plan_tags_new_labels(state: StateDB) -> None:
@@ -40,7 +40,7 @@ def test_plan_tags_new_labels(state: StateDB) -> None:
 
 
 def test_plan_no_change_idempotent(state: StateDB) -> None:
-    state.set_meta("color_labels_snapshot", json.dumps({"a1": "Red"}))
+    state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
     labels = {"a.jpg": "Red"}
     resolved = {"a.jpg": "a1"}
     actions = plan_color_labels_sync(labels, resolved, TAG_MAP, state)
@@ -48,7 +48,7 @@ def test_plan_no_change_idempotent(state: StateDB) -> None:
 
 
 def test_plan_label_changed(state: StateDB) -> None:
-    state.set_meta("color_labels_snapshot", json.dumps({"a1": "Red"}))
+    state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
     labels = {"a.jpg": "Blue"}
     resolved = {"a.jpg": "a1"}
     actions = plan_color_labels_sync(labels, resolved, TAG_MAP, state)
@@ -61,7 +61,7 @@ def test_plan_label_changed(state: StateDB) -> None:
 
 
 def test_plan_label_removed(state: StateDB) -> None:
-    state.set_meta("color_labels_snapshot", json.dumps({"a1": "Red"}))
+    state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
     actions = plan_color_labels_sync({}, {}, TAG_MAP, state)
     untag_actions = [a for a in actions if a.kind == "untag"]
     assert len(untag_actions) == 1
@@ -79,7 +79,7 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
 def test_ensure_color_tags_creates_missing(client: ImmichClient) -> None:
     respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "lr:color:red"})
     result = _ensure_color_tags(client, [])
-    assert "Red" in result
+    assert "red" in result
 
 
 @respx.mock
@@ -87,7 +87,7 @@ def test_ensure_color_tags_reuses_existing(client: ImmichClient) -> None:
     existing = [{"id": "existing-id", "value": "lr:color:red"}]
     respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "created"})
     result = _ensure_color_tags(client, existing)
-    assert result["Red"] == "existing-id"
+    assert result["red"] == "existing-id"
 
 
 @respx.mock
@@ -104,10 +104,10 @@ def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
             kind="untag", tag_id="t-blue", tag_name="lr:color:blue", asset_ids=["a2"]
         ),
     ]
-    result = apply_color_labels_sync(actions, {"a1": "Red"}, client, state)
+    result = apply_color_labels_sync(actions, {"a1": "red"}, client, state)
     assert result == ColorLabelsResult(tagged=1, untagged=1)
     snapshot = json.loads(state.get_meta("color_labels_snapshot") or "{}")
-    assert snapshot == {"a1": "Red"}
+    assert snapshot == {"a1": "red"}
 
 
 @respx.mock
@@ -118,7 +118,7 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     actions = [
         TagAction(kind="tag", tag_id="t-red", tag_name="lr:color:red", asset_ids=["a1"])
     ]
-    apply_color_labels_sync(actions, {"a1": "Red"}, client, state)
+    apply_color_labels_sync(actions, {"a1": "red"}, client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_color_labels"
@@ -127,5 +127,5 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
 def test_ensure_color_tags_no_create(client: ImmichClient) -> None:
     existing = [{"id": "e1", "value": "lr:color:red"}]
     result = _ensure_color_tags(client, existing, create=False)
-    assert result["Red"] == "e1"
-    assert result["Blue"].startswith("pending:")
+    assert result["red"] == "e1"
+    assert result["blue"].startswith("pending:")

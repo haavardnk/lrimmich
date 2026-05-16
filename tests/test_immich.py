@@ -100,9 +100,24 @@ def test_add_album_users_success(client: ImmichClient, api_url: str) -> None:
 
 
 @respx.mock
-def test_add_album_users_400_ignored(client: ImmichClient, api_url: str) -> None:
-    respx.put(f"{api_url}/albums/a1/users").mock(return_value=httpx.Response(400))
+def test_add_album_users_already_added_ignored(
+    client: ImmichClient, api_url: str
+) -> None:
+    respx.put(f"{api_url}/albums/a1/users").mock(
+        return_value=httpx.Response(400, text="User already added to album")
+    )
     client.add_album_users("a1", ["u1"])
+
+
+@respx.mock
+def test_add_album_users_400_other_raises(
+    client: ImmichClient, api_url: str
+) -> None:
+    respx.put(f"{api_url}/albums/a1/users").mock(
+        return_value=httpx.Response(400, text="Malformed payload")
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        client.add_album_users("a1", ["u1"])
 
 
 @respx.mock

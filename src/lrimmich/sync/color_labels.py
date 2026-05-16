@@ -22,14 +22,13 @@ def _ensure_color_tags(
     *,
     create: bool = True,
 ) -> dict[str, str]:
-    raw = ensure_tags(
+    return ensure_tags(
         client,
         existing_tags,
         {c.lower() for c in VALID_COLORS},
         COLOR_TAG_PREFIX,
         create=create,
     )
-    return {k.capitalize(): v for k, v in raw.items()}
 
 
 def plan_color_labels_sync(
@@ -43,8 +42,9 @@ def plan_color_labels_sync(
 
     desired: dict[str, str] = {}
     for rp, color in labels.items():
-        if rp in resolved and color in tag_map:
-            desired[resolved[rp]] = color
+        key = color.lower()
+        if rp in resolved and key in tag_map:
+            desired[resolved[rp]] = key
 
     by_tag_add: dict[str, list[str]] = {}
     by_tag_remove: dict[str, list[str]] = {}

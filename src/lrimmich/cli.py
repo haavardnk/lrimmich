@@ -15,7 +15,7 @@ import lrimmich
 from lrimmich.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.catalog import read_collections
 from lrimmich.config import DEFAULT_CONFIG_PATH, SyncConfig, load_config
-from lrimmich.doctor import run_doctor
+from lrimmich.doctor import DoctorReport, run_doctor
 from lrimmich.immich import ImmichClient
 from lrimmich.notify import send_notification
 from lrimmich.orchestrator import SyncSummary, run_sync
@@ -119,11 +119,11 @@ def sync(
             _print_summary(summary, cfg.sync)
             for err in summary.errors:
                 typer.echo(f"ERROR: {err}", err=True)
+        if cfg.sync.notify_url and not dry_run:
+            send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
     finally:
         state.close()
         client.close()
-    if cfg.sync.notify_url and not dry_run:
-        send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
     if summary.errors:
         raise typer.Exit(1)
 
@@ -137,6 +137,7 @@ def status(
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
+    summary = SyncSummary()
     try:
         show_progress = not quiet and not json_output
         with Progress(
@@ -199,8 +200,8 @@ def watch(
         nonlocal stop
         stop = True
 
-    signal.signal(signal.SIGINT, _handle_signal)
-    signal.signal(signal.SIGTERM, _handle_signal)
+    old_sigint = signal.signal(signal.SIGINT, _handle_signal)
+    old_sigterm = signal.signal(signal.SIGTERM, _handle_signal)
 
     last_mtime = 0.0
     if not quiet:
@@ -257,6 +258,8 @@ def watch(
 
     if not quiet:
         typer.echo("Stopped")
+    signal.signal(signal.SIGINT, old_sigint)
+    signal.signal(signal.SIGTERM, old_sigterm)
 
 
 def _sleep_or_stop(seconds: int, should_stop: Callable[[], bool]) -> None:
@@ -326,6 +329,7 @@ def doctor(
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
+    report = DoctorReport()
     try:
         report = run_doctor(cfg, client, state)
         for check in report.checks:

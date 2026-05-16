@@ -235,17 +235,18 @@ def run_sync(
             summary.errors.append(f"rejects: {e}")
 
     if cfg.sync.tags:
+        existing_tags = client.get_tags()
+
         if on_status:
             on_status("Syncing color labels...")
         try:
             labels = read_color_labels(cfg.lightroom.catalog)
-            existing_tags = client.get_tags()
             tag_map = _ensure_color_tags(client, existing_tags, create=not dry_run)
             actions = plan_color_labels_sync(labels, resolved, tag_map, state)
             desired = {
-                resolved[rp]: color
+                resolved[rp]: color.lower()
                 for rp, color in labels.items()
-                if rp in resolved and color in tag_map
+                if rp in resolved and color.lower() in tag_map
             }
             summary.color_labels = ColorLabelsResult(
                 tagged=sum(len(a.asset_ids) for a in actions if a.kind == "tag"),
@@ -260,7 +261,6 @@ def run_sync(
             on_status("Syncing keywords...")
         try:
             kw_data = read_keywords(cfg.lightroom.catalog)
-            existing_tags = client.get_tags()
             needed_kws: set[str] = set()
             for kws in kw_data.values():
                 needed_kws.update(kws)
