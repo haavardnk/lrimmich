@@ -21,7 +21,7 @@ from lrimmich.app import (
     app,
     config_app,
 )
-from lrimmich.clients.catalog import read_collections
+from lrimmich.clients.catalog import read_collection_tree, read_collections
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import DEFAULT_STATE_PATH, StateDB
 from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
@@ -208,3 +208,25 @@ def reset(
         )
     DEFAULT_STATE_PATH.unlink()
     typer.echo("State cleared.")
+
+
+@app.command()
+def collections(
+    config: ConfigOption = None,
+    json_output: JsonOption = False,
+) -> None:
+    cfg = load_config(config)
+    tree = read_collection_tree(cfg.lightroom.catalog)
+    if json_output:
+        typer.echo(json.dumps([n.model_dump() for n in tree], indent=2))
+        return
+    from lrimmich.clients.catalog import LrCollectionTreeNode
+
+    def _print_tree(nodes: list[LrCollectionTreeNode], indent: int = 0) -> None:
+        for node in nodes:
+            prefix = "  " * indent
+            label = "set" if node.kind == "set" else "col"
+            typer.echo(f"{prefix}[{label}] {node.name}  (id={node.id})")
+            _print_tree(node.children, indent + 1)
+
+    _print_tree(tree)

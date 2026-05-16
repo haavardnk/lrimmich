@@ -47,6 +47,7 @@ lrimmich status            # exit 1 if there's drift
 lrimmich watch             # poll for catalog changes, sync when detected
 lrimmich adopt             # claim existing Immich albums by name match
 lrimmich log               # show recent sync activity
+lrimmich collections       # list catalog collections with IDs
 lrimmich reset             # delete state DB, next sync rebuilds from scratch
 lrimmich install-service   # generate launchd/systemd unit for periodic sync
 lrimmich uninstall-service # remove service files

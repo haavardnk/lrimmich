@@ -23,6 +23,7 @@ runner = CliRunner()
         ["uninstall-service", "--help"],
         ["doctor", "--help"],
         ["adopt", "--help"],
+        ["collections", "--help"],
         ["config", "--help"],
         ["config", "init", "--help"],
         ["config", "show", "--help"],
@@ -162,6 +163,61 @@ def test_reset_prompts_without_force(
     monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
     runner.invoke(app, ["reset"], input="n\n")
     assert db_path.exists()
+
+
+def test_collections_tree(tmp_path: Path) -> None:
+    from tests.fixtures.catalog_factory import CatalogBuilder
+
+    catalog = tmp_path / "test.lrcat"
+    builder = CatalogBuilder(catalog)
+    builder.add_set(10, "Travel")
+    builder.add_collection(20, "Paris", parent=10)
+    builder.add_collection(30, "London", parent=10)
+    builder.build()
+
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        "[lightroom]\n"
+        f'catalog = "{catalog}"\n'
+        "[immich]\n"
+        'url = "http://localhost"\n'
+        'api_key = "k"\n'
+        'library_path = "/ext/"\n'
+    )
+    result = runner.invoke(app, ["collections", "--config", str(cfg)])
+    assert result.exit_code == 0
+    assert "Travel" in result.output
+    assert "Paris" in result.output
+    assert "id=10" in result.output
+    assert "[set]" in result.output
+    assert "[col]" in result.output
+
+
+def test_collections_json(tmp_path: Path) -> None:
+    import json
+
+    from tests.fixtures.catalog_factory import CatalogBuilder
+
+    catalog = tmp_path / "test.lrcat"
+    builder = CatalogBuilder(catalog)
+    builder.add_set(10, "Travel")
+    builder.add_collection(20, "Paris", parent=10)
+    builder.build()
+
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        "[lightroom]\n"
+        f'catalog = "{catalog}"\n'
+        "[immich]\n"
+        'url = "http://localhost"\n'
+        'api_key = "k"\n'
+        'library_path = "/ext/"\n'
+    )
+    result = runner.invoke(app, ["collections", "--json", "--config", str(cfg)])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0]["name"] == "Travel"
+    assert data[0]["children"][0]["name"] == "Paris"
 
 
 def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:

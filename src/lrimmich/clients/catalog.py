@@ -14,6 +14,14 @@ class LrCollection(BaseConfig):
     relative_paths: list[str]
 
 
+class LrCollectionTreeNode(BaseConfig):
+    id: int
+    name: str
+    full_name: str
+    kind: str
+    children: list["LrCollectionTreeNode"]
+
+
 def _connect(catalog: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
@@ -40,6 +48,46 @@ def read_collections(
 ) -> list[LrCollection]:
     with closing(_connect(catalog)) as conn:
         return _read_collections_inner(conn, exclude)
+
+
+def read_collection_tree(catalog: Path) -> list[LrCollectionTreeNode]:
+    with closing(_connect(catalog)) as conn:
+        rows = conn.execute("""
+            SELECT id_local, name, parent, creationId
+            FROM AgLibraryCollection
+            WHERE systemOnly != '1.0'
+        """).fetchall()
+
+    all_items: dict[int, tuple[str, int | None]] = {
+        r["id_local"]: (r["name"], r["parent"]) for r in rows
+    }
+
+    kind_map: dict[str, str] = {
+        "com.adobe.ag.library.collection": "collection",
+        "com.adobe.ag.library.group": "set",
+    }
+
+    nodes: dict[int, LrCollectionTreeNode] = {}
+    for r in rows:
+        rid: int = r["id_local"]
+        nodes[rid] = LrCollectionTreeNode(
+            id=rid,
+            name=r["name"],
+            full_name=_build_full_name(rid, all_items),
+            kind=kind_map.get(r["creationId"], r["creationId"]),
+            children=[],
+        )
+
+    roots: list[LrCollectionTreeNode] = []
+    for r in rows:
+        rid = r["id_local"]
+        parent: int | None = r["parent"]
+        if parent is not None and parent in nodes:
+            nodes[parent].children.append(nodes[rid])
+        else:
+            roots.append(nodes[rid])
+
+    return roots
 
 
 def _read_collections_inner(
