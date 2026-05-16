@@ -87,7 +87,7 @@ def test_skip_parent_filter(catalog_path: Path) -> None:
         .add_collection_image(2, 10)
         .build()
     )
-    exclude = ExcludeConfig(parent_ids=[67])
+    exclude = ExcludeConfig(collection_ids=[67])
     cols = read_collections(catalog_path, exclude=exclude)
     assert len(cols) == 1
     assert cols[0].name == "Local Album"

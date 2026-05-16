@@ -15,8 +15,8 @@ library_path = "/external/images/raw/"
 # share_albums_with = ["user-uuid-here"]
 
 [exclude]
-# Lightroom collection set IDs to skip (find via `lrimmich collections`)
-parent_ids = []
+# Collection or collection set IDs to skip (find via `lrimmich collections`)
+collection_ids = []
 # Glob patterns matched against full collection path (e.g. "Exports/*", "*/WIP")
 name_patterns = []
 

@@ -101,8 +101,16 @@ def _read_collections_inner(
         r["id_local"]: (r["name"], r["parent"]) for r in all_rows
     }
 
-    exclude_parent_ids = set(exclude.parent_ids) if exclude else set()
+    exclude_ids = set(exclude.collection_ids) if exclude else set()
     exclude_patterns = exclude.name_patterns if exclude else []
+
+    def _is_excluded(col_id: int) -> bool:
+        current: int | None = col_id
+        while current is not None and current in tree:
+            if current in exclude_ids:
+                return True
+            current = tree[current][1]
+        return False
 
     rows = conn.execute("""
         SELECT id_local, name, parent
@@ -114,7 +122,7 @@ def _read_collections_inner(
     collection_ids = [
         row["id_local"]
         for row in rows
-        if not (row["parent"] is not None and row["parent"] in exclude_parent_ids)
+        if not _is_excluded(row["id_local"])
         and not any(
             fnmatch(_build_full_name(row["id_local"], tree), pat)
             for pat in exclude_patterns
@@ -143,8 +151,7 @@ def _read_collections_inner(
     collections: list[LrCollection] = []
     for row in rows:
         col_id: int = row["id_local"]
-        parent_id: int | None = row["parent"]
-        if parent_id is not None and parent_id in exclude_parent_ids:
+        if _is_excluded(col_id):
             continue
 
         full_name = _build_full_name(col_id, tree)

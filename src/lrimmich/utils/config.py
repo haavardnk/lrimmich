@@ -14,7 +14,7 @@ class BaseConfig(BaseModel):
 
 
 class ExcludeConfig(BaseConfig):
-    parent_ids: list[int] = []
+    collection_ids: list[int] = []
     name_patterns: list[str] = []
 
 
