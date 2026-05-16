@@ -101,6 +101,7 @@ def test_skip_empty_deletes_owned_album(state: StateDB, client: ImmichClient) ->
 
 @respx.mock
 def test_create_and_share(state: StateDB, client: ImmichClient) -> None:
+    respx.get(f"{API}/albums").respond(json=[])
     col = _col(id=10, full_name="Shared")
     resolved: dict[str, str] = {}
 
@@ -224,6 +225,14 @@ def test_format_change_triggers_rename(state: StateDB, client: ImmichClient) -> 
 @respx.mock
 def test_share_idempotent(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.get(f"{API}/albums").respond(
+        json=[
+            {
+                "id": "imm-1",
+                "albumUsers": [{"user": {"id": "u1"}, "role": "editor"}],
+            }
+        ]
+    )
     respx.get(f"{API}/albums/imm-1").mock(
         return_value=httpx.Response(
             200,

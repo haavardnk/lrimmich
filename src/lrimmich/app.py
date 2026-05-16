@@ -3,9 +3,13 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.sync.orchestrator import run_sync
 from lrimmich.sync.summary import SyncSummary
-from lrimmich.utils.config import SyncConfig
+from lrimmich.utils.config import Config, SyncConfig, load_config
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
 config_app = typer.Typer(name="config", no_args_is_help=True)
@@ -50,6 +54,51 @@ def _print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
             f"-{summary.color_labels.untagged}"
         )
         typer.echo(f"keywords: +{summary.keywords.tagged} -{summary.keywords.untagged}")
+
+
+def _run_with_progress(
+    cfg_path: Path | None,
+    dry_run: bool = False,
+    force: bool = False,
+    no_delete: bool = False,
+    quiet: bool = False,
+    json_output: bool = False,
+) -> tuple[SyncSummary, Config]:
+    cfg = load_config(cfg_path)
+    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
+    state = StateDB()
+    try:
+        show_progress = not quiet and not json_output
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+            disable=not show_progress,
+        ) as progress:
+            task = progress.add_task("Starting...", total=None)
+
+            def on_status(msg: str) -> None:
+                progress.update(task, description=msg)
+
+            def on_progress(current: int, total: int) -> None:
+                progress.update(
+                    task, description=f"Resolving paths... {current}/{total}"
+                )
+
+            summary = run_sync(
+                cfg,
+                client,
+                state,
+                dry_run=dry_run,
+                force=force,
+                no_delete=no_delete,
+                on_status=on_status,
+                on_progress=on_progress,
+            )
+    finally:
+        state.close()
+        client.close()
+    return summary, cfg
 
 
 def _sleep_or_stop(seconds: int, should_stop: Callable[[], bool]) -> None:

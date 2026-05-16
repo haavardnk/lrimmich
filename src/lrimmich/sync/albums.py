@@ -66,6 +66,8 @@ def plan_album_sync(
     actions: list[AlbumAction] = []
     lr_ids = {c.id for c in collections}
 
+    all_albums = {a["id"]: a for a in client.get_albums()} if share_with else {}
+
     for collection in collections:
         album_name = format_album_name(collection, album_name_format)
         asset_ids = [resolved[rp] for rp in collection.relative_paths if rp in resolved]
@@ -149,7 +151,8 @@ def plan_album_sync(
             )
 
         if share_with:
-            shared_ids = {u["user"]["id"] for u in album_data.get("albumUsers", [])}
+            album_summary = all_albums.get(immich_album_id, {})
+            shared_ids = {u["user"]["id"] for u in album_summary.get("albumUsers", [])}
             unshared = [uid for uid in share_with if uid not in shared_ids]
             if unshared:
                 actions.append(
@@ -181,6 +184,85 @@ def plan_album_sync(
     return actions
 
 
+def _apply_create(action: AlbumAction, client: ImmichClient, state: StateDB) -> str:
+    result = client.create_album(action.album_name, action.asset_ids)
+    album_id: str = result["id"]
+    state.upsert_album_ownership(action.lr_collection_id, album_id, action.album_name)
+    state.append_audit_log(
+        "create_album",
+        "album",
+        album_id,
+        {"name": action.album_name, "assets": len(action.asset_ids)},
+    )
+    return album_id
+
+
+def _apply_rename(action: AlbumAction, client: ImmichClient, state: StateDB) -> None:
+    if not action.immich_album_id:
+        return
+    client.update_album(action.immich_album_id, albumName=action.album_name)
+    state.upsert_album_ownership(
+        action.lr_collection_id, action.immich_album_id, action.album_name
+    )
+    state.append_audit_log(
+        "rename_album",
+        "album",
+        action.immich_album_id,
+        {"old": action.old_name, "new": action.album_name},
+    )
+
+
+def _apply_add_assets(
+    action: AlbumAction, client: ImmichClient, state: StateDB
+) -> None:
+    if not action.immich_album_id:
+        return
+    client.add_album_assets(action.immich_album_id, action.asset_ids)
+    state.append_audit_log(
+        "add_assets",
+        "album",
+        action.immich_album_id,
+        {"count": len(action.asset_ids)},
+    )
+
+
+def _apply_remove_assets(
+    action: AlbumAction, client: ImmichClient, state: StateDB
+) -> None:
+    if not action.immich_album_id:
+        return
+    client.remove_album_assets(action.immich_album_id, action.asset_ids)
+    state.append_audit_log(
+        "remove_assets",
+        "album",
+        action.immich_album_id,
+        {"count": len(action.asset_ids)},
+    )
+
+
+def _apply_share(
+    action: AlbumAction,
+    client: ImmichClient,
+    state: StateDB,
+    created: dict[int, str],
+) -> None:
+    album_id = action.immich_album_id or created.get(action.lr_collection_id)
+    if not album_id:
+        return
+    client.add_album_users(album_id, action.user_ids)
+    state.append_audit_log("share_album", "album", album_id, {"users": action.user_ids})
+
+
+def _apply_delete(action: AlbumAction, client: ImmichClient, state: StateDB) -> None:
+    if not action.immich_album_id:
+        return
+    client.delete_album(action.immich_album_id)
+    state.remove_album_ownership(action.lr_collection_id)
+    state.append_audit_log(
+        "delete_album", "album", action.immich_album_id, {"name": action.album_name}
+    )
+
+
 def apply_album_sync(
     actions: list[AlbumAction],
     client: ImmichClient,
@@ -191,76 +273,14 @@ def apply_album_sync(
     for action in actions:
         match action.kind:
             case "create":
-                result = client.create_album(action.album_name, action.asset_ids)
-                album_id = result["id"]
-                created[action.lr_collection_id] = album_id
-                state.upsert_album_ownership(
-                    action.lr_collection_id, album_id, action.album_name
-                )
-                state.append_audit_log(
-                    "create_album",
-                    "album",
-                    album_id,
-                    {"name": action.album_name, "assets": len(action.asset_ids)},
-                )
-
+                created[action.lr_collection_id] = _apply_create(action, client, state)
             case "rename":
-                if action.immich_album_id:
-                    client.update_album(
-                        action.immich_album_id, albumName=action.album_name
-                    )
-                    state.upsert_album_ownership(
-                        action.lr_collection_id,
-                        action.immich_album_id,
-                        action.album_name,
-                    )
-                    state.append_audit_log(
-                        "rename_album",
-                        "album",
-                        action.immich_album_id,
-                        {"old": action.old_name, "new": action.album_name},
-                    )
-
+                _apply_rename(action, client, state)
             case "add_assets":
-                if action.immich_album_id:
-                    client.add_album_assets(action.immich_album_id, action.asset_ids)
-                    state.append_audit_log(
-                        "add_assets",
-                        "album",
-                        action.immich_album_id,
-                        {"count": len(action.asset_ids)},
-                    )
-
+                _apply_add_assets(action, client, state)
             case "remove_assets":
-                if action.immich_album_id:
-                    client.remove_album_assets(action.immich_album_id, action.asset_ids)
-                    state.append_audit_log(
-                        "remove_assets",
-                        "album",
-                        action.immich_album_id,
-                        {"count": len(action.asset_ids)},
-                    )
-
+                _apply_remove_assets(action, client, state)
             case "share":
-                album_id = action.immich_album_id or created.get(
-                    action.lr_collection_id
-                )
-                if album_id:
-                    client.add_album_users(album_id, action.user_ids)
-                    state.append_audit_log(
-                        "share_album",
-                        "album",
-                        album_id,
-                        {"users": action.user_ids},
-                    )
-
+                _apply_share(action, client, state, created)
             case "delete":
-                if action.immich_album_id:
-                    client.delete_album(action.immich_album_id)
-                    state.remove_album_ownership(action.lr_collection_id)
-                    state.append_audit_log(
-                        "delete_album",
-                        "album",
-                        action.immich_album_id,
-                        {"name": action.album_name},
-                    )
+                _apply_delete(action, client, state)

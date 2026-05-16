@@ -16,8 +16,9 @@ from lrimmich.sync.albums import (
     plan_album_sync,
 )
 from lrimmich.sync.color_labels import (
+    COLOR_TAG_PREFIX,
+    VALID_COLORS,
     ColorLabelsResult,
-    _ensure_color_tags,
     apply_color_labels_sync,
     plan_color_labels_sync,
 )
@@ -32,8 +33,8 @@ from lrimmich.sync.favorites import (
     plan_favorites_sync,
 )
 from lrimmich.sync.keywords import (
+    KEYWORD_TAG_PREFIX,
     KeywordsResult,
-    _ensure_keyword_tags,
     apply_keywords_sync,
     plan_keywords_sync,
 )
@@ -48,6 +49,7 @@ from lrimmich.sync.rejects import (
     plan_rejects_sync,
 )
 from lrimmich.sync.summary import SyncSummary, count_album_actions
+from lrimmich.sync.tags import ensure_tags
 from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import resolve_paths
 
@@ -175,7 +177,13 @@ def run_sync(
             on_status("Syncing color labels...")
         try:
             labels = read_color_labels(cfg.lightroom.catalog)
-            tag_map = _ensure_color_tags(client, existing_tags, create=not dry_run)
+            tag_map = ensure_tags(
+                client,
+                existing_tags,
+                {c.lower() for c in VALID_COLORS},
+                COLOR_TAG_PREFIX,
+                create=not dry_run,
+            )
             actions = plan_color_labels_sync(labels, resolved, tag_map, state)
             desired = {
                 resolved[rp]: color.lower()
@@ -198,8 +206,12 @@ def run_sync(
             needed_kws: set[str] = set()
             for kws in kw_data.values():
                 needed_kws.update(kws)
-            kw_tag_map = _ensure_keyword_tags(
-                client, existing_tags, needed_kws, create=not dry_run
+            kw_tag_map = ensure_tags(
+                client,
+                existing_tags,
+                needed_kws,
+                KEYWORD_TAG_PREFIX,
+                create=not dry_run,
             )
             kw_actions = plan_keywords_sync(kw_data, resolved, kw_tag_map, state)
             kw_desired: dict[str, list[str]] = {}

@@ -4,10 +4,10 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.tags import (
     TagAction,
+    TagMap,
     TagSyncResult,
     apply_tag_actions,
     build_tag_actions,
-    ensure_tags,
 )
 
 COLOR_TAG_PREFIX = "lr:color:"
@@ -16,25 +16,10 @@ VALID_COLORS = {"Red", "Yellow", "Green", "Blue", "Purple"}
 ColorLabelsResult = TagSyncResult
 
 
-def _ensure_color_tags(
-    client: ImmichClient,
-    existing_tags: list[dict[str, str]],
-    *,
-    create: bool = True,
-) -> dict[str, str]:
-    return ensure_tags(
-        client,
-        existing_tags,
-        {c.lower() for c in VALID_COLORS},
-        COLOR_TAG_PREFIX,
-        create=create,
-    )
-
-
 def plan_color_labels_sync(
     labels: dict[str, str],
     resolved: dict[str, str],
-    tag_map: dict[str, str],
+    tag_map: TagMap,
     state: StateDB,
 ) -> list[TagAction]:
     previous = state.get_meta("color_labels_snapshot")

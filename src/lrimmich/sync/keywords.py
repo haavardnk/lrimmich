@@ -4,10 +4,10 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.tags import (
     TagAction,
+    TagMap,
     TagSyncResult,
     apply_tag_actions,
     build_tag_actions,
-    ensure_tags,
 )
 
 KEYWORD_TAG_PREFIX = "lr:keyword:"
@@ -15,20 +15,10 @@ KEYWORD_TAG_PREFIX = "lr:keyword:"
 KeywordsResult = TagSyncResult
 
 
-def _ensure_keyword_tags(
-    client: ImmichClient,
-    existing_tags: list[dict[str, str]],
-    needed: set[str],
-    *,
-    create: bool = True,
-) -> dict[str, str]:
-    return ensure_tags(client, existing_tags, needed, KEYWORD_TAG_PREFIX, create=create)
-
-
 def plan_keywords_sync(
     keywords: dict[str, list[str]],
     resolved: dict[str, str],
-    tag_map: dict[str, str],
+    tag_map: TagMap,
     state: StateDB,
 ) -> list[TagAction]:
     previous = state.get_meta("keywords_snapshot")

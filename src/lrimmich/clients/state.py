@@ -2,7 +2,7 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 DEFAULT_STATE_PATH = Path("~/.cache/lrimmich/state.db").expanduser()
 
@@ -63,6 +63,12 @@ class StateDB:
         self._conn = sqlite3.connect(str(path))
         self._conn.row_factory = sqlite3.Row
         self._migrate()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
 
     def _migrate(self) -> None:
         current = self._get_schema_version()
@@ -185,11 +191,10 @@ class StateDB:
 
     def replace_synced_ratings(self, ratings: dict[str, int]) -> None:
         self._conn.execute("DELETE FROM synced_ratings")
-        for asset_id, rating in ratings.items():
-            self._conn.execute(
-                "INSERT INTO synced_ratings(asset_id, rating) VALUES (?, ?)",
-                (asset_id, rating),
-            )
+        self._conn.executemany(
+            "INSERT INTO synced_ratings(asset_id, rating) VALUES (?, ?)",
+            ratings.items(),
+        )
         self._conn.commit()
 
     def get_synced_covers(self) -> dict[str, str]:
@@ -200,11 +205,10 @@ class StateDB:
 
     def replace_synced_covers(self, covers: dict[str, str]) -> None:
         self._conn.execute("DELETE FROM synced_covers")
-        for album_id, asset_id in covers.items():
-            self._conn.execute(
-                "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
-                (album_id, asset_id),
-            )
+        self._conn.executemany(
+            "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
+            covers.items(),
+        )
         self._conn.commit()
 
     def get_synced_favorites(self) -> set[str]:
@@ -212,25 +216,21 @@ class StateDB:
         return {r["asset_id"] for r in rows}
 
     def replace_synced_favorites(self, asset_ids: set[str]) -> None:
-        self._conn.execute("DELETE FROM synced_favorites")
-        for asset_id in asset_ids:
-            self._conn.execute(
-                "INSERT INTO synced_favorites(asset_id) VALUES (?)",
-                (asset_id,),
-            )
-        self._conn.commit()
+        self._replace_asset_set("synced_favorites", asset_ids)
 
     def get_synced_rejects(self) -> set[str]:
         rows = self._conn.execute("SELECT asset_id FROM synced_rejects").fetchall()
         return {r["asset_id"] for r in rows}
 
     def replace_synced_rejects(self, asset_ids: set[str]) -> None:
-        self._conn.execute("DELETE FROM synced_rejects")
-        for asset_id in asset_ids:
-            self._conn.execute(
-                "INSERT INTO synced_rejects(asset_id) VALUES (?)",
-                (asset_id,),
-            )
+        self._replace_asset_set("synced_rejects", asset_ids)
+
+    def _replace_asset_set(self, table: str, asset_ids: set[str]) -> None:
+        self._conn.execute(f"DELETE FROM {table}")
+        self._conn.executemany(
+            f"INSERT INTO {table}(asset_id) VALUES (?)",
+            [(aid,) for aid in asset_ids],
+        )
         self._conn.commit()
 
     def append_audit_log(

@@ -3,7 +3,6 @@ from importlib import resources
 from typing import Annotated
 
 import typer
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 import lrimmich.utils as lrimmich_utils
 from lrimmich.app import (
@@ -14,14 +13,13 @@ from lrimmich.app import (
     NoDeleteOption,
     QuietOption,
     _print_summary,
+    _run_with_progress,
     app,
     config_app,
 )
 from lrimmich.clients.catalog import read_collections
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.sync.orchestrator import run_sync
-from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.utils.config import DEFAULT_CONFIG_PATH, load_config
 from lrimmich.utils.doctor import DoctorReport, run_doctor
@@ -41,50 +39,24 @@ def sync(
         typer.Option("--notify-on-drift", help="Notify only on drift."),
     ] = False,
 ) -> None:
-    cfg = load_config(config)
-    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
-    state = StateDB()
-    try:
-        show_progress = not quiet and not json_output
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=True,
-            disable=not show_progress,
-        ) as progress:
-            task = progress.add_task("Starting...", total=None)
-
-            def on_status(msg: str) -> None:
-                progress.update(task, description=msg)
-
-            def on_progress(current: int, total: int) -> None:
-                progress.update(
-                    task, description=f"Resolving paths... {current}/{total}"
-                )
-
-            summary = run_sync(
-                cfg,
-                client,
-                state,
-                dry_run=dry_run,
-                force=force,
-                no_delete=no_delete,
-                on_status=on_status,
-                on_progress=on_progress,
-            )
-        if json_output:
-            typer.echo(json.dumps(summary.to_dict(), indent=2))
-        elif not quiet:
-            if dry_run:
-                typer.echo("[dry-run] No changes applied")
-            _print_summary(summary, cfg.sync)
-            for err in summary.errors:
-                typer.echo(f"ERROR: {err}", err=True)
-        if cfg.sync.notify_url and not dry_run:
-            send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
-    finally:
-        state.close()
-        client.close()
+    summary, cfg = _run_with_progress(
+        config,
+        dry_run=dry_run,
+        force=force,
+        no_delete=no_delete,
+        quiet=quiet,
+        json_output=json_output,
+    )
+    if json_output:
+        typer.echo(json.dumps(summary.to_dict(), indent=2))
+    elif not quiet:
+        if dry_run:
+            typer.echo("[dry-run] No changes applied")
+        _print_summary(summary, cfg.sync)
+        for err in summary.errors:
+            typer.echo(f"ERROR: {err}", err=True)
+    if cfg.sync.notify_url and not dry_run:
+        send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
     if summary.errors:
         raise typer.Exit(1)
 
@@ -95,47 +67,17 @@ def status(
     json_output: JsonOption = False,
     quiet: QuietOption = False,
 ) -> None:
-    cfg = load_config(config)
-    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
-    state = StateDB()
-    summary = SyncSummary()
-    try:
-        show_progress = not quiet and not json_output
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=True,
-            disable=not show_progress,
-        ) as progress:
-            task = progress.add_task("Starting...", total=None)
-
-            def on_status(msg: str) -> None:
-                progress.update(task, description=msg)
-
-            def on_progress(current: int, total: int) -> None:
-                progress.update(
-                    task, description=f"Resolving paths... {current}/{total}"
-                )
-
-            summary = run_sync(
-                cfg,
-                client,
-                state,
-                dry_run=True,
-                on_status=on_status,
-                on_progress=on_progress,
-            )
-        if json_output:
-            typer.echo(json.dumps(summary.to_dict(), indent=2))
-        elif not quiet:
-            if summary.has_drift:
-                typer.echo("Drift detected:")
-            else:
-                typer.echo("No drift")
-            _print_summary(summary, cfg.sync)
-    finally:
-        state.close()
-        client.close()
+    summary, cfg = _run_with_progress(
+        config, dry_run=True, quiet=quiet, json_output=json_output
+    )
+    if json_output:
+        typer.echo(json.dumps(summary.to_dict(), indent=2))
+    elif not quiet:
+        if summary.has_drift:
+            typer.echo("Drift detected:")
+        else:
+            typer.echo("No drift")
+        _print_summary(summary, cfg.sync)
     if summary.has_drift or summary.errors:
         raise typer.Exit(1)
 

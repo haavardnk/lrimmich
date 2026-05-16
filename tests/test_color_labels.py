@@ -8,10 +8,10 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.color_labels import (
     ColorLabelsResult,
-    _ensure_color_tags,
     apply_color_labels_sync,
     plan_color_labels_sync,
 )
+from lrimmich.sync.tags import TagAction
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -76,25 +76,9 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
 
 
 @respx.mock
-def test_ensure_color_tags_creates_missing(client: ImmichClient) -> None:
-    respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "lr:color:red"})
-    result = _ensure_color_tags(client, [])
-    assert "red" in result
-
-
-@respx.mock
-def test_ensure_color_tags_reuses_existing(client: ImmichClient) -> None:
-    existing = [{"id": "existing-id", "value": "lr:color:red"}]
-    respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "created"})
-    result = _ensure_color_tags(client, existing)
-    assert result["red"] == "existing-id"
-
-
-@respx.mock
 def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
     respx.put(f"{API}/tags/t-red/assets").respond(json=None)
     respx.delete(f"{API}/tags/t-blue/assets").respond(json=None)
-    from lrimmich.sync.color_labels import TagAction
 
     actions = [
         TagAction(
@@ -113,7 +97,6 @@ def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
 @respx.mock
 def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     respx.put(f"{API}/tags/t-red/assets").respond(json=None)
-    from lrimmich.sync.color_labels import TagAction
 
     actions = [
         TagAction(kind="tag", tag_id="t-red", tag_name="lr:color:red", asset_ids=["a1"])
@@ -122,10 +105,3 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_color_labels"
-
-
-def test_ensure_color_tags_no_create(client: ImmichClient) -> None:
-    existing = [{"id": "e1", "value": "lr:color:red"}]
-    result = _ensure_color_tags(client, existing, create=False)
-    assert result["red"] == "e1"
-    assert result["blue"].startswith("pending:")

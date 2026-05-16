@@ -1,9 +1,10 @@
 import json
 from dataclasses import dataclass, field
-from typing import Any
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+
+TagMap = dict[str, str]
 
 
 @dataclass
@@ -27,9 +28,9 @@ def ensure_tags(
     prefix: str,
     *,
     create: bool = True,
-) -> dict[str, str]:
+) -> TagMap:
     existing_by_name = {t["value"]: t["id"] for t in existing_tags}
-    tag_map: dict[str, str] = {}
+    tag_map: TagMap = {}
     for key in sorted(needed):
         tag_name = prefix + key
         if tag_name in existing_by_name:
@@ -45,7 +46,7 @@ def ensure_tags(
 def build_tag_actions(
     by_tag_add: dict[str, list[str]],
     by_tag_remove: dict[str, list[str]],
-    tag_map: dict[str, str],
+    tag_map: TagMap,
     prefix: str,
 ) -> list[TagAction]:
     actions: list[TagAction] = []
@@ -72,7 +73,7 @@ def build_tag_actions(
 
 def apply_tag_actions(
     actions: list[TagAction],
-    desired: Any,
+    desired: dict[str, str] | dict[str, list[str]],
     client: ImmichClient,
     state: StateDB,
     snapshot_key: str,

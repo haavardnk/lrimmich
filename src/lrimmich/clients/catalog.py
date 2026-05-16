@@ -146,52 +146,39 @@ def read_collection_covers(catalog: Path) -> dict[int, str]:
         return result
 
 
-def read_flagged_images(catalog: Path) -> set[str]:
+def _image_query(
+    catalog: Path,
+    extra_cols: str,
+    where: str,
+) -> list[sqlite3.Row]:
     with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT af.pathFromRoot, lf.idx_filename
+        return conn.execute(f"""
+            SELECT af.pathFromRoot, lf.idx_filename{extra_cols}
             FROM Adobe_images ai
             JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
             JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ai.pick = 1
+            WHERE {where}
         """).fetchall()
-        return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
+
+
+def read_flagged_images(catalog: Path) -> set[str]:
+    rows = _image_query(catalog, "", "ai.pick = 1")
+    return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
 
 
 def read_rejected_images(catalog: Path) -> set[str]:
-    with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT af.pathFromRoot, lf.idx_filename
-            FROM Adobe_images ai
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ai.pick = -1
-        """).fetchall()
-        return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
+    rows = _image_query(catalog, "", "ai.pick = -1")
+    return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
 
 
 def read_rated_images(catalog: Path) -> dict[str, int]:
-    with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT af.pathFromRoot, lf.idx_filename, ai.rating
-            FROM Adobe_images ai
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ai.rating > 0
-        """).fetchall()
-        return {r["pathFromRoot"] + r["idx_filename"]: r["rating"] for r in rows}
+    rows = _image_query(catalog, ", ai.rating", "ai.rating > 0")
+    return {r["pathFromRoot"] + r["idx_filename"]: r["rating"] for r in rows}
 
 
 def read_color_labels(catalog: Path) -> dict[str, str]:
-    with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT af.pathFromRoot, lf.idx_filename, ai.colorLabels
-            FROM Adobe_images ai
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ai.colorLabels != ''
-        """).fetchall()
-        return {r["pathFromRoot"] + r["idx_filename"]: r["colorLabels"] for r in rows}
+    rows = _image_query(catalog, ", ai.colorLabels", "ai.colorLabels != ''")
+    return {r["pathFromRoot"] + r["idx_filename"]: r["colorLabels"] for r in rows}
 
 
 def _build_keyword_hierarchy(

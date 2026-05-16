@@ -88,7 +88,7 @@ def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
     )
     summary = SyncSummary()
     summary.errors.append("some error")
-    with patch("lrimmich.commands.run_sync", return_value=summary):
+    with patch("lrimmich.app.run_sync", return_value=summary):
         result = runner.invoke(app, ["status", "--config", str(cfg_path), "-q"])
     assert result.exit_code == 1
 
@@ -104,9 +104,9 @@ def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
         'library_path = "/ext/"\n'
     )
     with (
-        patch("lrimmich.commands.run_sync", side_effect=RuntimeError("boom")),
-        patch("lrimmich.commands.ImmichClient") as mock_cls,
-        patch("lrimmich.commands.StateDB") as mock_state_cls,
+        patch("lrimmich.app.run_sync", side_effect=RuntimeError("boom")),
+        patch("lrimmich.app.ImmichClient") as mock_cls,
+        patch("lrimmich.app.StateDB") as mock_state_cls,
     ):
         mock_client = mock_cls.return_value
         mock_state = mock_state_cls.return_value

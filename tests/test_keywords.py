@@ -9,11 +9,10 @@ from lrimmich.clients.state import StateDB
 from lrimmich.sync.keywords import (
     KEYWORD_TAG_PREFIX,
     KeywordsResult,
-    TagAction,
-    _ensure_keyword_tags,
     apply_keywords_sync,
     plan_keywords_sync,
 )
+from lrimmich.sync.tags import TagAction
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -84,24 +83,6 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
     assert len(actions) == 0
 
 
-@respx.mock
-def test_ensure_keyword_tags_creates_missing(client: ImmichClient) -> None:
-    respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "created"})
-    result = _ensure_keyword_tags(client, [], {"Nature", "Travel"})
-    assert len(result) == 2
-    assert "Nature" in result
-    assert "Travel" in result
-
-
-@respx.mock
-def test_ensure_keyword_tags_reuses_existing(client: ImmichClient) -> None:
-    existing = [{"id": "e1", "value": f"{KEYWORD_TAG_PREFIX}Nature"}]
-    respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "created"})
-    result = _ensure_keyword_tags(client, existing, {"Nature", "Travel"})
-    assert result["Nature"] == "e1"
-    assert result["Travel"] == "new-id"
-
-
 def test_plan_hierarchy_preserved(state: StateDB) -> None:
     keywords = {"a.jpg": ["Nature/Trees"]}
     resolved = {"a.jpg": "a1"}
@@ -150,10 +131,3 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_keywords"
-
-
-def test_ensure_keyword_tags_no_create(client: ImmichClient) -> None:
-    existing = [{"id": "e1", "value": f"{KEYWORD_TAG_PREFIX}Nature"}]
-    result = _ensure_keyword_tags(client, existing, {"Nature", "Travel"}, create=False)
-    assert result["Nature"] == "e1"
-    assert result["Travel"].startswith("pending:")
