@@ -1,6 +1,6 @@
 [project]
 name = "lrimmich"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Sync Lightroom Classic catalogs to Immich"
 readme = "README.md"
 license = "MIT"
@@ -31,8 +31,11 @@ Issues = "https://github.com/haavardnk/lrimmich/issues"
 lrimmich = "lrimmich.app:app"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.uv]
 dev-dependencies = [
