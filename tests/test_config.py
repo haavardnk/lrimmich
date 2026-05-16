@@ -61,7 +61,7 @@ library_path = "/immich/"
 
 
 def test_missing_config_file() -> None:
-    with pytest.raises(FileNotFoundError, match="not found"):
+    with pytest.raises(SystemExit, match="config init"):
         load_config(Path("/nonexistent/config.toml"))
 
 

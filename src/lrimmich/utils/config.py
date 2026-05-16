@@ -64,7 +64,11 @@ class Config(BaseConfig):
 def load_config(path: Path | None = None) -> Config:
     config_path = path or DEFAULT_CONFIG_PATH
     if not config_path.exists():
-        raise FileNotFoundError(f"config file not found: {config_path}")
+        msg = (
+            f"Config not found: {config_path}\n"
+            "Run 'lrimmich config init' to create one."
+        )
+        raise SystemExit(msg)
     with open(config_path, "rb") as f:
         raw = tomllib.load(f)
     env_key = os.environ.get("LRIMMICH_API_KEY")

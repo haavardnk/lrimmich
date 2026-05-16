@@ -4,27 +4,9 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from lrimmich.app import _sleep_or_stop, app
+from lrimmich.app import app
 
 runner = CliRunner()
-
-
-def test_sleep_or_stop_exits_early() -> None:
-    called = False
-
-    def should_stop() -> bool:
-        nonlocal called
-        if called:
-            return True
-        called = True
-        return False
-
-    _sleep_or_stop(100, should_stop)
-    assert called
-
-
-def test_sleep_or_stop_runs_full() -> None:
-    _sleep_or_stop(0, lambda: False)
 
 
 def test_watch_missing_catalog(tmp_path: Path) -> None:
@@ -38,7 +20,7 @@ def test_watch_missing_catalog(tmp_path: Path) -> None:
     assert "not found" in result.output
 
 
-def test_watch_no_work_when_mtime_unchanged(tmp_path: Path) -> None:
+def test_watch_runs_sync_on_change(tmp_path: Path) -> None:
     catalog = tmp_path / "test.lrcat"
     catalog.write_text("x")
     config_path = tmp_path / "config.toml"
@@ -46,25 +28,21 @@ def test_watch_no_work_when_mtime_unchanged(tmp_path: Path) -> None:
         f'[lightroom]\ncatalog = "{catalog}"\n'
         '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_path = "/img"\n'
     )
-    call_count = 0
-
-    def fake_sleep(seconds: int, should_stop: callable) -> None:
-        nonlocal call_count
-        call_count += 1
-        if call_count >= 2:
-            raise SystemExit(0)
-
+    fake_changes = iter([{("modified", str(catalog))}])
     with (
-        patch("lrimmich.watch._sleep_or_stop", side_effect=fake_sleep),
+        patch("lrimmich.watch.watch_files", return_value=fake_changes),
         patch("lrimmich.watch.run_sync") as mock_sync,
+        patch("lrimmich.watch.ImmichClient"),
+        patch("lrimmich.watch.StateDB"),
     ):
-        runner.invoke(app, ["watch", "--config", str(config_path), "--interval", "1"])
-        mock_sync.assert_not_called()
+        mock_sync.return_value.errors = []
+        result = runner.invoke(app, ["watch", "--config", str(config_path)])
+        assert result.exit_code == 0
+        mock_sync.assert_called_once()
 
 
 def test_watch_help_shows_options() -> None:
     result = runner.invoke(app, ["watch", "--help"])
     assert result.exit_code == 0
     plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
-    assert "--interval" in plain
     assert "--debounce" in plain

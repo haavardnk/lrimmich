@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -99,12 +98,3 @@ def _run_with_progress(
         state.close()
         client.close()
     return summary, cfg
-
-
-def _sleep_or_stop(seconds: int, should_stop: Callable[[], bool]) -> None:
-    import time
-
-    for _ in range(seconds):
-        if should_stop():
-            return
-        time.sleep(1)

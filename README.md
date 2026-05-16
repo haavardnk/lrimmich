@@ -53,10 +53,10 @@ lrimmich config show       # print resolved config (secrets redacted)
 
 ### Watch
 
-Watches the catalog file (including WAL) for writes, waits for debounce, then syncs:
+Watches the catalog file (including WAL) for filesystem events and syncs after a debounce window:
 
 ```
-lrimmich watch --interval 60 --debounce 5
+lrimmich watch --debounce 5000
 ```
 
 To run it as a background service:
