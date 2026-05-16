@@ -67,7 +67,7 @@ lrimmich install-service --interval 300
 
 ## How it works
 
-Reads the `.lrcat` SQLite database, maps LR file paths to Immich asset IDs by scanning the external library folder tree, then diffs against what was synced last time (stored in `~/.cache/lrimmich/state.db`). Repeat runs only touch what changed.
+Reads the `.lrcat` SQLite database, maps LR file paths to Immich asset IDs by scanning the external library folder tree, then diffs against what was synced last time (stored alongside the config in your platform's user state directory). Repeat runs only touch what changed.
 
 ## Alternatives
 

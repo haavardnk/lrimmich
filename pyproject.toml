@@ -17,10 +17,12 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.28.1",
+    "platformdirs>=4.9.6",
     "pydantic>=2.13.4",
     "rich>=15.0.0",
     "stamina>=26.1.0",
     "typer>=0.25.1",
+    "watchfiles>=1.1.1",
 ]
 
 [project.urls]

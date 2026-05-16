@@ -4,7 +4,9 @@ import time
 from pathlib import Path
 from typing import Any, Self
 
-DEFAULT_STATE_PATH = Path("~/.cache/lrimmich/state.db").expanduser()
+from platformdirs import user_state_path
+
+DEFAULT_STATE_PATH = user_state_path("lrimmich") / "state.db"
 
 SCHEMA_VERSION = 1
 

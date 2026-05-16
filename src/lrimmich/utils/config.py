@@ -3,9 +3,10 @@ import tomllib
 from pathlib import Path
 from typing import Literal
 
+from platformdirs import user_config_path
 from pydantic import BaseModel, ConfigDict, field_validator
 
-DEFAULT_CONFIG_PATH = Path("~/.config/lrimmich/config.toml").expanduser()
+DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
 
 
 class BaseConfig(BaseModel):
