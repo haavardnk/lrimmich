@@ -13,15 +13,19 @@ class RejectsResult:
 def plan_rejects_sync(
     rejected: set[str],
     resolved: dict[str, str],
+    state: StateDB,
 ) -> tuple[list[str], list[str]]:
-    to_archive: list[str] = []
-    to_unarchive: list[str] = []
+    desired_archive: set[str] = set()
+    desired_unarchive: set[str] = set()
     for rp, asset_id in resolved.items():
         if rp in rejected:
-            to_archive.append(asset_id)
+            desired_archive.add(asset_id)
         else:
-            to_unarchive.append(asset_id)
-    return sorted(to_archive), sorted(to_unarchive)
+            desired_unarchive.add(asset_id)
+    previous = state.get_synced_rejects()
+    to_archive = sorted(desired_archive - previous)
+    to_unarchive = sorted(desired_unarchive & previous)
+    return to_archive, to_unarchive
 
 
 def apply_rejects_sync(
@@ -39,6 +43,9 @@ def apply_rejects_sync(
         unarchived=len(to_unarchive),
     )
     if to_archive or to_unarchive:
+        previous = state.get_synced_rejects()
+        updated = (previous | set(to_archive)) - set(to_unarchive)
+        state.replace_synced_rejects(updated)
         state.append_audit_log(
             "sync_rejects",
             "rejects",

@@ -223,7 +223,7 @@ def run_sync(
             on_status("Syncing rejects...")
         try:
             rejected = read_rejected_images(cfg.lightroom.catalog)
-            to_arch, to_unarch = plan_rejects_sync(rejected, resolved)
+            to_arch, to_unarch = plan_rejects_sync(rejected, resolved, state)
             summary.rejects = RejectsResult(
                 archived=len(to_arch),
                 unarchived=len(to_unarch),

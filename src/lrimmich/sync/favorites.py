@@ -32,14 +32,17 @@ def plan_favorites_sync(
     state: StateDB,
 ) -> tuple[list[str], list[str]]:
     scoped = _scoped_asset_ids(scope, collections, state)
-    to_favorite: list[str] = []
-    to_unfavorite: list[str] = []
+    desired_favs: set[str] = set()
+    desired_unfavs: set[str] = set()
     for rp, asset_id in scoped.items():
         if rp in flagged:
-            to_favorite.append(asset_id)
+            desired_favs.add(asset_id)
         else:
-            to_unfavorite.append(asset_id)
-    return sorted(to_favorite), sorted(to_unfavorite)
+            desired_unfavs.add(asset_id)
+    previous = state.get_synced_favorites()
+    to_favorite = sorted(desired_favs - previous)
+    to_unfavorite = sorted(desired_unfavs & previous)
+    return to_favorite, to_unfavorite
 
 
 def apply_favorites_sync(
@@ -57,6 +60,9 @@ def apply_favorites_sync(
         unfavorited=len(to_unfavorite),
     )
     if to_favorite or to_unfavorite:
+        previous = state.get_synced_favorites()
+        updated = (previous | set(to_favorite)) - set(to_unfavorite)
+        state.replace_synced_favorites(updated)
         state.append_audit_log(
             "sync_favorites",
             "favorites",

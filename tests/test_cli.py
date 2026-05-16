@@ -15,7 +15,6 @@ runner = CliRunner()
     [
         ["--help"],
         ["sync", "--help"],
-        ["sync", "all", "--help"],
         ["status", "--help"],
         ["resolve", "--help"],
         ["doctor", "--help"],

@@ -16,9 +16,7 @@ from lrimmich.orchestrator import SyncSummary, run_sync
 from lrimmich.state import StateDB
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
-sync_app = typer.Typer(name="sync", no_args_is_help=True)
 config_app = typer.Typer(name="config", no_args_is_help=True)
-app.add_typer(sync_app, name="sync")
 app.add_typer(config_app, name="config")
 
 ConfigOption = Annotated[
@@ -62,8 +60,8 @@ def _print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
         typer.echo(f"keywords: +{summary.keywords.tagged} -{summary.keywords.untagged}")
 
 
-@sync_app.command("all")
-def sync_all(
+@app.command()
+def sync(
     config: ConfigOption = None,
     dry_run: DryRunOption = False,
     json_output: JsonOption = False,

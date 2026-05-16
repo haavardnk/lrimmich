@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS synced_covers (
     asset_id TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS synced_favorites (
+    asset_id TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS synced_rejects (
+    asset_id TEXT PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts INTEGER NOT NULL,
@@ -183,6 +191,32 @@ class StateDB:
             self._conn.execute(
                 "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
                 (album_id, asset_id),
+            )
+        self._conn.commit()
+
+    def get_synced_favorites(self) -> set[str]:
+        rows = self._conn.execute("SELECT asset_id FROM synced_favorites").fetchall()
+        return {r["asset_id"] for r in rows}
+
+    def replace_synced_favorites(self, asset_ids: set[str]) -> None:
+        self._conn.execute("DELETE FROM synced_favorites")
+        for asset_id in asset_ids:
+            self._conn.execute(
+                "INSERT INTO synced_favorites(asset_id) VALUES (?)",
+                (asset_id,),
+            )
+        self._conn.commit()
+
+    def get_synced_rejects(self) -> set[str]:
+        rows = self._conn.execute("SELECT asset_id FROM synced_rejects").fetchall()
+        return {r["asset_id"] for r in rows}
+
+    def replace_synced_rejects(self, asset_ids: set[str]) -> None:
+        self._conn.execute("DELETE FROM synced_rejects")
+        for asset_id in asset_ids:
+            self._conn.execute(
+                "INSERT INTO synced_rejects(asset_id) VALUES (?)",
+                (asset_id,),
             )
         self._conn.commit()
 
