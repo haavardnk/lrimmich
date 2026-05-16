@@ -118,6 +118,19 @@ class StateDB:
         )
         self._conn.commit()
 
+    def upsert_path_cache_bulk(
+        self,
+        entries: list[tuple[str, str, str]],
+    ) -> None:
+        now = int(time.time())
+        self._conn.executemany(
+            "INSERT OR REPLACE INTO path_cache"
+            "(relative_path, asset_id, original_path, last_verified_at) "
+            "VALUES (?, ?, ?, ?)",
+            [(rp, aid, op, now) for rp, aid, op in entries],
+        )
+        self._conn.commit()
+
     def get_all_cached_paths(self) -> dict[str, str]:
         rows = self._conn.execute(
             "SELECT relative_path, asset_id FROM path_cache"

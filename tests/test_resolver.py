@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pytest
 import respx
 
 from lrimmich.immich import ImmichClient
+from lrimmich.state import StateDB
 from lrimmich.resolver import map_path, resolve_paths
 
 
@@ -96,3 +99,23 @@ def test_same_filename_different_folders(client: ImmichClient) -> None:
     )
     result = resolve_paths({"dir1/same.jpg", "dir2/same.jpg"}, "/ext/", client)
     assert result == {"dir1/same.jpg": "a1", "dir2/same.jpg": "a2"}
+
+
+@respx.mock
+def test_warm_cache_skips_api(client: ImmichClient, tmp_path: Path) -> None:
+    state = StateDB(tmp_path / "state.db")
+    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    result = resolve_paths({"a.jpg"}, "/ext/", client, state=state)
+    assert result == {"a.jpg": "cached-id"}
+
+
+@respx.mock
+def test_cache_miss_falls_through(client: ImmichClient, tmp_path: Path) -> None:
+    state = StateDB(tmp_path / "state.db")
+    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    _mock_folders(
+        ["/ext"],
+        {"/ext": [{"id": "new-id", "originalPath": "/ext/b.jpg"}]},
+    )
+    result = resolve_paths({"a.jpg", "b.jpg"}, "/ext/", client, state=state)
+    assert result == {"a.jpg": "cached-id", "b.jpg": "new-id"}

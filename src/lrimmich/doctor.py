@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,9 +29,8 @@ def check_catalog(catalog: Path) -> CheckResult:
     if not catalog.exists():
         return CheckResult("catalog", False, f"Not found: {catalog}")
     try:
-        conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
-        conn.execute("SELECT id_local FROM AgLibraryCollection LIMIT 1")
-        conn.close()
+        with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
+            conn.execute("SELECT id_local FROM AgLibraryCollection LIMIT 1")
     except sqlite3.OperationalError as e:
         return CheckResult("catalog", False, str(e))
     return CheckResult("catalog", True, "Readable")
@@ -41,10 +41,9 @@ def check_wal_lock(catalog: Path) -> CheckResult:
     if not wal.exists():
         return CheckResult("wal_lock", True, "No WAL file")
     try:
-        conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
-        conn.execute("BEGIN IMMEDIATE")
-        conn.rollback()
-        conn.close()
+        with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.rollback()
         return CheckResult("wal_lock", True, "WAL not locked")
     except sqlite3.OperationalError:
         return CheckResult("wal_lock", False, "WAL locked (Lightroom open?)")
@@ -74,15 +73,14 @@ def check_path_mapping(
     strip: str = "",
 ) -> CheckResult:
     try:
-        conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT af.pathFromRoot, lf.idx_filename "
-            "FROM AgLibraryFile lf "
-            "JOIN AgLibraryFolder af ON lf.folder = af.id_local "
-            "LIMIT 1"
-        ).fetchone()
-        conn.close()
+        with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT af.pathFromRoot, lf.idx_filename "
+                "FROM AgLibraryFile lf "
+                "JOIN AgLibraryFolder af ON lf.folder = af.id_local "
+                "LIMIT 1"
+            ).fetchone()
         if not row:
             return CheckResult("path_mapping", False, "No files in catalog")
         relative_path = row["pathFromRoot"] + row["idx_filename"]

@@ -143,13 +143,13 @@ def run_sync(
         all_paths,
         cfg.immich.library_path,
         client,
+        state=state,
         on_progress=on_progress,
         strip=cfg.lightroom.strip,
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
-    for rp, asset_id in resolved.items():
-        state.upsert_path_cache(rp, asset_id, rp)
+    state.upsert_path_cache_bulk([(rp, aid, rp) for rp, aid in resolved.items()])
 
     if cfg.sync.albums:
         if on_status:

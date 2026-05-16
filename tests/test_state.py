@@ -59,6 +59,32 @@ def test_get_all_cached_paths(db: StateDB) -> None:
     assert result == {"a.jpg": "x1", "b.jpg": "x2"}
 
 
+def test_upsert_path_cache_bulk(db: StateDB) -> None:
+    db.upsert_path_cache_bulk(
+        [
+            ("a.jpg", "id-a", "/ext/a.jpg"),
+            ("b.jpg", "id-b", "/ext/b.jpg"),
+            ("c.jpg", "id-c", "/ext/c.jpg"),
+        ]
+    )
+    assert db.get_all_cached_paths() == {
+        "a.jpg": "id-a",
+        "b.jpg": "id-b",
+        "c.jpg": "id-c",
+    }
+
+
+def test_upsert_path_cache_bulk_overwrites(db: StateDB) -> None:
+    db.upsert_path_cache("a.jpg", "old", "/ext/a.jpg")
+    db.upsert_path_cache_bulk([("a.jpg", "new", "/ext/a.jpg")])
+    assert db.get_cached_asset("a.jpg") == "new"
+
+
+def test_upsert_path_cache_bulk_empty(db: StateDB) -> None:
+    db.upsert_path_cache_bulk([])
+    assert db.get_all_cached_paths() == {}
+
+
 def test_album_ownership_upsert(db: StateDB) -> None:
     db.upsert_album_ownership(1, "immich-abc", "Vacation")
     row = db.get_album_ownership(1)
