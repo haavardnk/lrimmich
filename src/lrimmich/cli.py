@@ -19,7 +19,7 @@ from lrimmich.doctor import run_doctor
 from lrimmich.immich import ImmichClient
 from lrimmich.notify import send_notification
 from lrimmich.orchestrator import SyncSummary, run_sync
-from lrimmich.service import generate_service
+from lrimmich.service import generate_service, service_paths
 from lrimmich.state import StateDB
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
@@ -281,6 +281,33 @@ def install_service(
             typer.echo(
                 "Run: systemctl --user daemon-reload"
                 " && systemctl --user enable --now lrimmich.timer"
+            )
+
+
+@app.command(name="uninstall-service")
+def uninstall_service(
+    dry_run: DryRunOption = False,
+) -> None:
+    kind, paths = service_paths()
+    removed = False
+    for path in paths:
+        if path.exists():
+            if dry_run:
+                typer.echo(f"Would remove {path}")
+            else:
+                path.unlink()
+                typer.echo(f"Removed {path}")
+            removed = True
+    if not removed:
+        typer.echo("No service files found.")
+        return
+    if not dry_run:
+        if kind == "launchd":
+            typer.echo(f"Run: launchctl unload {paths[0]}")
+        else:
+            typer.echo(
+                "Run: systemctl --user disable --now lrimmich.timer"
+                " && systemctl --user daemon-reload"
             )
 
 

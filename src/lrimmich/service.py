@@ -55,6 +55,18 @@ WantedBy=timers.target
 """
 
 
+def service_paths() -> tuple[str, list[Path]]:
+    system = platform.system()
+    if system == "Darwin":
+        return "launchd", [
+            Path("~/Library/LaunchAgents/com.lrimmich.sync.plist").expanduser(),
+        ]
+    return "systemd", [
+        Path("~/.config/systemd/user/lrimmich.service").expanduser(),
+        Path("~/.config/systemd/user/lrimmich.timer").expanduser(),
+    ]
+
+
 def generate_service(interval: int = 300) -> tuple[str, dict[str, str]]:
     exe = shutil.which("lrimmich") or "lrimmich"
     system = platform.system()

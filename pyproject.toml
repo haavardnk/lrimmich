@@ -3,13 +3,29 @@ name = "lrimmich"
 version = "0.1.0"
 description = "Sync Lightroom Classic catalogs to Immich"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
+authors = [{ name = "Håvard Nordhus Kråkenes" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics",
+]
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
     "rich>=15.0.0",
     "typer>=0.25.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/haavardnk/lrimmich"
+Repository = "https://github.com/haavardnk/lrimmich"
+Issues = "https://github.com/haavardnk/lrimmich/issues"
 
 [project.scripts]
 lrimmich = "lrimmich.cli:app"

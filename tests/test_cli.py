@@ -18,6 +18,7 @@ runner = CliRunner()
         ["status", "--help"],
         ["watch", "--help"],
         ["install-service", "--help"],
+        ["uninstall-service", "--help"],
         ["doctor", "--help"],
         ["adopt", "--help"],
         ["config", "--help"],
