@@ -1,6 +1,11 @@
 import platform
 import shutil
 from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from lrimmich.app import DryRunOption, app
 
 LAUNCHD_PLIST = """\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -86,3 +91,56 @@ def generate_service(interval: int = 300) -> tuple[str, dict[str, str]]:
         str(base / "lrimmich.service"): service,
         str(base / "lrimmich.timer"): timer,
     }
+
+
+@app.command(name="install-service")
+def install_service(
+    interval: Annotated[int, typer.Option(help="Sync interval in seconds.")] = 300,
+    dry_run: DryRunOption = False,
+) -> None:
+    kind, files = generate_service(interval)
+    for path, content in files.items():
+        if dry_run:
+            typer.echo(f"Would write {path}:")
+            typer.echo(content)
+        else:
+            target = Path(path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+            typer.echo(f"Wrote {path}")
+    if not dry_run:
+        if kind == "launchd":
+            plist = next(iter(files))
+            typer.echo(f"Run: launchctl load {plist}")
+        else:
+            typer.echo(
+                "Run: systemctl --user daemon-reload"
+                " && systemctl --user enable --now lrimmich.timer"
+            )
+
+
+@app.command(name="uninstall-service")
+def uninstall_service(
+    dry_run: DryRunOption = False,
+) -> None:
+    kind, paths = service_paths()
+    removed = False
+    for path in paths:
+        if path.exists():
+            if dry_run:
+                typer.echo(f"Would remove {path}")
+            else:
+                path.unlink()
+                typer.echo(f"Removed {path}")
+            removed = True
+    if not removed:
+        typer.echo("No service files found.")
+        return
+    if not dry_run:
+        if kind == "launchd":
+            typer.echo(f"Run: launchctl unload {paths[0]}")
+        else:
+            typer.echo(
+                "Run: systemctl --user disable --now lrimmich.timer"
+                " && systemctl --user daemon-reload"
+            )

@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 import lrimmich.utils as lrimmich_utils
-from lrimmich.cli import app
+from lrimmich.app import app
 from lrimmich.sync.summary import SyncSummary
 
 runner = CliRunner()
@@ -57,7 +57,7 @@ def test_config_show_redacts_key(tmp_path: Path) -> None:
 
 def test_config_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "lrimmich" / "config.toml"
-    monkeypatch.setattr("lrimmich.cli.DEFAULT_CONFIG_PATH", target)
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_CONFIG_PATH", target)
     result = runner.invoke(app, ["config", "init"])
     assert result.exit_code == 0
     assert target.exists()
@@ -71,7 +71,7 @@ def test_config_init_already_exists(
 ) -> None:
     target = tmp_path / "config.toml"
     target.write_text("existing")
-    monkeypatch.setattr("lrimmich.cli.DEFAULT_CONFIG_PATH", target)
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_CONFIG_PATH", target)
     result = runner.invoke(app, ["config", "init"])
     assert result.exit_code == 1
 
@@ -88,7 +88,7 @@ def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
     )
     summary = SyncSummary()
     summary.errors.append("some error")
-    with patch("lrimmich.cli.run_sync", return_value=summary):
+    with patch("lrimmich.commands.run_sync", return_value=summary):
         result = runner.invoke(app, ["status", "--config", str(cfg_path), "-q"])
     assert result.exit_code == 1
 
@@ -104,9 +104,9 @@ def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
         'library_path = "/ext/"\n'
     )
     with (
-        patch("lrimmich.cli.run_sync", side_effect=RuntimeError("boom")),
-        patch("lrimmich.cli.ImmichClient") as mock_cls,
-        patch("lrimmich.cli.StateDB") as mock_state_cls,
+        patch("lrimmich.commands.run_sync", side_effect=RuntimeError("boom")),
+        patch("lrimmich.commands.ImmichClient") as mock_cls,
+        patch("lrimmich.commands.StateDB") as mock_state_cls,
     ):
         mock_client = mock_cls.return_value
         mock_state = mock_state_cls.return_value

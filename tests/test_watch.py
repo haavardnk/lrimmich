@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from lrimmich.cli import _sleep_or_stop, app
+from lrimmich.app import _sleep_or_stop, app
 
 runner = CliRunner()
 
@@ -55,8 +55,8 @@ def test_watch_no_work_when_mtime_unchanged(tmp_path: Path) -> None:
             raise SystemExit(0)
 
     with (
-        patch("lrimmich.cli._sleep_or_stop", side_effect=fake_sleep),
-        patch("lrimmich.cli.run_sync") as mock_sync,
+        patch("lrimmich.watch._sleep_or_stop", side_effect=fake_sleep),
+        patch("lrimmich.watch.run_sync") as mock_sync,
     ):
         runner.invoke(app, ["watch", "--config", str(config_path), "--interval", "1"])
         mock_sync.assert_not_called()

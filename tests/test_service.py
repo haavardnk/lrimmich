@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from lrimmich.cli import app
+from lrimmich.app import app
 from lrimmich.service import generate_service, service_paths
 
 runner = CliRunner()
@@ -68,7 +68,8 @@ def test_service_paths_linux() -> None:
 def test_uninstall_service_dry_run(tmp_path: Path) -> None:
     fake_plist = tmp_path / "com.lrimmich.sync.plist"
     fake_plist.write_text("x")
-    with patch("lrimmich.cli.service_paths", return_value=("launchd", [fake_plist])):
+    mock_paths = ("launchd", [fake_plist])
+    with patch("lrimmich.service.service_paths", return_value=mock_paths):
         result = runner.invoke(app, ["uninstall-service", "--dry-run"])
     assert result.exit_code == 0
     assert "Would remove" in result.output
@@ -78,7 +79,8 @@ def test_uninstall_service_dry_run(tmp_path: Path) -> None:
 def test_uninstall_service_removes_files(tmp_path: Path) -> None:
     fake_plist = tmp_path / "com.lrimmich.sync.plist"
     fake_plist.write_text("x")
-    with patch("lrimmich.cli.service_paths", return_value=("launchd", [fake_plist])):
+    mock_paths = ("launchd", [fake_plist])
+    with patch("lrimmich.service.service_paths", return_value=mock_paths):
         result = runner.invoke(app, ["uninstall-service"])
     assert result.exit_code == 0
     assert "Removed" in result.output
@@ -87,7 +89,7 @@ def test_uninstall_service_removes_files(tmp_path: Path) -> None:
 
 def test_uninstall_service_no_files() -> None:
     with patch(
-        "lrimmich.cli.service_paths",
+        "lrimmich.service.service_paths",
         return_value=("launchd", [Path("/nonexistent/file.plist")]),
     ):
         result = runner.invoke(app, ["uninstall-service"])
