@@ -1,19 +1,18 @@
+[lightroom]
 # Path to your Lightroom Classic catalog (.lrcat file)
 catalog = "~/Pictures/ClassicLibrary/ClassicLibrary.lrcat"
+# Optional prefix to strip from Lightroom-relative paths before matching
+# strip = "raw/"
 
+[immich]
 # Immich server URL and API key (generate at Immich → Account Settings → API Keys)
-immich_url = "http://localhost:2283"
+url = "http://localhost:2283"
 api_key = "your-api-key-here"
-
+# External library path where your photos are stored.
+# The folder structure must mirror your Lightroom catalog's folder structure.
+library_path = "/external/images/raw/"
 # Immich user IDs to share every synced album with (optional)
 # share_albums_with = ["user-uuid-here"]
-
-# Map Lightroom folder paths to Immich original paths.
-# lr_path is stripped and replaced with immich_path.
-# Multiple mappings supported — first match wins.
-[[path_map]]
-lr_path = ""
-immich_path = "/external/images/raw/"
 
 [exclude]
 # Lightroom collection parent IDs to skip (find via `lrimmich status --verbose`)

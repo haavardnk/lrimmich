@@ -6,19 +6,13 @@ from pydantic import ValidationError
 from lrimmich.config import load_config
 
 MINIMAL_TOML = """\
+[lightroom]
 catalog = "/tmp/test.lrcat"
-immich_url = "http://localhost:2283"
+
+[immich]
+url = "http://localhost:2283"
 api_key = "testkey123456"
-
-[[path_map]]
-lr_path = "/lr/"
-immich_path = "/immich/"
-"""
-
-ENV_KEY_TOML = """\
-catalog = "/tmp/test.lrcat"
-immich_url = "http://localhost:2283"
-api_key_env = "MY_TEST_KEY"
+library_path = "/immich/"
 """
 
 
@@ -31,18 +25,21 @@ def config_file(tmp_path: Path) -> Path:
 
 def test_load_basic(config_file: Path) -> None:
     cfg = load_config(config_file)
-    assert cfg.catalog == Path("/tmp/test.lrcat")
-    assert cfg.immich_url == "http://localhost:2283"
-    assert cfg.api_key == "testkey123456"
-    assert len(cfg.path_map) == 1
-    assert cfg.path_map[0].lr_path == "/lr/"
+    assert cfg.lightroom.catalog == Path("/tmp/test.lrcat")
+    assert cfg.immich.url == "http://localhost:2283"
+    assert cfg.immich.api_key == "testkey123456"
+    assert cfg.immich.library_path == "/immich/"
 
 
 def test_missing_api_key(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
+[lightroom]
 catalog = "/tmp/test.lrcat"
-immich_url = "http://localhost:2283"
+
+[immich]
+url = "http://localhost:2283"
+library_path = "/immich/"
 """)
     with pytest.raises(ValidationError, match="api_key"):
         load_config(p)
@@ -56,10 +53,14 @@ def test_missing_config_file() -> None:
 def test_missing_required_field(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
+[lightroom]
 catalog = "/tmp/test.lrcat"
+
+[immich]
 api_key = "k123456"
+library_path = "/immich/"
 """)
-    with pytest.raises(ValidationError, match="immich_url"):
+    with pytest.raises(ValidationError, match="url"):
         load_config(p)
 
 
@@ -74,9 +75,13 @@ def test_defaults(config_file: Path) -> None:
 def test_invalid_favorites_scope(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
+[lightroom]
 catalog = "/tmp/test.lrcat"
-immich_url = "http://localhost:2283"
+
+[immich]
+url = "http://localhost:2283"
 api_key = "testkey123456"
+library_path = "/immich/"
 
 [favorites]
 scope = "invalid"
@@ -88,9 +93,13 @@ scope = "invalid"
 def test_extra_field_rejected(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
+[lightroom]
 catalog = "/tmp/test.lrcat"
-immich_url = "http://localhost:2283"
+
+[immich]
+url = "http://localhost:2283"
 api_key = "testkey123456"
+library_path = "/immich/"
 bogus_field = "should fail"
 """)
     with pytest.raises(ValidationError):

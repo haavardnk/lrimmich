@@ -43,9 +43,12 @@ def test_no_args_shows_help() -> None:
 def test_config_show_redacts_key(tmp_path: Path) -> None:
     cfg = tmp_path / "config.toml"
     cfg.write_text(
+        "[lightroom]\n"
         'catalog = "/tmp/test.lrcat"\n'
-        'immich_url = "http://localhost"\n'
+        "[immich]\n"
+        'url = "http://localhost"\n'
         'api_key = "secret-key-123"\n'
+        'library_path = "/ext/"\n'
     )
     result = runner.invoke(app, ["config", "show", "--config", str(cfg)])
     assert result.exit_code == 0

@@ -48,7 +48,7 @@ def sync_all(
     no_delete: NoDeleteOption = False,
 ) -> None:
     cfg = load_config(config)
-    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
     show_progress = not quiet and not json_output
     with Progress(
@@ -144,7 +144,7 @@ def status(
     quiet: QuietOption = False,
 ) -> None:
     cfg = load_config(config)
-    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
     show_progress = not quiet and not json_output
     with Progress(
@@ -205,7 +205,7 @@ def doctor(
     config: ConfigOption = None,
 ) -> None:
     cfg = load_config(config)
-    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
     report = run_doctor(cfg, client, state)
     for check in report.checks:
@@ -223,9 +223,9 @@ def adopt(
     apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
 ) -> None:
     cfg = load_config(config)
-    client = ImmichClient(cfg.immich_url, cfg.api_key)
+    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
-    collections = read_collections(cfg.catalog, cfg.exclude)
+    collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
     candidates = find_adopt_candidates(collections, client, state)
     for c in candidates:
         tag = " [CONFLICT]" if c.conflict else ""
@@ -258,6 +258,6 @@ def config_show(
 ) -> None:
     cfg = load_config(config)
     redacted = cfg.model_dump()
-    redacted["api_key"] = "***"
+    redacted["immich"]["api_key"] = "***"
     for key, value in redacted.items():
         typer.echo(f"{key}: {value}")

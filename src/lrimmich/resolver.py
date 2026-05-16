@@ -1,34 +1,23 @@
 from collections.abc import Callable
 
-from lrimmich.config import PathMapping
 from lrimmich.immich import ImmichClient
 
 
-def map_path(relative_path: str, path_map: list[PathMapping]) -> str:
-    for mapping in path_map:
-        if relative_path.startswith(mapping.lr_path):
-            return mapping.immich_path + relative_path[len(mapping.lr_path) :]
-    return relative_path
-
-
-def _folder_from_path(path: str) -> str:
-    idx = path.rfind("/")
-    return path[: idx + 1] if idx >= 0 else ""
+def map_path(relative_path: str, immich_library_path: str, strip: str = "") -> str:
+    if strip and relative_path.startswith(strip):
+        relative_path = relative_path[len(strip) :]
+    return immich_library_path + relative_path
 
 
 def _build_immich_index(
-    path_map: list[PathMapping],
+    immich_library_path: str,
     client: ImmichClient,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, str]:
     all_folders = client.get_folder_paths()
-    if path_map:
-        immich_prefixes = {m.immich_path.rstrip("/") for m in path_map}
-        relevant = [
-            f
-            for f in all_folders
-            if any(f == p or f.startswith(p + "/") for p in immich_prefixes)
-        ]
+    if immich_library_path:
+        prefix = immich_library_path.rstrip("/")
+        relevant = [f for f in all_folders if f == prefix or f.startswith(prefix + "/")]
     else:
         relevant = all_folders
     index: dict[str, str] = {}
@@ -46,14 +35,15 @@ def _build_immich_index(
 
 def resolve_paths(
     relative_paths: set[str],
-    path_map: list[PathMapping],
+    immich_library_path: str,
     client: ImmichClient,
     on_progress: Callable[[int, int], None] | None = None,
+    strip: str = "",
 ) -> dict[str, str]:
-    index = _build_immich_index(path_map, client, on_progress)
+    index = _build_immich_index(immich_library_path, client, on_progress)
     cache: dict[str, str] = {}
     for rp in relative_paths:
-        expected = map_path(rp, path_map)
+        expected = map_path(rp, immich_library_path, strip)
         asset_id = index.get(expected)
         if asset_id:
             cache[rp] = asset_id

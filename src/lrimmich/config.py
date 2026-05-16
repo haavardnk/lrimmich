@@ -10,11 +10,6 @@ class BaseConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PathMapping(BaseConfig):
-    lr_path: str
-    immich_path: str
-
-
 class ExcludeConfig(BaseConfig):
     parent_ids: list[int] = []
     name_patterns: list[str] = []
@@ -25,6 +20,7 @@ class SyncConfig(BaseConfig):
     favorites: bool = True
     ratings: bool = True
     tags: bool = True
+    rejects: bool = False
     skip_empty: bool = True
 
 
@@ -39,6 +35,23 @@ class FavoritesConfig(BaseConfig):
         return v
 
 
+class LightroomConfig(BaseConfig):
+    catalog: Path
+    strip: str = ""
+
+    @field_validator("catalog")
+    @classmethod
+    def expand_catalog(cls, v: Path) -> Path:
+        return v.expanduser()
+
+
+class ImmichConfig(BaseConfig):
+    url: str
+    api_key: str
+    library_path: str
+    share_albums_with: list[str] = []
+
+
 class SafetyConfig(BaseConfig):
     delete_threshold: int = 100
     remove_percent_limit: int = 50
@@ -46,20 +59,12 @@ class SafetyConfig(BaseConfig):
 
 
 class Config(BaseConfig):
-    catalog: Path
-    immich_url: str
-    api_key: str
-    share_albums_with: list[str] = []
-    path_map: list[PathMapping] = []
+    lightroom: LightroomConfig
+    immich: ImmichConfig
     exclude: ExcludeConfig = ExcludeConfig()
     sync: SyncConfig = SyncConfig()
     favorites: FavoritesConfig = FavoritesConfig()
     safety: SafetyConfig = SafetyConfig()
-
-    @field_validator("catalog")
-    @classmethod
-    def expand_catalog(cls, v: Path) -> Path:
-        return v.expanduser()
 
 
 def load_config(path: Path | None = None) -> Config:

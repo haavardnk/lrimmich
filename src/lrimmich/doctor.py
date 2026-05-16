@@ -2,7 +2,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lrimmich.config import Config, PathMapping
+from lrimmich.config import Config
 from lrimmich.immich import ImmichClient
 from lrimmich.resolver import map_path
 from lrimmich.state import StateDB
@@ -67,13 +67,11 @@ def check_api_permissions(client: ImmichClient) -> CheckResult:
         return CheckResult("api_perms", False, str(e))
 
 
-def check_path_map(
-    path_map: list[PathMapping],
+def check_path_mapping(
+    immich_library_path: str,
     catalog: Path,
     client: ImmichClient,
 ) -> CheckResult:
-    if not path_map:
-        return CheckResult("path_map", True, "No mappings configured")
     try:
         conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
@@ -85,21 +83,21 @@ def check_path_map(
         ).fetchone()
         conn.close()
         if not row:
-            return CheckResult("path_map", False, "No files in catalog")
+            return CheckResult("path_mapping", False, "No files in catalog")
         relative_path = row["pathFromRoot"] + row["idx_filename"]
-        expected = map_path(relative_path, path_map)
+        expected = map_path(relative_path, immich_library_path)
         expected_folder = expected.rsplit("/", 1)[0]
         assets = client.get_folder_assets(expected_folder)
         for asset in assets:
             if asset.get("originalPath", "") == expected:
-                return CheckResult("path_map", True, f"Verified: {expected}")
+                return CheckResult("path_mapping", True, f"Verified: {expected}")
         return CheckResult(
-            "path_map",
+            "path_mapping",
             False,
             f"No asset matched (expected {expected})",
         )
     except Exception as e:
-        return CheckResult("path_map", False, str(e))
+        return CheckResult("path_mapping", False, str(e))
 
 
 def check_state_db(state: StateDB) -> CheckResult:
@@ -119,10 +117,12 @@ def run_doctor(
     state: StateDB,
 ) -> DoctorReport:
     report = DoctorReport()
-    report.checks.append(check_catalog(cfg.catalog))
-    report.checks.append(check_wal_lock(cfg.catalog))
+    report.checks.append(check_catalog(cfg.lightroom.catalog))
+    report.checks.append(check_wal_lock(cfg.lightroom.catalog))
     report.checks.append(check_immich_reachable(client))
     report.checks.append(check_api_permissions(client))
-    report.checks.append(check_path_map(cfg.path_map, cfg.catalog, client))
+    report.checks.append(
+        check_path_mapping(cfg.immich.library_path, cfg.lightroom.catalog, client)
+    )
     report.checks.append(check_state_db(state))
     return report

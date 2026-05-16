@@ -111,6 +111,20 @@ def read_flagged_images(catalog: Path) -> set[str]:
     return result
 
 
+def read_rejected_images(catalog: Path) -> set[str]:
+    conn = _connect(catalog)
+    rows = conn.execute("""
+        SELECT af.pathFromRoot, lf.idx_filename
+        FROM Adobe_images ai
+        JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
+        JOIN AgLibraryFolder af ON lf.folder = af.id_local
+        WHERE ai.pick = -1
+    """).fetchall()
+    result = {r["pathFromRoot"] + r["idx_filename"] for r in rows}
+    conn.close()
+    return result
+
+
 def read_rated_images(catalog: Path) -> dict[str, int]:
     conn = _connect(catalog)
     rows = conn.execute("""

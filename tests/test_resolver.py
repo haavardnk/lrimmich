@@ -1,39 +1,21 @@
 import pytest
 import respx
 
-from lrimmich.config import PathMapping
 from lrimmich.immich import ImmichClient
 from lrimmich.resolver import map_path, resolve_paths
 
 
 @pytest.mark.parametrize(
-    ("relative", "path_map", "expected"),
+    ("relative", "immich_library_path", "expected"),
     [
-        (
-            "2024/jan/IMG_001.jpg",
-            [PathMapping(lr_path="2024/", immich_path="/external/2024/")],
-            "/external/2024/jan/IMG_001.jpg",
-        ),
-        (
-            "other/file.jpg",
-            [PathMapping(lr_path="raw/", immich_path="/external/raw/")],
-            "other/file.jpg",
-        ),
+        ("2024/jan/IMG_001.jpg", "/external/", "/external/2024/jan/IMG_001.jpg"),
+        ("a.jpg", "/ext/", "/ext/a.jpg"),
+        ("a.jpg", "", "a.jpg"),
     ],
-    ids=["mapped", "unmapped"],
+    ids=["nested", "simple", "empty-root"],
 )
-def test_map_path(relative: str, path_map: list[PathMapping], expected: str) -> None:
-    assert map_path(relative, path_map) == expected
-
-
-def test_map_path_multi_root() -> None:
-    path_map = [
-        PathMapping(lr_path="raw/", immich_path="/external/raw/"),
-        PathMapping(lr_path="jpeg/", immich_path="/external/jpeg/"),
-    ]
-    assert map_path("raw/a.jpg", path_map) == "/external/raw/a.jpg"
-    assert map_path("jpeg/b.jpg", path_map) == "/external/jpeg/b.jpg"
-    assert map_path("other/c.jpg", path_map) == "other/c.jpg"
+def test_map_path(relative: str, immich_library_path: str, expected: str) -> None:
+    assert map_path(relative, immich_library_path) == expected
 
 
 IMMICH_URL = "http://immich.test"
@@ -54,8 +36,7 @@ def test_single_match(client: ImmichClient) -> None:
         ["/ext"],
         {"/ext": [{"id": "asset-1", "originalPath": "/ext/a.jpg"}]},
     )
-    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = resolve_paths({"a.jpg"}, path_map, client)
+    result = resolve_paths({"a.jpg"}, "/ext/", client)
     assert result == {"a.jpg": "asset-1"}
 
 
@@ -68,8 +49,7 @@ def test_ambiguous_match(client: ImmichClient) -> None:
             "/ext/2024": [{"id": "correct", "originalPath": "/ext/2024/a.jpg"}],
         },
     )
-    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = resolve_paths({"2024/a.jpg"}, path_map, client)
+    result = resolve_paths({"2024/a.jpg"}, "/ext/", client)
     assert result == {"2024/a.jpg": "correct"}
 
 
@@ -82,34 +62,15 @@ def test_trashed_asset_filtered(client: ImmichClient) -> None:
     respx.get(f"{API}/view/folder", params={"path": "/ext"}).respond(
         json=[{"id": "trashed", "originalPath": "/ext/a.jpg", "isTrashed": True}]
     )
-    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = resolve_paths({"a.jpg"}, path_map, client)
+    result = resolve_paths({"a.jpg"}, "/ext/", client)
     assert result == {}
 
 
 @respx.mock
 def test_unmatched(client: ImmichClient) -> None:
     _mock_folders(["/ext"], {"/ext": []})
-    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = resolve_paths({"missing.jpg"}, path_map, client)
+    result = resolve_paths({"missing.jpg"}, "/ext/", client)
     assert result == {}
-
-
-@respx.mock
-def test_multi_root_resolve(client: ImmichClient) -> None:
-    _mock_folders(
-        ["/raw", "/jpeg"],
-        {
-            "/raw": [{"id": "a1", "originalPath": "/raw/photo.jpg"}],
-            "/jpeg": [{"id": "a2", "originalPath": "/jpeg/render.jpg"}],
-        },
-    )
-    path_map = [
-        PathMapping(lr_path="raw/", immich_path="/raw/"),
-        PathMapping(lr_path="jpeg/", immich_path="/jpeg/"),
-    ]
-    result = resolve_paths({"raw/photo.jpg", "jpeg/render.jpg"}, path_map, client)
-    assert result == {"raw/photo.jpg": "a1", "jpeg/render.jpg": "a2"}
 
 
 @respx.mock
@@ -120,8 +81,7 @@ def test_irrelevant_folders_skipped(client: ImmichClient) -> None:
     respx.get(f"{API}/view/folder", params={"path": "/ext/photos"}).respond(
         json=[{"id": "a1", "originalPath": "/ext/photos/a.jpg"}]
     )
-    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = resolve_paths({"photos/a.jpg"}, path_map, client)
+    result = resolve_paths({"photos/a.jpg"}, "/ext/", client)
     assert result == {"photos/a.jpg": "a1"}
 
 
@@ -134,6 +94,5 @@ def test_same_filename_different_folders(client: ImmichClient) -> None:
             "/ext/dir2": [{"id": "a2", "originalPath": "/ext/dir2/same.jpg"}],
         },
     )
-    path_map = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = resolve_paths({"dir1/same.jpg", "dir2/same.jpg"}, path_map, client)
+    result = resolve_paths({"dir1/same.jpg", "dir2/same.jpg"}, "/ext/", client)
     assert result == {"dir1/same.jpg": "a1", "dir2/same.jpg": "a2"}

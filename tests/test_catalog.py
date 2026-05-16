@@ -8,6 +8,7 @@ from lrimmich.catalog import (
     read_flagged_images,
     read_keywords,
     read_rated_images,
+    read_rejected_images,
 )
 from lrimmich.config import ExcludeConfig
 from tests.fixtures.catalog_factory import CatalogBuilder
@@ -139,6 +140,18 @@ def test_no_flagged_images(catalog_path: Path) -> None:
     )
     flagged = read_flagged_images(catalog_path)
     assert flagged == set()
+
+
+def test_rejected_images(catalog_path: Path) -> None:
+    (
+        CatalogBuilder(catalog_path)
+        .add_image(1, "picked.jpg", "2024/", pick=1)
+        .add_image(2, "normal.jpg", "2024/", pick=0)
+        .add_image(3, "rejected.jpg", "2024/", pick=-1)
+        .build()
+    )
+    rejected = read_rejected_images(catalog_path)
+    assert rejected == {"2024/rejected.jpg"}
 
 
 def test_multiple_images_in_collection(catalog_path: Path) -> None:

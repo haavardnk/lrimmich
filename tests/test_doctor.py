@@ -4,12 +4,12 @@ import httpx
 import pytest
 import respx
 
-from lrimmich.config import Config, PathMapping
+from lrimmich.config import Config
 from lrimmich.doctor import (
     check_api_permissions,
     check_catalog,
     check_immich_reachable,
-    check_path_map,
+    check_path_mapping,
     check_state_db,
     check_wal_lock,
     run_doctor,
@@ -97,32 +97,34 @@ def test_check_api_permissions_fail(client: ImmichClient) -> None:
 
 
 @respx.mock
-def test_check_path_map_pass(catalog: Path, client: ImmichClient) -> None:
+def test_check_path_mapping_pass(catalog: Path, client: ImmichClient) -> None:
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(
             200,
             json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
-    mappings = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = check_path_map(mappings, catalog, client)
+    result = check_path_mapping("/ext/", catalog, client)
     assert result.ok
 
 
 @respx.mock
-def test_check_path_map_no_assets(catalog: Path, client: ImmichClient) -> None:
+def test_check_path_mapping_no_assets(catalog: Path, client: ImmichClient) -> None:
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(200, json=[]),
     )
-    mappings = [PathMapping(lr_path="", immich_path="/ext/")]
-    result = check_path_map(mappings, catalog, client)
+    result = check_path_mapping("/ext/", catalog, client)
     assert not result.ok
 
 
-def test_check_path_map_empty(catalog: Path) -> None:
+@respx.mock
+def test_check_path_mapping_empty(catalog: Path) -> None:
     client = ImmichClient(IMMICH_URL, "test-key")
-    result = check_path_map([], catalog, client)
-    assert result.ok
+    respx.get(f"{API}/view/folder").mock(
+        return_value=httpx.Response(200, json=[]),
+    )
+    result = check_path_mapping("", catalog, client)
+    assert not result.ok
 
 
 def test_check_state_db_pass(state: StateDB) -> None:
@@ -146,10 +148,8 @@ def test_run_doctor_all_pass(
         )
     )
     cfg = Config(
-        catalog=catalog,
-        immich_url=IMMICH_URL,
-        api_key="test-key",
-        path_map=[PathMapping(lr_path="", immich_path="/ext/")],
+        lightroom={"catalog": catalog},
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
     )
     report = run_doctor(cfg, client, state)
     assert report.all_ok
@@ -163,9 +163,8 @@ def test_run_doctor_partial_fail(
     respx.get(f"{API}/server/about").mock(return_value=httpx.Response(500))
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(401))
     cfg = Config(
-        catalog=tmp_path / "missing.lrcat",
-        immich_url=IMMICH_URL,
-        api_key="test-key",
+        lightroom={"catalog": tmp_path / "missing.lrcat"},
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
     )
     report = run_doctor(cfg, client, state)
     assert not report.all_ok

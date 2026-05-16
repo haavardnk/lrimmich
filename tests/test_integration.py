@@ -38,9 +38,8 @@ def catalog(tmp_path: Path) -> Path:
 @pytest.fixture()
 def cfg(catalog: Path) -> Config:
     return Config(
-        catalog=catalog,
-        immich_url=IMMICH_URL,
-        api_key="test-key",
+        lightroom={"catalog": catalog},
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": ""},
     )
 
 
