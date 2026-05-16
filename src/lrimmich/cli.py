@@ -11,16 +11,16 @@ from typing import Annotated
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-import lrimmich
-from lrimmich.adopt import apply_adopt, find_adopt_candidates
-from lrimmich.catalog import read_collections
-from lrimmich.config import DEFAULT_CONFIG_PATH, SyncConfig, load_config
-from lrimmich.doctor import DoctorReport, run_doctor
-from lrimmich.immich import ImmichClient
-from lrimmich.notify import send_notification
-from lrimmich.orchestrator import SyncSummary, run_sync
+import lrimmich.utils as lrimmich_utils
+from lrimmich.clients.catalog import read_collections
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.service import generate_service, service_paths
-from lrimmich.state import StateDB
+from lrimmich.sync.orchestrator import SyncSummary, run_sync
+from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
+from lrimmich.utils.config import DEFAULT_CONFIG_PATH, SyncConfig, load_config
+from lrimmich.utils.doctor import DoctorReport, run_doctor
+from lrimmich.utils.notify import send_notification
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
 config_app = typer.Typer(name="config", no_args_is_help=True)
@@ -374,7 +374,7 @@ def config_init() -> None:
         typer.echo(f"Config already exists: {DEFAULT_CONFIG_PATH}")
         raise typer.Exit(1)
     DEFAULT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    sample = resources.files(lrimmich).joinpath("sample_config.toml").read_text()
+    sample = resources.files(lrimmich_utils).joinpath("sample_config.toml").read_text()
     DEFAULT_CONFIG_PATH.write_text(sample)
     typer.echo(f"Created {DEFAULT_CONFIG_PATH}")
 

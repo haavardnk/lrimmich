@@ -1,3 +1,4 @@
+import os
 import tomllib
 from pathlib import Path
 from typing import Literal
@@ -40,7 +41,7 @@ class LightroomConfig(BaseConfig):
 
 class ImmichConfig(BaseConfig):
     url: str
-    api_key: str
+    api_key: str = ""
     library_path: str
     share_albums_with: list[str] = []
 
@@ -65,4 +66,11 @@ def load_config(path: Path | None = None) -> Config:
         raise FileNotFoundError(f"config file not found: {config_path}")
     with open(config_path, "rb") as f:
         raw = tomllib.load(f)
-    return Config(**raw)
+    env_key = os.environ.get("LRIMMICH_API_KEY")
+    if env_key:
+        raw.setdefault("immich", {})["api_key"] = env_key
+    cfg = Config(**raw)
+    if not cfg.immich.api_key:
+        msg = "immich.api_key required (set in config or LRIMMICH_API_KEY env var)"
+        raise SystemExit(msg)
+    return cfg

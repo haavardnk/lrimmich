@@ -2,7 +2,7 @@ import httpx
 import pytest
 import respx
 
-from lrimmich.immich import ImmichClient
+from lrimmich.clients.immich import ImmichClient
 
 
 @respx.mock
@@ -110,9 +110,7 @@ def test_add_album_users_already_added_ignored(
 
 
 @respx.mock
-def test_add_album_users_400_other_raises(
-    client: ImmichClient, api_url: str
-) -> None:
+def test_add_album_users_400_other_raises(client: ImmichClient, api_url: str) -> None:
     respx.put(f"{api_url}/albums/a1/users").mock(
         return_value=httpx.Response(400, text="Malformed payload")
     )

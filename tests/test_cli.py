@@ -5,9 +5,9 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-import lrimmich
+import lrimmich.utils as lrimmich_utils
 from lrimmich.cli import app
-from lrimmich.orchestrator import SyncSummary
+from lrimmich.sync.orchestrator import SyncSummary
 
 runner = CliRunner()
 
@@ -61,7 +61,8 @@ def test_config_init(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, ["config", "init"])
     assert result.exit_code == 0
     assert target.exists()
-    expected = resources.files(lrimmich).joinpath("sample_config.toml").read_text()
+    sample = resources.files(lrimmich_utils).joinpath("sample_config.toml")
+    expected = sample.read_text()
     assert target.read_text() == expected
 
 

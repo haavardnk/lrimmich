@@ -1,6 +1,6 @@
 import pytest
 
-from lrimmich.immich import ImmichClient
+from lrimmich.clients.immich import ImmichClient
 
 IMMICH_URL = "http://immich.test"
 

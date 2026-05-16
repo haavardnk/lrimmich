@@ -2,8 +2,8 @@ from pathlib import Path
 
 import respx
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.sync.rejects import RejectsResult, apply_rejects_sync, plan_rejects_sync
 
 IMMICH_URL = "http://immich.test"

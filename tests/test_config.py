@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from lrimmich.config import load_config
+from lrimmich.utils.config import load_config
 
 MINIMAL_TOML = """\
 [lightroom]
@@ -41,8 +41,23 @@ catalog = "/tmp/test.lrcat"
 url = "http://localhost:2283"
 library_path = "/immich/"
 """)
-    with pytest.raises(ValidationError, match="api_key"):
+    with pytest.raises(SystemExit, match="api_key"):
         load_config(p)
+
+
+def test_api_key_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text("""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+library_path = "/immich/"
+""")
+    monkeypatch.setenv("LRIMMICH_API_KEY", "from-env")
+    cfg = load_config(p)
+    assert cfg.immich.api_key == "from-env"
 
 
 def test_missing_config_file() -> None:

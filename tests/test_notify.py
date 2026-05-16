@@ -1,8 +1,8 @@
 import httpx
 import respx
 
-from lrimmich.notify import send_notification
-from lrimmich.orchestrator import SyncSummary
+from lrimmich.sync.orchestrator import SyncSummary
+from lrimmich.utils.notify import send_notification
 
 URL = "http://notify.test/hook"
 

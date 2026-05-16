@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 import respx
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.sync.color_labels import (
     ColorLabelsResult,
     _ensure_color_tags,

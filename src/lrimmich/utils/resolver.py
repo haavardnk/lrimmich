@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 
 
 def map_path(relative_path: str, immich_library_path: str, strip: str = "") -> str:

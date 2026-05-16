@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 
-from lrimmich.catalog import LrCollection
-from lrimmich.config import SafetyConfig
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.catalog import LrCollection
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.utils.config import SafetyConfig
 
 
 def format_album_name(collection: LrCollection, fmt: str = "{path}") -> str:

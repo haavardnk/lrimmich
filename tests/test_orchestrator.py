@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 import respx
 
-from lrimmich.config import Config
-from lrimmich.immich import ImmichClient
-from lrimmich.orchestrator import SyncSummary, run_sync
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.sync.orchestrator import SyncSummary, run_sync
+from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
 
 IMMICH_URL = "http://immich.test"

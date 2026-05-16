@@ -3,10 +3,10 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lrimmich.config import Config
-from lrimmich.immich import ImmichClient
-from lrimmich.resolver import map_path
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.utils.config import Config
+from lrimmich.utils.resolver import map_path
 
 
 @dataclass

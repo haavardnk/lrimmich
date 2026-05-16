@@ -2,7 +2,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from lrimmich.catalog import (
+from lrimmich.clients.catalog import (
     read_collection_covers,
     read_collections,
     read_color_labels,
@@ -11,10 +11,8 @@ from lrimmich.catalog import (
     read_rated_images,
     read_rejected_images,
 )
-from lrimmich.config import Config
-from lrimmich.immich import ImmichClient
-from lrimmich.resolver import resolve_paths
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.sync.albums import (
     AlbumAction,
     apply_album_sync,
@@ -52,6 +50,8 @@ from lrimmich.sync.rejects import (
     apply_rejects_sync,
     plan_rejects_sync,
 )
+from lrimmich.utils.config import Config
+from lrimmich.utils.resolver import resolve_paths
 
 
 @dataclass

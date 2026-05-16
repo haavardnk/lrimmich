@@ -4,10 +4,10 @@ import httpx
 import pytest
 import respx
 
-from lrimmich.config import Config
-from lrimmich.immich import ImmichClient
-from lrimmich.orchestrator import run_sync
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.sync.orchestrator import run_sync
+from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
 
 IMMICH_URL = "http://immich.test"
@@ -49,6 +49,7 @@ def _mock_folders(asset_map: dict[str, str]) -> None:
     ]
     respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
     respx.get(f"{API}/view/folder").respond(json=folder_assets)
+    respx.get(f"{API}/tags").respond(json=[])
 
 
 def _mock_album_crud() -> dict[str, list[dict[str, str]]]:

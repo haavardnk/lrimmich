@@ -4,8 +4,10 @@ import httpx
 import pytest
 import respx
 
-from lrimmich.config import Config
-from lrimmich.doctor import (
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.utils.config import Config
+from lrimmich.utils.doctor import (
     check_api_permissions,
     check_catalog,
     check_immich_reachable,
@@ -14,8 +16,6 @@ from lrimmich.doctor import (
     check_wal_lock,
     run_doctor,
 )
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
 from tests.fixtures.catalog_factory import CatalogBuilder
 
 IMMICH_URL = "http://immich.test"

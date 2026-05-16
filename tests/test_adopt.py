@@ -4,10 +4,10 @@ import httpx
 import pytest
 import respx
 
-from lrimmich.adopt import AdoptCandidate, apply_adopt, find_adopt_candidates
-from lrimmich.catalog import LrCollection
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.catalog import LrCollection
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.utils.adopt import AdoptCandidate, apply_adopt, find_adopt_candidates
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"

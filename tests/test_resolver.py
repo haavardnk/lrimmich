@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 import respx
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
-from lrimmich.resolver import map_path, resolve_paths
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
+from lrimmich.utils.resolver import map_path, resolve_paths
 
 
 @pytest.mark.parametrize(

@@ -4,14 +4,10 @@ from contextlib import closing
 from fnmatch import fnmatch
 from pathlib import Path
 
-from pydantic import ConfigDict
-
-from lrimmich.config import BaseConfig, ExcludeConfig
+from lrimmich.utils.config import BaseConfig, ExcludeConfig
 
 
 class LrCollection(BaseConfig):
-    model_config = ConfigDict(extra="forbid")
-
     id: int
     name: str
     full_name: str

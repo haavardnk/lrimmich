@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from lrimmich.catalog import LrCollection
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.catalog import LrCollection
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 
 
 @dataclass

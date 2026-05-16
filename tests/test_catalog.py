@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lrimmich.catalog import (
+from lrimmich.clients.catalog import (
     read_collection_covers,
     read_collections,
     read_color_labels,
@@ -11,7 +11,7 @@ from lrimmich.catalog import (
     read_rated_images,
     read_rejected_images,
 )
-from lrimmich.config import ExcludeConfig
+from lrimmich.utils.config import ExcludeConfig
 from tests.fixtures.catalog_factory import CatalogBuilder
 
 

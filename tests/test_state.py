@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from lrimmich.state import StateDB
+from lrimmich.clients.state import StateDB
 
 
 @pytest.fixture()

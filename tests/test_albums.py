@@ -4,10 +4,9 @@ import httpx
 import pytest
 import respx
 
-from lrimmich.catalog import LrCollection
-from lrimmich.config import SafetyConfig
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.catalog import LrCollection
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.sync.albums import (
     AlbumAction,
     DeleteThresholdExceeded,
@@ -16,6 +15,7 @@ from lrimmich.sync.albums import (
     format_album_name,
     plan_album_sync,
 )
+from lrimmich.utils.config import SafetyConfig
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"

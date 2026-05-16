@@ -2,8 +2,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 
 
 @dataclass

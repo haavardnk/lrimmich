@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 
 
 @dataclass

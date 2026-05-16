@@ -1,7 +1,7 @@
 import json
 
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.sync.tags import (
     TagAction,
     TagSyncResult,

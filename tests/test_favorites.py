@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 import respx
 
-from lrimmich.catalog import LrCollection
-from lrimmich.immich import ImmichClient
-from lrimmich.state import StateDB
+from lrimmich.clients.catalog import LrCollection
+from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.state import StateDB
 from lrimmich.sync.favorites import (
     FavoritesResult,
     apply_favorites_sync,
