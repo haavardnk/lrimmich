@@ -5,7 +5,8 @@ import respx
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.sync.orchestrator import SyncSummary, run_sync
+from lrimmich.sync.orchestrator import run_sync
+from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
 

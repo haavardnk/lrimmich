@@ -1,6 +1,4 @@
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
-from typing import Any
 
 from lrimmich.clients.catalog import (
     read_collection_covers,
@@ -14,7 +12,6 @@ from lrimmich.clients.catalog import (
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.albums import (
-    AlbumAction,
     apply_album_sync,
     plan_album_sync,
 )
@@ -50,72 +47,9 @@ from lrimmich.sync.rejects import (
     apply_rejects_sync,
     plan_rejects_sync,
 )
+from lrimmich.sync.summary import SyncSummary, count_album_actions
 from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import resolve_paths
-
-
-@dataclass
-class SyncSummary:
-    albums_created: int = 0
-    albums_renamed: int = 0
-    albums_deleted: int = 0
-    assets_added: int = 0
-    assets_removed: int = 0
-    favorites: FavoritesResult = field(default_factory=FavoritesResult)
-    ratings: RatingsResult = field(default_factory=RatingsResult)
-    rejects: RejectsResult = field(default_factory=RejectsResult)
-    color_labels: ColorLabelsResult = field(default_factory=ColorLabelsResult)
-    keywords: KeywordsResult = field(default_factory=KeywordsResult)
-    covers: CoversResult = field(default_factory=CoversResult)
-    errors: list[str] = field(default_factory=list)
-
-    @property
-    def has_drift(self) -> bool:
-        return (
-            self.albums_created > 0
-            or self.albums_renamed > 0
-            or self.albums_deleted > 0
-            or self.assets_added > 0
-            or self.assets_removed > 0
-            or self.favorites.favorited > 0
-            or self.favorites.unfavorited > 0
-            or self.ratings.set > 0
-            or self.ratings.cleared > 0
-            or self.rejects.archived > 0
-            or self.rejects.unarchived > 0
-            or self.color_labels.tagged > 0
-            or self.color_labels.untagged > 0
-            or self.keywords.tagged > 0
-            or self.keywords.untagged > 0
-            or self.covers.set > 0
-            or self.covers.cleared > 0
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def _count_actions(actions: list[AlbumAction]) -> dict[str, int]:
-    counts: dict[str, int] = {
-        "created": 0,
-        "renamed": 0,
-        "deleted": 0,
-        "assets_added": 0,
-        "assets_removed": 0,
-    }
-    for a in actions:
-        match a.kind:
-            case "create":
-                counts["created"] += 1
-            case "rename":
-                counts["renamed"] += 1
-            case "delete":
-                counts["deleted"] += 1
-            case "add_assets":
-                counts["assets_added"] += len(a.asset_ids)
-            case "remove_assets":
-                counts["assets_removed"] += len(a.asset_ids)
-    return counts
 
 
 def run_sync(
@@ -167,7 +101,7 @@ def run_sync(
                 skip_empty=cfg.sync.skip_empty,
                 album_name_format=cfg.sync.album_name_format,
             )
-            counts = _count_actions(album_actions)
+            counts = count_album_actions(album_actions)
             summary.albums_created = counts["created"]
             summary.albums_renamed = counts["renamed"]
             summary.albums_deleted = counts["deleted"]

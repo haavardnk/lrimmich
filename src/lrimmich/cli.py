@@ -16,7 +16,8 @@ from lrimmich.clients.catalog import read_collections
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.service import generate_service, service_paths
-from lrimmich.sync.orchestrator import SyncSummary, run_sync
+from lrimmich.sync.orchestrator import run_sync
+from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.utils.config import DEFAULT_CONFIG_PATH, SyncConfig, load_config
 from lrimmich.utils.doctor import DoctorReport, run_doctor

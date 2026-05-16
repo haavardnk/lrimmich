@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 import lrimmich.utils as lrimmich_utils
 from lrimmich.cli import app
-from lrimmich.sync.orchestrator import SyncSummary
+from lrimmich.sync.summary import SyncSummary
 
 runner = CliRunner()
 

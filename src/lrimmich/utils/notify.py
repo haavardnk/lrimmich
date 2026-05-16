@@ -1,6 +1,6 @@
 import httpx
 
-from lrimmich.sync.orchestrator import SyncSummary
+from lrimmich.sync.summary import SyncSummary
 
 
 def send_notification(
