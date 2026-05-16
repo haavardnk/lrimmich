@@ -78,7 +78,7 @@ def test_add_album_assets(client: ImmichClient, api_url: str) -> None:
 
 
 @respx.mock
-def test_add_album_assets_empty(client: ImmichClient, api_url: str) -> None:
+def test_add_album_assets_empty(client: ImmichClient) -> None:
     result = client.add_album_assets("a1", [])
     assert result == []
 
@@ -119,7 +119,7 @@ def test_add_album_users_400_other_raises(client: ImmichClient, api_url: str) ->
 
 
 @respx.mock
-def test_add_album_users_empty(client: ImmichClient, api_url: str) -> None:
+def test_add_album_users_empty(client: ImmichClient) -> None:
     client.add_album_users("a1", [])
 
 
@@ -164,7 +164,7 @@ def test_bulk_update_assets_chunking(client: ImmichClient, api_url: str) -> None
 
 
 @respx.mock
-def test_bulk_update_assets_empty(client: ImmichClient, api_url: str) -> None:
+def test_bulk_update_assets_empty(client: ImmichClient) -> None:
     client.bulk_update_assets([], isFavorite=False)
 
 
@@ -178,22 +178,13 @@ def test_update_asset(client: ImmichClient, api_url: str) -> None:
 
 
 @respx.mock
-def test_retry_on_429(client: ImmichClient, api_url: str) -> None:
+@pytest.mark.parametrize("status", [429, 500, 502, 503])
+def test_retry_on_transient_error(
+    status: int, client: ImmichClient, api_url: str
+) -> None:
     route = respx.get(f"{api_url}/server/about")
     route.side_effect = [
-        httpx.Response(429),
-        httpx.Response(200, json={"version": "1.0"}),
-    ]
-    result = client.server_about()
-    assert result["version"] == "1.0"
-    assert route.call_count == 2
-
-
-@respx.mock
-def test_retry_on_500(client: ImmichClient, api_url: str) -> None:
-    route = respx.get(f"{api_url}/server/about")
-    route.side_effect = [
-        httpx.Response(500),
+        httpx.Response(status),
         httpx.Response(200, json={"version": "1.0"}),
     ]
     result = client.server_about()
@@ -244,7 +235,7 @@ def test_tag_assets(client: ImmichClient, api_url: str) -> None:
 
 
 @respx.mock
-def test_tag_assets_empty(client: ImmichClient, api_url: str) -> None:
+def test_tag_assets_empty(client: ImmichClient) -> None:
     client.tag_assets("t1", [])
 
 

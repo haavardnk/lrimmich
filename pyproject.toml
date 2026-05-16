@@ -44,6 +44,7 @@ source = "vcs"
 dev-dependencies = [
     "pyrefly>=1.0.0",
     "pytest>=9.0.3",
+    "pytest-xdist>=3.8.0",
     "respx>=0.23.1",
     "ruff>=0.15.13",
 ]
@@ -58,6 +59,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-n auto"
 
 [tool.pyrefly]
 project_includes = ["src"]

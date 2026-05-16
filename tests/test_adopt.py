@@ -1,7 +1,4 @@
-from pathlib import Path
-
 import httpx
-import pytest
 import respx
 
 from lrimmich.clients.catalog import LrCollection
@@ -11,16 +8,6 @@ from lrimmich.utils.adopt import AdoptCandidate, apply_adopt, find_adopt_candida
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
-
-
-@pytest.fixture()
-def state(tmp_path: Path) -> StateDB:
-    return StateDB(tmp_path / "state.db")
-
-
-@pytest.fixture()
-def client() -> ImmichClient:
-    return ImmichClient(IMMICH_URL, "test-key")
 
 
 def _col(

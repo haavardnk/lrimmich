@@ -1,6 +1,3 @@
-from pathlib import Path
-
-import pytest
 import respx
 
 from lrimmich.clients.immich import ImmichClient
@@ -9,16 +6,6 @@ from lrimmich.sync.ratings import RatingsResult, apply_ratings_sync, plan_rating
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
-
-
-@pytest.fixture()
-def client() -> ImmichClient:
-    return ImmichClient(IMMICH_URL, "test-key")
-
-
-@pytest.fixture()
-def state(tmp_path: Path) -> StateDB:
-    return StateDB(tmp_path / "state.db")
 
 
 def test_plan_new_ratings(state: StateDB) -> None:

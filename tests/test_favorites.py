@@ -25,11 +25,6 @@ def state(tmp_path: Path) -> StateDB:
     return db
 
 
-@pytest.fixture()
-def client() -> ImmichClient:
-    return ImmichClient(IMMICH_URL, "test-key")
-
-
 def _col(
     id: int = 1,
     relative_paths: list[str] | None = None,

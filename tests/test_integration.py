@@ -15,16 +15,6 @@ API = IMMICH_URL + "/api"
 
 
 @pytest.fixture()
-def state(tmp_path: Path) -> StateDB:
-    return StateDB(tmp_path / "state.db")
-
-
-@pytest.fixture()
-def client() -> ImmichClient:
-    return ImmichClient(IMMICH_URL, "test-key")
-
-
-@pytest.fixture()
 def catalog(tmp_path: Path) -> Path:
     builder = CatalogBuilder(tmp_path / "test.lrcat")
     builder.add_collection(1, "Vacation")

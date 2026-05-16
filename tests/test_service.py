@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from lrimmich.app import app
@@ -50,19 +51,15 @@ def test_install_service_help() -> None:
     assert "--interval" in plain
 
 
-def test_service_paths_darwin() -> None:
-    with patch("lrimmich.service.platform.system", return_value="Darwin"):
+@pytest.mark.parametrize(
+    ("platform", "expected_kind", "expected_count"),
+    [("Darwin", "launchd", 1), ("Linux", "systemd", 2)],
+)
+def test_service_paths(platform: str, expected_kind: str, expected_count: int) -> None:
+    with patch("lrimmich.service.platform.system", return_value=platform):
         kind, paths = service_paths()
-    assert kind == "launchd"
-    assert len(paths) == 1
-    assert "LaunchAgents" in str(paths[0])
-
-
-def test_service_paths_linux() -> None:
-    with patch("lrimmich.service.platform.system", return_value="Linux"):
-        kind, paths = service_paths()
-    assert kind == "systemd"
-    assert len(paths) == 2
+    assert kind == expected_kind
+    assert len(paths) == expected_count
 
 
 def test_uninstall_service_dry_run(tmp_path: Path) -> None:
