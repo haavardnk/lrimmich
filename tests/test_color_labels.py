@@ -122,3 +122,10 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_color_labels"
+
+
+def test_ensure_color_tags_no_create(client: ImmichClient) -> None:
+    existing = [{"id": "e1", "value": "lr:color:red"}]
+    result = _ensure_color_tags(client, existing, create=False)
+    assert result["Red"] == "e1"
+    assert result["Blue"].startswith("pending:")

@@ -25,6 +25,8 @@ def _ensure_keyword_tags(
     client: ImmichClient,
     existing_tags: list[dict[str, str]],
     needed: set[str],
+    *,
+    create: bool = True,
 ) -> dict[str, str]:
     existing_by_name = {t["value"]: t["id"] for t in existing_tags}
     tag_map: dict[str, str] = {}
@@ -32,9 +34,11 @@ def _ensure_keyword_tags(
         tag_name = KEYWORD_TAG_PREFIX + keyword
         if tag_name in existing_by_name:
             tag_map[keyword] = existing_by_name[tag_name]
-        else:
+        elif create:
             result = client.create_tag(tag_name)
             tag_map[keyword] = result["id"]
+        else:
+            tag_map[keyword] = f"pending:{tag_name}"
     return tag_map
 
 

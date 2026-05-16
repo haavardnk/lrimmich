@@ -71,6 +71,7 @@ def check_path_mapping(
     immich_library_path: str,
     catalog: Path,
     client: ImmichClient,
+    strip: str = "",
 ) -> CheckResult:
     try:
         conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
@@ -85,7 +86,7 @@ def check_path_mapping(
         if not row:
             return CheckResult("path_mapping", False, "No files in catalog")
         relative_path = row["pathFromRoot"] + row["idx_filename"]
-        expected = map_path(relative_path, immich_library_path)
+        expected = map_path(relative_path, immich_library_path, strip)
         expected_folder = expected.rsplit("/", 1)[0]
         assets = client.get_folder_assets(expected_folder)
         for asset in assets:
@@ -122,7 +123,12 @@ def run_doctor(
     report.checks.append(check_immich_reachable(client))
     report.checks.append(check_api_permissions(client))
     report.checks.append(
-        check_path_mapping(cfg.immich.library_path, cfg.lightroom.catalog, client)
+        check_path_mapping(
+            cfg.immich.library_path,
+            cfg.lightroom.catalog,
+            client,
+            cfg.lightroom.strip,
+        )
     )
     report.checks.append(check_state_db(state))
     return report

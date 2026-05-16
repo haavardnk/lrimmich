@@ -1,5 +1,5 @@
 import time
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
@@ -17,24 +17,34 @@ class ImmichClient:
             timeout=timeout,
         )
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
     def _request(
         self,
         method: str,
         path: str,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
     ) -> Any:
         last_exc: httpx.HTTPStatusError | None = None
         for attempt in range(MAX_RETRIES):
-            response = self._client.request(method, path, json=json)
+            response = self._client.request(method, path, json=json, params=params)
             if response.status_code in RETRYABLE_STATUSES:
                 last_exc = self._make_status_error(response)
-                time.sleep(RETRY_BACKOFF * (2**attempt))
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(RETRY_BACKOFF * (2**attempt))
                 continue
             response.raise_for_status()
             if not response.content:
                 return None
             return response.json()
-        raise last_exc  # type: ignore[misc]
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("unreachable: no retries attempted")
 
     def _make_status_error(self, response: httpx.Response) -> httpx.HTTPStatusError:
         return httpx.HTTPStatusError(
@@ -160,4 +170,4 @@ class ImmichClient:
         return self._request("GET", "/view/folder/unique-paths") or []
 
     def get_folder_assets(self, path: str) -> list[dict[str, Any]]:
-        return self._request("GET", f"/view/folder?path={path}") or []
+        return self._request("GET", "/view/folder", params={"path": path}) or []

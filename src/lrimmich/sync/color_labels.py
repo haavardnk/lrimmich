@@ -25,6 +25,8 @@ class ColorLabelsResult:
 def _ensure_color_tags(
     client: ImmichClient,
     existing_tags: list[dict[str, str]],
+    *,
+    create: bool = True,
 ) -> dict[str, str]:
     tag_map: dict[str, str] = {}
     existing_by_name = {t["value"]: t["id"] for t in existing_tags}
@@ -32,9 +34,11 @@ def _ensure_color_tags(
         tag_name = COLOR_TAG_PREFIX + color.lower()
         if tag_name in existing_by_name:
             tag_map[color] = existing_by_name[tag_name]
-        else:
+        elif create:
             result = client.create_tag(tag_name)
             tag_map[color] = result["id"]
+        else:
+            tag_map[color] = f"pending:{tag_name}"
     return tag_map
 
 

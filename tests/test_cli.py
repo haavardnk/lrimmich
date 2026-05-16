@@ -1,11 +1,13 @@
 from importlib import resources
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
 import lrimmich
 from lrimmich.cli import app
+from lrimmich.orchestrator import SyncSummary
 
 runner = CliRunner()
 
@@ -71,3 +73,42 @@ def test_config_init_already_exists(
     monkeypatch.setattr("lrimmich.cli.DEFAULT_CONFIG_PATH", target)
     result = runner.invoke(app, ["config", "init"])
     assert result.exit_code == 1
+
+
+def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text(
+        "[lightroom]\n"
+        f'catalog = "{tmp_path / "test.lrcat"}"\n'
+        "[immich]\n"
+        'url = "http://localhost"\n'
+        'api_key = "k"\n'
+        'library_path = "/ext/"\n'
+    )
+    summary = SyncSummary()
+    summary.errors.append("some error")
+    with patch("lrimmich.cli.run_sync", return_value=summary):
+        result = runner.invoke(app, ["status", "--config", str(cfg_path), "-q"])
+    assert result.exit_code == 1
+
+
+def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text(
+        "[lightroom]\n"
+        f'catalog = "{tmp_path / "test.lrcat"}"\n'
+        "[immich]\n"
+        'url = "http://localhost"\n'
+        'api_key = "k"\n'
+        'library_path = "/ext/"\n'
+    )
+    with (
+        patch("lrimmich.cli.run_sync", side_effect=RuntimeError("boom")),
+        patch("lrimmich.cli.ImmichClient") as mock_cls,
+        patch("lrimmich.cli.StateDB") as mock_state_cls,
+    ):
+        mock_client = mock_cls.return_value
+        mock_state = mock_state_cls.return_value
+        runner.invoke(app, ["sync", "--config", str(cfg_path)])
+        mock_client.close.assert_called_once()
+        mock_state.close.assert_called_once()

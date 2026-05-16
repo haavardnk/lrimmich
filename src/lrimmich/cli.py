@@ -83,41 +83,45 @@ def sync(
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
-    show_progress = not quiet and not json_output
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        transient=True,
-        disable=not show_progress,
-    ) as progress:
-        task = progress.add_task("Starting...", total=None)
+    try:
+        show_progress = not quiet and not json_output
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+            disable=not show_progress,
+        ) as progress:
+            task = progress.add_task("Starting...", total=None)
 
-        def on_status(msg: str) -> None:
-            progress.update(task, description=msg)
+            def on_status(msg: str) -> None:
+                progress.update(task, description=msg)
 
-        def on_progress(current: int, total: int) -> None:
-            progress.update(task, description=f"Resolving paths... {current}/{total}")
+            def on_progress(current: int, total: int) -> None:
+                progress.update(
+                    task, description=f"Resolving paths... {current}/{total}"
+                )
 
-        summary = run_sync(
-            cfg,
-            client,
-            state,
-            dry_run=dry_run,
-            force=force,
-            no_delete=no_delete,
-            on_status=on_status,
-            on_progress=on_progress,
-        )
-    if json_output:
-        typer.echo(json.dumps(summary.to_dict(), indent=2))
-    elif not quiet:
-        if dry_run:
-            typer.echo("[dry-run] No changes applied")
-        _print_summary(summary, cfg.sync)
-        for err in summary.errors:
-            typer.echo(f"ERROR: {err}", err=True)
-    state.close()
-    client.close()
+            summary = run_sync(
+                cfg,
+                client,
+                state,
+                dry_run=dry_run,
+                force=force,
+                no_delete=no_delete,
+                on_status=on_status,
+                on_progress=on_progress,
+            )
+        if json_output:
+            typer.echo(json.dumps(summary.to_dict(), indent=2))
+        elif not quiet:
+            if dry_run:
+                typer.echo("[dry-run] No changes applied")
+            _print_summary(summary, cfg.sync)
+            for err in summary.errors:
+                typer.echo(f"ERROR: {err}", err=True)
+    finally:
+        state.close()
+        client.close()
     if cfg.sync.notify_url and not dry_run:
         send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
     if summary.errors:
@@ -133,40 +137,44 @@ def status(
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
-    show_progress = not quiet and not json_output
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        transient=True,
-        disable=not show_progress,
-    ) as progress:
-        task = progress.add_task("Starting...", total=None)
+    try:
+        show_progress = not quiet and not json_output
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+            disable=not show_progress,
+        ) as progress:
+            task = progress.add_task("Starting...", total=None)
 
-        def on_status(msg: str) -> None:
-            progress.update(task, description=msg)
+            def on_status(msg: str) -> None:
+                progress.update(task, description=msg)
 
-        def on_progress(current: int, total: int) -> None:
-            progress.update(task, description=f"Resolving paths... {current}/{total}")
+            def on_progress(current: int, total: int) -> None:
+                progress.update(
+                    task, description=f"Resolving paths... {current}/{total}"
+                )
 
-        summary = run_sync(
-            cfg,
-            client,
-            state,
-            dry_run=True,
-            on_status=on_status,
-            on_progress=on_progress,
-        )
-    if json_output:
-        typer.echo(json.dumps(summary.to_dict(), indent=2))
-    elif not quiet:
-        if summary.has_drift:
-            typer.echo("Drift detected:")
-        else:
-            typer.echo("No drift")
-        _print_summary(summary, cfg.sync)
-    state.close()
-    client.close()
-    if summary.has_drift:
+            summary = run_sync(
+                cfg,
+                client,
+                state,
+                dry_run=True,
+                on_status=on_status,
+                on_progress=on_progress,
+            )
+        if json_output:
+            typer.echo(json.dumps(summary.to_dict(), indent=2))
+        elif not quiet:
+            if summary.has_drift:
+                typer.echo("Drift detected:")
+            else:
+                typer.echo("No drift")
+            _print_summary(summary, cfg.sync)
+    finally:
+        state.close()
+        client.close()
+    if summary.has_drift or summary.errors:
         raise typer.Exit(1)
 
 
@@ -318,12 +326,14 @@ def doctor(
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
-    report = run_doctor(cfg, client, state)
-    for check in report.checks:
-        status = "OK" if check.ok else "FAIL"
-        typer.echo(f"[{status}] {check.name}: {check.message}")
-    state.close()
-    client.close()
+    try:
+        report = run_doctor(cfg, client, state)
+        for check in report.checks:
+            check_status = "OK" if check.ok else "FAIL"
+            typer.echo(f"[{check_status}] {check.name}: {check.message}")
+    finally:
+        state.close()
+        client.close()
     if not report.all_ok:
         raise typer.Exit(1)
 
@@ -336,20 +346,22 @@ def adopt(
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
-    collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
-    candidates = find_adopt_candidates(collections, client, state)
-    for c in candidates:
-        tag = " [CONFLICT]" if c.conflict else ""
-        typer.echo(f"{c.collection_name} -> {c.immich_album_id}{tag}")
-    if not candidates:
-        typer.echo("No albums to adopt")
-    elif apply:
-        adopted = apply_adopt(candidates, state)
-        typer.echo(f"Adopted {adopted} albums")
-    else:
-        typer.echo("Run with --apply to commit")
-    state.close()
-    client.close()
+    try:
+        collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
+        candidates = find_adopt_candidates(collections, client, state)
+        for c in candidates:
+            tag = " [CONFLICT]" if c.conflict else ""
+            typer.echo(f"{c.collection_name} -> {c.immich_album_id}{tag}")
+        if not candidates:
+            typer.echo("No albums to adopt")
+        elif apply:
+            adopted = apply_adopt(candidates, state)
+            typer.echo(f"Adopted {adopted} albums")
+        else:
+            typer.echo("Run with --apply to commit")
+    finally:
+        state.close()
+        client.close()
 
 
 @config_app.command("init")

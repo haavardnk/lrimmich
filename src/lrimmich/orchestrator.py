@@ -240,7 +240,7 @@ def run_sync(
         try:
             labels = read_color_labels(cfg.lightroom.catalog)
             existing_tags = client.get_tags()
-            tag_map = _ensure_color_tags(client, existing_tags)
+            tag_map = _ensure_color_tags(client, existing_tags, create=not dry_run)
             actions = plan_color_labels_sync(labels, resolved, tag_map, state)
             desired = {
                 resolved[rp]: color
@@ -264,7 +264,9 @@ def run_sync(
             needed_kws: set[str] = set()
             for kws in kw_data.values():
                 needed_kws.update(kws)
-            kw_tag_map = _ensure_keyword_tags(client, existing_tags, needed_kws)
+            kw_tag_map = _ensure_keyword_tags(
+                client, existing_tags, needed_kws, create=not dry_run
+            )
             kw_actions = plan_keywords_sync(kw_data, resolved, kw_tag_map, state)
             kw_desired: dict[str, list[str]] = {}
             for rp, kws in kw_data.items():

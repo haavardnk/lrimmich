@@ -171,3 +171,18 @@ def test_run_doctor_partial_fail(
     failed = [c.name for c in report.checks if not c.ok]
     assert "catalog" in failed
     assert "immich" in failed
+
+
+@respx.mock
+def test_check_path_mapping_with_strip(tmp_path: Path, client: ImmichClient) -> None:
+    builder = CatalogBuilder(tmp_path / "test.lrcat")
+    builder.add_image(1, "img.jpg", "Root/photos/")
+    catalog = builder.build()
+    respx.get(f"{API}/view/folder").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
+        )
+    )
+    result = check_path_mapping("/ext/", catalog, client, strip="Root/")
+    assert result.ok

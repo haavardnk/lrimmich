@@ -150,3 +150,10 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_keywords"
+
+
+def test_ensure_keyword_tags_no_create(client: ImmichClient) -> None:
+    existing = [{"id": "e1", "value": f"{KEYWORD_TAG_PREFIX}Nature"}]
+    result = _ensure_keyword_tags(client, existing, {"Nature", "Travel"}, create=False)
+    assert result["Nature"] == "e1"
+    assert result["Travel"].startswith("pending:")

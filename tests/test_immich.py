@@ -233,3 +233,16 @@ def test_tag_assets(client: ImmichClient, api_url: str) -> None:
 @respx.mock
 def test_tag_assets_empty(client: ImmichClient, api_url: str) -> None:
     client.tag_assets("t1", [])
+
+
+@respx.mock
+def test_get_folder_assets_special_chars(client: ImmichClient, api_url: str) -> None:
+    route = respx.get(f"{api_url}/view/folder").mock(
+        return_value=httpx.Response(
+            200, json=[{"id": "a1", "originalPath": "/lib/a&b#c"}]
+        )
+    )
+    result = client.get_folder_assets("/lib/a&b#c")
+    assert result[0]["id"] == "a1"
+    request = route.calls[0].request
+    assert "path=%2Flib%2Fa%26b%23c" in str(request.url)
