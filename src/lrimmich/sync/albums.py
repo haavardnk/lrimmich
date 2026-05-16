@@ -6,6 +6,15 @@ from lrimmich.immich import ImmichClient
 from lrimmich.state import StateDB
 
 
+def format_album_name(collection: LrCollection, fmt: str = "{path}") -> str:
+    parts = collection.full_name.split("/")
+    return fmt.format(
+        path=collection.full_name,
+        name=parts[-1],
+        parent=parts[-2] if len(parts) >= 2 else "",
+    )
+
+
 class AlbumSyncError(Exception):
     pass
 
@@ -50,6 +59,7 @@ def plan_album_sync(
     force: bool = False,
     no_delete: bool = False,
     skip_empty: bool = True,
+    album_name_format: str = "{path}",
 ) -> list[AlbumAction]:
     safety = safety or SafetyConfig()
     share_with = share_with or []
@@ -57,6 +67,7 @@ def plan_album_sync(
     lr_ids = {c.id for c in collections}
 
     for collection in collections:
+        album_name = format_album_name(collection, album_name_format)
         asset_ids = [resolved[rp] for rp in collection.relative_paths if rp in resolved]
         ownership = state.get_album_ownership(collection.id)
 
@@ -71,7 +82,7 @@ def plan_album_sync(
                 AlbumAction(
                     kind="create",
                     lr_collection_id=collection.id,
-                    album_name=collection.full_name,
+                    album_name=album_name,
                     asset_ids=asset_ids,
                 )
             )
@@ -80,7 +91,7 @@ def plan_album_sync(
                     AlbumAction(
                         kind="share",
                         lr_collection_id=collection.id,
-                        album_name=collection.full_name,
+                        album_name=album_name,
                         user_ids=list(share_with),
                     )
                 )
@@ -88,13 +99,13 @@ def plan_album_sync(
 
         immich_album_id = ownership["immich_album_id"]
 
-        if ownership["last_name"] != collection.full_name:
+        if ownership["last_name"] != album_name:
             actions.append(
                 AlbumAction(
                     kind="rename",
                     lr_collection_id=collection.id,
                     immich_album_id=immich_album_id,
-                    album_name=collection.full_name,
+                    album_name=album_name,
                     old_name=ownership["last_name"],
                 )
             )
@@ -112,7 +123,7 @@ def plan_album_sync(
                     kind="add_assets",
                     lr_collection_id=collection.id,
                     immich_album_id=immich_album_id,
-                    album_name=collection.full_name,
+                    album_name=album_name,
                     asset_ids=to_add,
                 )
             )
@@ -122,7 +133,7 @@ def plan_album_sync(
             pct = len(to_remove) * 100 // total if total > 0 else 0
             if pct > safety.remove_percent_limit and not force:
                 raise RemoveLimitExceeded(
-                    collection.full_name,
+                    album_name,
                     len(to_remove),
                     pct,
                     safety.remove_percent_limit,
@@ -132,7 +143,7 @@ def plan_album_sync(
                     kind="remove_assets",
                     lr_collection_id=collection.id,
                     immich_album_id=immich_album_id,
-                    album_name=collection.full_name,
+                    album_name=album_name,
                     asset_ids=to_remove,
                 )
             )
@@ -146,7 +157,7 @@ def plan_album_sync(
                         kind="share",
                         lr_collection_id=collection.id,
                         immich_album_id=immich_album_id,
-                        album_name=collection.full_name,
+                        album_name=album_name,
                         user_ids=unshared,
                     )
                 )

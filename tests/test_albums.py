@@ -13,6 +13,7 @@ from lrimmich.sync.albums import (
     DeleteThresholdExceeded,
     RemoveLimitExceeded,
     apply_album_sync,
+    format_album_name,
     plan_album_sync,
 )
 
@@ -42,6 +43,22 @@ def _col(
         full_name=full_name,
         relative_paths=relative_paths or [],
     )
+
+
+@pytest.mark.parametrize(
+    "full_name,fmt,expected",
+    [
+        ("Travel/Europe/Italy", "{path}", "Travel/Europe/Italy"),
+        ("Travel/Europe/Italy", "{name}", "Italy"),
+        ("Travel/Europe/Italy", "{parent}/{name}", "Europe/Italy"),
+        ("Travel/Europe/Italy", "Photos - {name}", "Photos - Italy"),
+        ("TopLevel", "{name}", "TopLevel"),
+        ("TopLevel", "{parent}/{name}", "/TopLevel"),
+    ],
+)
+def test_format_album_name(full_name: str, fmt: str, expected: str) -> None:
+    col = _col(full_name=full_name)
+    assert format_album_name(col, fmt) == expected
 
 
 @respx.mock
@@ -184,6 +201,24 @@ def test_rename_detection(state: StateDB, client: ImmichClient) -> None:
     actions = plan_album_sync([col], {}, state, client, skip_empty=False)
 
     assert any(a.kind == "rename" and a.album_name == "NewName" for a in actions)
+
+
+@respx.mock
+def test_format_change_triggers_rename(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Travel/Japan")
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(200, json={"assets": [], "albumUsers": []})
+    )
+
+    col = _col(id=10, full_name="Travel/Japan")
+    actions = plan_album_sync(
+        [col], {}, state, client, skip_empty=False, album_name_format="{name}"
+    )
+
+    rename = [a for a in actions if a.kind == "rename"]
+    assert len(rename) == 1
+    assert rename[0].album_name == "Japan"
+    assert rename[0].old_name == "Travel/Japan"
 
 
 @respx.mock

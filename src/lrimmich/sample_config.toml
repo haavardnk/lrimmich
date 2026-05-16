@@ -31,6 +31,10 @@ skip_empty = true
 # "collections" = only sync metadata for assets in synced collections
 # "all" = sync metadata for every resolved asset in the catalog
 scope = "collections"
+# Album naming format. Placeholders: {path} (full hierarchy), {name} (leaf), {parent} (parent set)
+# album_name_format = "{path}"
+# Webhook URL to POST sync summaries to (leave empty to disable)
+# notify_url = ""
 
 [safety]
 # Block album deletion when more than this many albums would be removed

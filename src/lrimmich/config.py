@@ -24,6 +24,8 @@ class SyncConfig(BaseConfig):
     rejects: bool = False
     skip_empty: bool = True
     scope: Literal["collections", "all"] = "collections"
+    album_name_format: str = "{path}"
+    notify_url: str = ""
 
 
 class LightroomConfig(BaseConfig):

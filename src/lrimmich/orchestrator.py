@@ -165,6 +165,7 @@ def run_sync(
                 force=force,
                 no_delete=no_delete,
                 skip_empty=cfg.sync.skip_empty,
+                album_name_format=cfg.sync.album_name_format,
             )
             counts = _count_actions(album_actions)
             summary.albums_created = counts["created"]

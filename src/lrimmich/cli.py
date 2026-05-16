@@ -1,4 +1,9 @@
+import contextlib
 import json
+import signal
+import time
+from collections.abc import Callable
+from datetime import datetime
 from importlib import resources
 from pathlib import Path
 from typing import Annotated
@@ -12,7 +17,9 @@ from lrimmich.catalog import read_collections
 from lrimmich.config import DEFAULT_CONFIG_PATH, SyncConfig, load_config
 from lrimmich.doctor import run_doctor
 from lrimmich.immich import ImmichClient
+from lrimmich.notify import send_notification
 from lrimmich.orchestrator import SyncSummary, run_sync
+from lrimmich.service import generate_service
 from lrimmich.state import StateDB
 
 app = typer.Typer(name="lrimmich", no_args_is_help=True)
@@ -68,6 +75,10 @@ def sync(
     quiet: QuietOption = False,
     force: ForceOption = False,
     no_delete: NoDeleteOption = False,
+    notify_on_drift: Annotated[
+        bool,
+        typer.Option("--notify-on-drift", help="Notify only on drift."),
+    ] = False,
 ) -> None:
     cfg = load_config(config)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
@@ -107,6 +118,8 @@ def sync(
             typer.echo(f"ERROR: {err}", err=True)
     state.close()
     client.close()
+    if cfg.sync.notify_url and not dry_run:
+        send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
     if summary.errors:
         raise typer.Exit(1)
 
@@ -158,11 +171,117 @@ def status(
 
 
 @app.command()
-def resolve(
+def watch(
     config: ConfigOption = None,
+    quiet: QuietOption = False,
+    force: ForceOption = False,
+    no_delete: NoDeleteOption = False,
+    interval: Annotated[int, typer.Option(help="Poll interval in seconds.")] = 60,
+    debounce: Annotated[int, typer.Option(help="Debounce seconds after change.")] = 5,
 ) -> None:
-    typer.echo("resolve: not implemented")
-    raise typer.Exit(1)
+    cfg = load_config(config)
+    catalog_path = cfg.lightroom.catalog
+    if not catalog_path.exists():
+        typer.echo(f"Catalog not found: {catalog_path}", err=True)
+        raise typer.Exit(1)
+
+    stop = False
+
+    def _handle_signal(signum: int, frame: object) -> None:
+        nonlocal stop
+        stop = True
+
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
+
+    last_mtime = 0.0
+    if not quiet:
+        typer.echo(
+            f"Watching {catalog_path} (interval={interval}s, debounce={debounce}s)"
+        )
+
+    def _catalog_mtime() -> float:
+        mt = 0.0
+        for suffix in ("", "-wal", "-shm"):
+            p = catalog_path.with_name(catalog_path.name + suffix)
+            with contextlib.suppress(OSError):
+                mt = max(mt, p.stat().st_mtime)
+        return mt
+
+    def _log(msg: str) -> None:
+        if not quiet:
+            ts = datetime.now().strftime("%H:%M:%S")
+            typer.echo(f"[{ts}] {msg}")
+
+    while not stop:
+        current_mtime = _catalog_mtime()
+
+        if current_mtime > last_mtime and last_mtime > 0:
+            _sleep_or_stop(debounce, lambda: stop)
+            if stop:
+                break
+            current_mtime = _catalog_mtime()
+            _log("Change detected, syncing...")
+            client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
+            state = StateDB()
+            try:
+                summary = run_sync(
+                    cfg,
+                    client,
+                    state,
+                    dry_run=False,
+                    force=force,
+                    no_delete=no_delete,
+                )
+                if not quiet:
+                    _print_summary(summary, cfg.sync)
+                    for err in summary.errors:
+                        typer.echo(f"ERROR: {err}", err=True)
+                _log("Sync complete")
+            except Exception as e:
+                _log(f"Sync error: {e}")
+            finally:
+                state.close()
+                client.close()
+
+        last_mtime = current_mtime
+        _sleep_or_stop(interval, lambda: stop)
+
+    if not quiet:
+        typer.echo("Stopped")
+
+
+def _sleep_or_stop(seconds: int, should_stop: Callable[[], bool]) -> None:
+    for _ in range(seconds):
+        if should_stop():
+            return
+        time.sleep(1)
+
+
+@app.command(name="install-service")
+def install_service(
+    interval: Annotated[int, typer.Option(help="Sync interval in seconds.")] = 300,
+    dry_run: DryRunOption = False,
+) -> None:
+    kind, files = generate_service(interval)
+    for path, content in files.items():
+        if dry_run:
+            typer.echo(f"Would write {path}:")
+            typer.echo(content)
+        else:
+            target = Path(path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+            typer.echo(f"Wrote {path}")
+    if not dry_run:
+        if kind == "launchd":
+            plist = next(iter(files))
+            typer.echo(f"Run: launchctl load {plist}")
+        else:
+            typer.echo(
+                "Run: systemctl --user daemon-reload"
+                " && systemctl --user enable --now lrimmich.timer"
+            )
 
 
 @app.command()
