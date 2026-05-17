@@ -16,10 +16,10 @@ from lrimmich.app import (
     JsonOption,
     NoDeleteOption,
     QuietOption,
-    _print_summary,
-    _run_with_progress,
     app,
     config_app,
+    print_summary,
+    run_with_progress,
 )
 from lrimmich.clients.catalog import read_collection_tree, read_collections
 from lrimmich.clients.immich import ImmichClient
@@ -43,7 +43,7 @@ def sync(
         typer.Option("--notify-on-drift", help="Notify only on drift."),
     ] = False,
 ) -> None:
-    summary, cfg = _run_with_progress(
+    summary, cfg = run_with_progress(
         config,
         dry_run=dry_run,
         force=force,
@@ -56,7 +56,7 @@ def sync(
     elif not quiet:
         if dry_run:
             typer.echo("[dry-run] No changes applied")
-        _print_summary(summary, cfg.sync)
+        print_summary(summary, cfg.sync)
         for err in summary.errors:
             typer.echo(f"ERROR: {err}", err=True)
     if cfg.sync.notify_url and not dry_run:
@@ -71,7 +71,7 @@ def status(
     json_output: JsonOption = False,
     quiet: QuietOption = False,
 ) -> None:
-    summary, cfg = _run_with_progress(
+    summary, cfg = run_with_progress(
         config, dry_run=True, quiet=quiet, json_output=json_output
     )
     if json_output:
@@ -81,7 +81,7 @@ def status(
             typer.echo("Drift detected:")
         else:
             typer.echo("No drift")
-        _print_summary(summary, cfg.sync)
+        print_summary(summary, cfg.sync)
     if summary.has_drift or summary.errors:
         raise typer.Exit(1)
 

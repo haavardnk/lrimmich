@@ -10,8 +10,8 @@ from lrimmich.app import (
     ForceOption,
     NoDeleteOption,
     QuietOption,
-    _print_summary,
     app,
+    print_summary,
 )
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
@@ -68,7 +68,7 @@ def watch(
                 no_delete=no_delete,
             )
             if not quiet:
-                _print_summary(summary, cfg.sync)
+                print_summary(summary, cfg.sync)
                 for err in summary.errors:
                     typer.echo(f"ERROR: {err}", err=True)
             _log("Sync complete")

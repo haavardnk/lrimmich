@@ -51,7 +51,7 @@ ForceOption = Annotated[bool, typer.Option("--force", help="Skip safety guards."
 NoDeleteOption = Annotated[bool, typer.Option("--no-delete", help="Skip all deletes.")]
 
 
-def _print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
+def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
     typer.echo(
         f"albums: +{summary.albums_created} "
         f"~{summary.albums_renamed} "
@@ -79,7 +79,7 @@ def _print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
         typer.echo(f"keywords: +{summary.keywords.tagged} -{summary.keywords.untagged}")
 
 
-def _run_with_progress(
+def run_with_progress(
     cfg_path: Path | None,
     dry_run: bool = False,
     force: bool = False,
