@@ -6,6 +6,7 @@ catalog = "~/Pictures/ClassicLibrary/ClassicLibrary.lrcat"
 
 [immich]
 # Immich server URL and API key (generate at Immich → Account Settings → API Keys)
+# The API key can also be set via the LRIMMICH_API_KEY environment variable.
 url = "http://localhost:2283"
 api_key = "your-api-key-here"
 # External library path where your photos are stored.

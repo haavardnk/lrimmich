@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/lrimmich)](https://pypi.org/project/lrimmich/)
 
-Syncs your Lightroom Classic catalog to Immich. Collections become albums, picks become favorites, ratings carry over, and color labels and keywords are written as tags.
+Syncs your Lightroom Classic catalog to Immich. Collections become albums, picks become favorites, rejects become archived, ratings carry over, and color labels and keywords are written as tags.
 
 The same photo files Lightroom reads must be mounted into Immich as an external library. lrimmich doesn't upload anything. It matches files that are already on both sides and writes metadata through the Immich API.
 
@@ -26,13 +26,13 @@ This writes a starter config to your platform's user config directory:
 - macOS: `~/Library/Application Support/lrimmich/config.toml`
 - Windows: `%APPDATA%\lrimmich\config.toml`
 
-Edit it with your catalog path, Immich URL, API key, and library path (the folder Immich mounts your photos from). See [sample_config.toml](src/lrimmich/utils/sample_config.toml) for all options.
+Fill in your Lightroom Classic catalog path, Immich URL, [API key](https://docs.immich.app/features/command-line-interface/#obtain-the-api-key), and external library path. If you prefer not to store the API key in the file, set `LRIMMICH_API_KEY` as an environment variable instead. Run `lrimmich config edit` to open the file in your editor, or see [sample_config.toml](src/lrimmich/utils/sample_config.toml) for all options.
 
 ```
 lrimmich doctor
 ```
 
-Checks that the catalog opens, the Immich API responds, and at least some files resolve. If it passes, run a dry-run first:
+Checks that the catalog opens, the Immich API responds, and file paths match between the two. If it passes, run a dry-run first:
 
 ```
 lrimmich sync --dry-run
@@ -43,22 +43,22 @@ lrimmich sync --dry-run
 ```
 lrimmich sync              # sync everything
 lrimmich sync --dry-run    # see what would happen
-lrimmich status            # exit 1 if there's drift
-lrimmich watch             # poll for catalog changes, sync when detected
+lrimmich status            # check for drift (exit 1 if out of sync)
+lrimmich doctor            # verify config, connectivity, and path mapping
+lrimmich watch             # watch for catalog changes, sync when detected
 lrimmich adopt             # claim existing Immich albums by name match
 lrimmich log               # show recent sync activity
 lrimmich collections       # list catalog collections with IDs
 lrimmich reset             # delete state DB, next sync rebuilds from scratch
-lrimmich install-service   # generate launchd/systemd unit for periodic sync
-lrimmich uninstall-service # remove service files
+lrimmich install-service   # generate launchd/systemd unit (macOS/Linux)
+lrimmich uninstall-service # remove service files (macOS/Linux)
 lrimmich config show       # print resolved config (secrets redacted)
 lrimmich config edit       # open config in your default editor
-lrimmich --version         # print version
 ```
 
 ### Watch
 
-Watches the catalog file (including WAL) for filesystem events and syncs after a debounce window:
+Watches the catalog file (including WAL) for filesystem changes and syncs after a debounce window:
 
 ```
 lrimmich watch --debounce 5000
