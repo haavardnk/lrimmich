@@ -119,3 +119,18 @@ def test_cache_miss_falls_through(client: ImmichClient, tmp_path: Path) -> None:
     )
     result = resolve_paths({"a.jpg", "b.jpg"}, "/ext/", client, state=state)
     assert result == {"a.jpg": "cached-id", "b.jpg": "new-id"}
+
+
+@respx.mock
+def test_cache_ttl_expires_old_entries(client: ImmichClient, tmp_path: Path) -> None:
+    state = StateDB(tmp_path / "state.db")
+    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    state._conn.execute(
+        "UPDATE path_cache SET last_verified_at = last_verified_at - 999999"
+    )
+    _mock_folders(
+        ["/ext"],
+        {"/ext": [{"id": "fresh-id", "originalPath": "/ext/a.jpg"}]},
+    )
+    result = resolve_paths({"a.jpg"}, "/ext/", client, state=state, max_cache_age=3600)
+    assert result == {"a.jpg": "fresh-id"}

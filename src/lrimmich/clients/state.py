@@ -162,11 +162,22 @@ class StateDB:
                 [(rp, aid, op, now) for rp, aid, op in entries],
             )
 
-    def get_all_cached_paths(self) -> dict[str, str]:
-        rows = self._conn.execute(
-            "SELECT relative_path, asset_id FROM path_cache"
-        ).fetchall()
+    def get_all_cached_paths(self, max_age: int | None = None) -> dict[str, str]:
+        if max_age is not None:
+            cutoff = int(time.time()) - max_age
+            rows = self._conn.execute(
+                "SELECT relative_path, asset_id FROM path_cache "
+                "WHERE last_verified_at >= ?",
+                (cutoff,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT relative_path, asset_id FROM path_cache"
+            ).fetchall()
         return {r["relative_path"]: r["asset_id"] for r in rows}
+
+    def clear_path_cache(self) -> None:
+        self._conn.execute("DELETE FROM path_cache")
 
     def get_album_ownership(self, lr_collection_id: int) -> dict[str, Any] | None:
         row = self._conn.execute(

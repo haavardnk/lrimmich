@@ -41,11 +41,12 @@ def resolve_paths(
     state: StateDB | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     strip: str = "",
+    max_cache_age: int | None = None,
 ) -> dict[str, str]:
     cached: dict[str, str] = {}
     missing: set[str] = set()
     if state:
-        all_cached = state.get_all_cached_paths()
+        all_cached = state.get_all_cached_paths(max_age=max_cache_age)
         for rp in relative_paths:
             if rp in all_cached:
                 cached[rp] = all_cached[rp]

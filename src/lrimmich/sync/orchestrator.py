@@ -32,6 +32,9 @@ STEPS: list[SyncStep[Any]] = [
 ]
 
 
+CACHE_TTL_SECONDS: int = 7_776_000
+
+
 def run_sync(
     cfg: Config,
     client: ImmichClient,
@@ -41,8 +44,12 @@ def run_sync(
     no_delete: bool = False,
     on_status: Callable[[str], None] | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    refresh_cache: bool = False,
 ) -> SyncSummary:
     summary = SyncSummary()
+
+    if refresh_cache:
+        state.clear_path_cache()
 
     if on_status:
         on_status("Reading catalog...")
@@ -60,6 +67,7 @@ def run_sync(
         state=state,
         on_progress=on_progress,
         strip=cfg.lightroom.strip,
+        max_cache_age=None if refresh_cache else CACHE_TTL_SECONDS,
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")

@@ -96,6 +96,7 @@ def run_with_progress(
     no_delete: bool = False,
     quiet: bool = False,
     json_output: bool = False,
+    refresh_cache: bool = False,
 ) -> tuple[SyncSummary, Config]:
     cfg = load_config(cfg_path)
     client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
@@ -127,6 +128,7 @@ def run_with_progress(
                 no_delete=no_delete,
                 on_status=on_status,
                 on_progress=on_progress,
+                refresh_cache=refresh_cache,
             )
     finally:
         state.close()

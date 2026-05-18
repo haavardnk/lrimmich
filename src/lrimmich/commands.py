@@ -43,6 +43,10 @@ def sync(
         bool,
         typer.Option("--notify-on-drift", help="Notify only on drift."),
     ] = False,
+    refresh_cache: Annotated[
+        bool,
+        typer.Option("--refresh-cache", help="Ignore cached path resolutions."),
+    ] = False,
 ) -> None:
     summary, cfg = run_with_progress(
         config,
@@ -51,6 +55,7 @@ def sync(
         no_delete=no_delete,
         quiet=quiet,
         json_output=json_output,
+        refresh_cache=refresh_cache,
     )
     if json_output:
         typer.echo(json.dumps(summary.to_dict(), indent=2))
@@ -71,9 +76,17 @@ def status(
     config: ConfigOption = None,
     json_output: JsonOption = False,
     quiet: QuietOption = False,
+    refresh_cache: Annotated[
+        bool,
+        typer.Option("--refresh-cache", help="Ignore cached path resolutions."),
+    ] = False,
 ) -> None:
     summary, cfg = run_with_progress(
-        config, dry_run=True, quiet=quiet, json_output=json_output
+        config,
+        dry_run=True,
+        quiet=quiet,
+        json_output=json_output,
+        refresh_cache=refresh_cache,
     )
     if json_output:
         typer.echo(json.dumps(summary.to_dict(), indent=2))
