@@ -28,12 +28,12 @@ def _connect(catalog: Path) -> sqlite3.Connection:
     return conn
 
 
-def _build_full_name(
-    collection_id: int,
+def _walk_ancestors(
+    node_id: int,
     tree: dict[int, tuple[str, int | None]],
 ) -> str:
     parts: list[str] = []
-    current: int | None = collection_id
+    current: int | None = node_id
     while current is not None and current in tree:
         name, parent_id = tree[current]
         parts.append(name)
@@ -73,7 +73,7 @@ def read_collection_tree(catalog: Path) -> list[LrCollectionTreeNode]:
         nodes[rid] = LrCollectionTreeNode(
             id=rid,
             name=r["name"],
-            full_name=_build_full_name(rid, all_items),
+            full_name=_walk_ancestors(rid, all_items),
             kind=kind_map.get(r["creationId"], r["creationId"]),
             children=[],
         )
@@ -119,15 +119,17 @@ def _read_collections_inner(
           AND systemOnly != '1.0'
     """).fetchall()
 
-    collection_ids = [
-        row["id_local"]
-        for row in rows
-        if not _is_excluded(row["id_local"])
-        and not any(
-            fnmatch(_build_full_name(row["id_local"], tree), pat)
-            for pat in exclude_patterns
-        )
-    ]
+    kept_rows: list[tuple[sqlite3.Row, str]] = []
+    for row in rows:
+        col_id: int = row["id_local"]
+        if _is_excluded(col_id):
+            continue
+        full_name = _walk_ancestors(col_id, tree)
+        if any(fnmatch(full_name, pat) for pat in exclude_patterns):
+            continue
+        kept_rows.append((row, full_name))
+
+    collection_ids = [row["id_local"] for row, _ in kept_rows]
 
     files_by_collection: dict[int, list[str]] = defaultdict(list)
     if collection_ids:
@@ -148,26 +150,15 @@ def _read_collections_inner(
                 f["pathFromRoot"] + f["idx_filename"]
             )
 
-    collections: list[LrCollection] = []
-    for row in rows:
-        col_id: int = row["id_local"]
-        if _is_excluded(col_id):
-            continue
-
-        full_name = _build_full_name(col_id, tree)
-        if any(fnmatch(full_name, pat) for pat in exclude_patterns):
-            continue
-
-        collections.append(
-            LrCollection(
-                id=col_id,
-                name=row["name"],
-                full_name=full_name,
-                relative_paths=files_by_collection.get(col_id, []),
-            )
+    return [
+        LrCollection(
+            id=row["id_local"],
+            name=row["name"],
+            full_name=full_name,
+            relative_paths=files_by_collection.get(row["id_local"], []),
         )
-
-    return collections
+        for row, full_name in kept_rows
+    ]
 
 
 def read_collection_covers(catalog: Path) -> dict[int, str]:
@@ -236,20 +227,6 @@ def read_color_labels(catalog: Path) -> dict[str, str]:
     return {r["pathFromRoot"] + r["idx_filename"]: r["colorLabels"] for r in rows}
 
 
-def _build_keyword_hierarchy(
-    keyword_id: int,
-    tree: dict[int, tuple[str, int | None]],
-) -> str:
-    parts: list[str] = []
-    current: int | None = keyword_id
-    while current is not None and current in tree:
-        name, parent_id = tree[current]
-        parts.append(name)
-        current = parent_id
-    parts.reverse()
-    return "/".join(parts)
-
-
 def read_keywords(catalog: Path) -> dict[str, list[str]]:
     with closing(_connect(catalog)) as conn:
         return _read_keywords_inner(conn)
@@ -274,7 +251,7 @@ def _read_keywords_inner(conn: sqlite3.Connection) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for r in rows:
         path = r["pathFromRoot"] + r["idx_filename"]
-        hierarchy = _build_keyword_hierarchy(r["tag"], tree)
+        hierarchy = _walk_ancestors(r["tag"], tree)
         result.setdefault(path, []).append(hierarchy)
 
     return result
