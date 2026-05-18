@@ -6,6 +6,7 @@ from datetime import UTC
 from importlib import resources
 from typing import Annotated
 
+import tomli_w
 import typer
 
 import lrimmich.utils as lrimmich_utils
@@ -149,10 +150,9 @@ def config_show(
     config: ConfigOption = None,
 ) -> None:
     cfg = load_config(config)
-    redacted = cfg.model_dump()
-    redacted["immich"]["api_key"] = "***"
-    for key, value in redacted.items():
-        typer.echo(f"{key}: {value}")
+    data = cfg.model_dump(mode="json")
+    data["immich"]["api_key"] = "***"
+    typer.echo(tomli_w.dumps(data))
 
 
 @config_app.command("edit")
