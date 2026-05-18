@@ -59,8 +59,8 @@ def sync(
         print_summary(summary, cfg.sync)
         for err in summary.errors:
             typer.echo(f"ERROR: {err}", err=True)
-    if cfg.sync.notify_url and not dry_run:
-        send_notification(cfg.sync.notify_url, summary, drift_only=notify_on_drift)
+    if cfg.notification.url and not dry_run:
+        send_notification(cfg.notification.url, summary, drift_only=notify_on_drift)
     if summary.errors:
         raise typer.Exit(1)
 

@@ -41,8 +41,6 @@ album_filter = "all"
 album_min_rating = 0
 # Album naming format. Placeholders: {path} (full hierarchy), {name} (leaf), {parent} (parent set)
 # album_name_format = "{path}"
-# Webhook URL to POST sync summaries to (leave empty to disable)
-# notify_url = ""
 
 # Optional per-collection album membership rules (first match wins)
 # [[album_rules]]
@@ -61,3 +59,7 @@ delete_threshold = 100
 remove_percent_limit = 50
 # Set true to never delete albums, regardless of other settings
 disable_deletes = false
+
+[notification]
+# Webhook URL to POST sync summaries to (leave empty to disable)
+# url = ""

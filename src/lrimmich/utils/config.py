@@ -17,33 +17,6 @@ class BaseConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class ExcludeConfig(BaseConfig):
-    collection_ids: list[int] = []
-    name_patterns: list[str] = []
-
-
-class AlbumRule(BaseConfig):
-    match: str = ""
-    id: int | None = None
-    filter: AlbumFilter | None = None
-    min_rating: int | None = Field(default=None, ge=0, le=5)
-
-
-class SyncConfig(BaseConfig):
-    albums: bool = True
-    favorites: bool = True
-    ratings: bool = True
-    tags: bool = True
-    rejects: bool = False
-    skip_empty: bool = True
-    scope: SyncScope = "collections"
-    album_mode: AlbumMode = "managed"
-    album_filter: AlbumFilter = "all"
-    album_min_rating: int = Field(default=0, ge=0, le=5)
-    album_name_format: str = "{path}"
-    notify_url: str = ""
-
-
 class LightroomConfig(BaseConfig):
     catalog: Path
     strip: str = ""
@@ -61,10 +34,40 @@ class ImmichConfig(BaseConfig):
     share_albums_with: list[str] = []
 
 
+class ExcludeConfig(BaseConfig):
+    collection_ids: list[int] = []
+    name_patterns: list[str] = []
+
+
+class SyncConfig(BaseConfig):
+    albums: bool = True
+    favorites: bool = True
+    ratings: bool = True
+    tags: bool = True
+    rejects: bool = False
+    skip_empty: bool = True
+    scope: SyncScope = "collections"
+    album_mode: AlbumMode = "managed"
+    album_filter: AlbumFilter = "all"
+    album_min_rating: int = Field(default=0, ge=0, le=5)
+    album_name_format: str = "{path}"
+
+
+class AlbumRule(BaseConfig):
+    match: str = ""
+    id: int | None = None
+    filter: AlbumFilter | None = None
+    min_rating: int | None = Field(default=None, ge=0, le=5)
+
+
 class SafetyConfig(BaseConfig):
     delete_threshold: int = 100
     remove_percent_limit: int = 50
     disable_deletes: bool = False
+
+
+class NotificationConfig(BaseConfig):
+    url: str = ""
 
 
 class Config(BaseConfig):
@@ -74,6 +77,7 @@ class Config(BaseConfig):
     sync: SyncConfig = SyncConfig()
     album_rules: list[AlbumRule] = []
     safety: SafetyConfig = SafetyConfig()
+    notification: NotificationConfig = NotificationConfig()
 
 
 def load_config(path: Path | None = None) -> Config:
