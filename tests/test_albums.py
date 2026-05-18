@@ -418,3 +418,203 @@ def test_apply_full_lifecycle(state: StateDB, client: ImmichClient) -> None:
     assert state.get_album_ownership(99) is None
     logs = state.get_audit_log()
     assert len(logs) == 5
+
+
+@respx.mock
+def test_hybrid_preserves_manual_assets(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    state.replace_synced_album_assets("imm-1", {"a1", "a2"})
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "assets": [{"id": "a1"}, {"id": "a2"}, {"id": "manual-1"}],
+                "albumUsers": [],
+            },
+        )
+    )
+
+    col = _col(id=10, full_name="Album", relative_paths=["x.jpg", "y.jpg"])
+    resolved = {"x.jpg": "a1", "y.jpg": "a2"}
+
+    actions = plan_album_sync([col], resolved, state, client, album_mode="hybrid")
+
+    assert not any(a.kind == "remove_assets" for a in actions)
+    assert not any(a.kind == "add_assets" for a in actions)
+
+
+@respx.mock
+def test_hybrid_removes_tracked_stale_assets(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    state.replace_synced_album_assets("imm-1", {"a1", "a2", "a3"})
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "assets": [
+                    {"id": "a1"},
+                    {"id": "a2"},
+                    {"id": "a3"},
+                    {"id": "manual-1"},
+                ],
+                "albumUsers": [],
+            },
+        )
+    )
+
+    col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
+    resolved = {"x.jpg": "a1"}
+
+    actions = plan_album_sync([col], resolved, state, client, album_mode="hybrid")
+
+    remove = [a for a in actions if a.kind == "remove_assets"]
+    assert len(remove) == 1
+    assert sorted(remove[0].asset_ids) == ["a2", "a3"]
+    assert not any(a.kind == "add_assets" for a in actions)
+
+
+@respx.mock
+def test_hybrid_first_run_baselines_without_removal(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "assets": [{"id": "a1"}, {"id": "manual-1"}],
+                "albumUsers": [],
+            },
+        )
+    )
+
+    col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
+    resolved = {"x.jpg": "a1"}
+
+    actions = plan_album_sync([col], resolved, state, client, album_mode="hybrid")
+
+    assert not any(a.kind == "remove_assets" for a in actions)
+    track = [a for a in actions if a.kind == "track_assets"]
+    assert len(track) == 1
+    assert track[0].asset_ids == ["a1"]
+
+
+@respx.mock
+def test_managed_mode_still_removes_non_lr_assets(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "assets": [{"id": "a1"}, {"id": "manual-1"}],
+                "albumUsers": [],
+            },
+        )
+    )
+
+    col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
+    resolved = {"x.jpg": "a1"}
+
+    actions = plan_album_sync([col], resolved, state, client, album_mode="managed")
+
+    remove = [a for a in actions if a.kind == "remove_assets"]
+    assert len(remove) == 1
+    assert remove[0].asset_ids == ["manual-1"]
+
+
+@respx.mock
+def test_apply_tracks_assets_on_create(state: StateDB, client: ImmichClient) -> None:
+    respx.post(f"{API}/albums").mock(
+        return_value=httpx.Response(200, json={"id": "imm-new"})
+    )
+
+    actions = [
+        AlbumAction(
+            kind="create",
+            lr_collection_id=10,
+            album_name="New",
+            asset_ids=["a1", "a2"],
+        ),
+    ]
+    apply_album_sync(actions, client, state)
+
+    assert state.get_synced_album_assets("imm-new") == {"a1", "a2"}
+
+
+@respx.mock
+def test_apply_updates_tracking_on_add_remove(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    state.replace_synced_album_assets("imm-1", {"a1"})
+    respx.put(f"{API}/albums/imm-1/assets").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    respx.delete(url=f"{API}/albums/imm-1/assets").mock(
+        return_value=httpx.Response(200, json=None)
+    )
+
+    actions = [
+        AlbumAction(
+            kind="add_assets",
+            lr_collection_id=10,
+            immich_album_id="imm-1",
+            album_name="Album",
+            asset_ids=["a2"],
+        ),
+        AlbumAction(
+            kind="remove_assets",
+            lr_collection_id=10,
+            immich_album_id="imm-1",
+            album_name="Album",
+            asset_ids=["a1"],
+        ),
+    ]
+    apply_album_sync(actions, client, state)
+
+    assert state.get_synced_album_assets("imm-1") == {"a2"}
+
+
+@respx.mock
+def test_apply_clears_tracking_on_delete(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    state.replace_synced_album_assets("imm-1", {"a1", "a2"})
+    respx.delete(url=f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(200, json=None)
+    )
+
+    actions = [
+        AlbumAction(
+            kind="delete",
+            lr_collection_id=10,
+            immich_album_id="imm-1",
+            album_name="Album",
+        ),
+    ]
+    apply_album_sync(actions, client, state)
+
+    assert state.get_synced_album_assets("imm-1") == set()
+
+
+@respx.mock
+def test_apply_track_assets_baselines_state(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+
+    actions = [
+        AlbumAction(
+            kind="track_assets",
+            lr_collection_id=10,
+            immich_album_id="imm-1",
+            album_name="Album",
+            asset_ids=["a1", "a2"],
+        ),
+    ]
+    apply_album_sync(actions, client, state)
+
+    assert state.get_synced_album_assets("imm-1") == {"a1", "a2"}

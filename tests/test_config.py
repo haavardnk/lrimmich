@@ -119,3 +119,44 @@ bogus_field = "should fail"
 """)
     with pytest.raises(ValidationError):
         load_config(p)
+
+
+def test_album_mode_default(config_file: Path) -> None:
+    cfg = load_config(config_file)
+    assert cfg.sync.album_mode == "managed"
+
+
+def test_album_mode_hybrid(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text("""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+api_key = "testkey123456"
+library_path = "/immich/"
+
+[sync]
+album_mode = "hybrid"
+""")
+    cfg = load_config(p)
+    assert cfg.sync.album_mode == "hybrid"
+
+
+def test_album_mode_invalid(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text("""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+api_key = "testkey123456"
+library_path = "/immich/"
+
+[sync]
+album_mode = "bogus"
+""")
+    with pytest.raises(ValidationError):
+        load_config(p)

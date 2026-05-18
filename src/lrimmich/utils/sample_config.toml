@@ -32,6 +32,9 @@ skip_empty = true
 # "collections" = only sync metadata for assets in synced collections
 # "all" = sync metadata for every resolved asset in the catalog
 scope = "collections"
+# "managed" = Lightroom fully controls album contents (non-LR assets removed)
+# "hybrid" = Lightroom syncs its assets but preserves assets added in Immich
+album_mode = "managed"
 # Album naming format. Placeholders: {path} (full hierarchy), {name} (leaf), {parent} (parent set)
 # album_name_format = "{path}"
 # Webhook URL to POST sync summaries to (leave empty to disable)

@@ -8,7 +8,7 @@ from platformdirs import user_state_path
 
 DEFAULT_STATE_PATH = user_state_path("lrimmich") / "state.db"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -58,6 +58,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
+SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS synced_album_assets (
+    immich_album_id TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    PRIMARY KEY (immich_album_id, asset_id)
+);
+"""
+
 
 class StateDB:
     def __init__(self, path: Path = DEFAULT_STATE_PATH) -> None:
@@ -76,6 +84,9 @@ class StateDB:
         current = self._get_schema_version()
         if current < 1:
             self._conn.executescript(SCHEMA_V1)
+        if current < 2:
+            self._conn.executescript(SCHEMA_V2)
+        if current < SCHEMA_VERSION:
             self._set_meta("schema_version", str(SCHEMA_VERSION))
             self._conn.commit()
 
@@ -257,6 +268,53 @@ class StateDB:
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_synced_album_assets(self, immich_album_id: str) -> set[str]:
+        rows = self._conn.execute(
+            "SELECT asset_id FROM synced_album_assets WHERE immich_album_id = ?",
+            (immich_album_id,),
+        ).fetchall()
+        return {r["asset_id"] for r in rows}
+
+    def replace_synced_album_assets(
+        self, immich_album_id: str, asset_ids: set[str]
+    ) -> None:
+        self._conn.execute(
+            "DELETE FROM synced_album_assets WHERE immich_album_id = ?",
+            (immich_album_id,),
+        )
+        self._conn.executemany(
+            "INSERT INTO synced_album_assets(immich_album_id, asset_id) VALUES (?, ?)",
+            [(immich_album_id, aid) for aid in asset_ids],
+        )
+        self._conn.commit()
+
+    def add_synced_album_assets(
+        self, immich_album_id: str, asset_ids: set[str]
+    ) -> None:
+        self._conn.executemany(
+            "INSERT OR IGNORE INTO synced_album_assets(immich_album_id, asset_id) "
+            "VALUES (?, ?)",
+            [(immich_album_id, aid) for aid in asset_ids],
+        )
+        self._conn.commit()
+
+    def remove_synced_album_assets(
+        self, immich_album_id: str, asset_ids: set[str]
+    ) -> None:
+        self._conn.executemany(
+            "DELETE FROM synced_album_assets "
+            "WHERE immich_album_id = ? AND asset_id = ?",
+            [(immich_album_id, aid) for aid in asset_ids],
+        )
+        self._conn.commit()
+
+    def clear_synced_album_assets(self, immich_album_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM synced_album_assets WHERE immich_album_id = ?",
+            (immich_album_id,),
+        )
+        self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()

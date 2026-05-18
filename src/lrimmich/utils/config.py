@@ -6,6 +6,9 @@ from typing import Literal
 from platformdirs import user_config_path
 from pydantic import BaseModel, ConfigDict, field_validator
 
+AlbumMode = Literal["managed", "hybrid"]
+SyncScope = Literal["collections", "all"]
+
 DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
 
 
@@ -25,7 +28,8 @@ class SyncConfig(BaseConfig):
     tags: bool = True
     rejects: bool = False
     skip_empty: bool = True
-    scope: Literal["collections", "all"] = "collections"
+    scope: SyncScope = "collections"
+    album_mode: AlbumMode = "managed"
     album_name_format: str = "{path}"
     notify_url: str = ""
 

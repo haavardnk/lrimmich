@@ -74,6 +74,12 @@ lrimmich install-service --interval 300
 
 Reads the `.lrcat` SQLite database, maps LR file paths to Immich asset IDs by scanning the external library folder tree, then diffs against what was synced last time (stored alongside the config in your platform's user state directory). Repeat runs only touch what changed.
 
+### Album modes
+
+By default albums run in **managed** mode — Lightroom fully controls album contents. Any asset in Immich that isn't in the matching Lightroom collection gets removed on sync.
+
+Set `album_mode = "hybrid"` under `[sync]` to let users add extra photos to albums inside Immich without them being removed. In hybrid mode lrimmich tracks which assets it placed and only removes those when they disappear from the Lightroom collection. Manually-added Immich assets are left untouched.
+
 ## Alternatives
 
 | | How it works | Uploads photos? |

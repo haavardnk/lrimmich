@@ -12,7 +12,7 @@ def db(tmp_path: Path) -> StateDB:
 
 
 def test_schema_creation(db: StateDB) -> None:
-    assert db.get_meta("schema_version") == "1"
+    assert db.get_meta("schema_version") == "2"
 
 
 def test_migration_idempotent(tmp_path: Path) -> None:
@@ -21,7 +21,7 @@ def test_migration_idempotent(tmp_path: Path) -> None:
     db1.set_meta("custom", "value")
     db1.close()
     db2 = StateDB(path)
-    assert db2.get_meta("schema_version") == "1"
+    assert db2.get_meta("schema_version") == "2"
     assert db2.get_meta("custom") == "value"
     db2.close()
 
@@ -152,5 +152,76 @@ def test_audit_log_ordering(db: StateDB) -> None:
 def test_creates_parent_dir(tmp_path: Path) -> None:
     path = tmp_path / "deep" / "nested" / "state.db"
     db = StateDB(path)
-    assert db.get_meta("schema_version") == "1"
+    assert db.get_meta("schema_version") == "2"
     db.close()
+
+
+def test_schema_v2_fresh(db: StateDB) -> None:
+    assert db.get_meta("schema_version") == "2"
+
+
+def test_schema_v1_migrates_to_v2(tmp_path: Path) -> None:
+    import sqlite3
+
+    path = tmp_path / "v1.db"
+    conn = sqlite3.connect(str(path))
+    from lrimmich.clients.state import SCHEMA_V1
+
+    conn.executescript(SCHEMA_V1)
+    conn.execute(
+        "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', '1')"
+    )
+    conn.commit()
+    conn.close()
+    db = StateDB(path)
+    assert db.get_meta("schema_version") == "2"
+    db.get_synced_album_assets("anything")
+    db.close()
+
+
+def test_synced_album_assets_empty(db: StateDB) -> None:
+    assert db.get_synced_album_assets("album-1") == set()
+
+
+def test_replace_synced_album_assets(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1", "a2"})
+    assert db.get_synced_album_assets("album-1") == {"a1", "a2"}
+    db.replace_synced_album_assets("album-1", {"a3"})
+    assert db.get_synced_album_assets("album-1") == {"a3"}
+
+
+def test_add_synced_album_assets(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1"})
+    db.add_synced_album_assets("album-1", {"a2", "a3"})
+    assert db.get_synced_album_assets("album-1") == {"a1", "a2", "a3"}
+
+
+def test_add_synced_album_assets_idempotent(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1"})
+    db.add_synced_album_assets("album-1", {"a1"})
+    assert db.get_synced_album_assets("album-1") == {"a1"}
+
+
+def test_remove_synced_album_assets(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1", "a2", "a3"})
+    db.remove_synced_album_assets("album-1", {"a2"})
+    assert db.get_synced_album_assets("album-1") == {"a1", "a3"}
+
+
+def test_remove_synced_album_assets_idempotent(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1"})
+    db.remove_synced_album_assets("album-1", {"a99"})
+    assert db.get_synced_album_assets("album-1") == {"a1"}
+
+
+def test_clear_synced_album_assets(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1", "a2"})
+    db.clear_synced_album_assets("album-1")
+    assert db.get_synced_album_assets("album-1") == set()
+
+
+def test_synced_album_assets_scoped_per_album(db: StateDB) -> None:
+    db.replace_synced_album_assets("album-1", {"a1"})
+    db.replace_synced_album_assets("album-2", {"a2"})
+    assert db.get_synced_album_assets("album-1") == {"a1"}
+    assert db.get_synced_album_assets("album-2") == {"a2"}

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.utils.config import SafetyConfig
+from lrimmich.utils.config import AlbumMode, SafetyConfig
 
 
 def format_album_name(collection: LrCollection, fmt: str = "{path}") -> str:
@@ -60,6 +60,7 @@ def plan_album_sync(
     no_delete: bool = False,
     skip_empty: bool = True,
     album_name_format: str = "{path}",
+    album_mode: AlbumMode = "managed",
 ) -> list[AlbumAction]:
     safety = safety or SafetyConfig()
     share_with = share_with or []
@@ -117,7 +118,24 @@ def plan_album_sync(
         desired_ids = set(asset_ids)
 
         to_add = sorted(desired_ids - current_ids)
-        to_remove = sorted(current_ids - desired_ids)
+
+        if album_mode == "hybrid":
+            tracked_ids = state.get_synced_album_assets(immich_album_id)
+            if not tracked_ids:
+                actions.append(
+                    AlbumAction(
+                        kind="track_assets",
+                        lr_collection_id=collection.id,
+                        immich_album_id=immich_album_id,
+                        album_name=album_name,
+                        asset_ids=sorted(desired_ids),
+                    )
+                )
+                to_remove: list[str] = []
+            else:
+                to_remove = sorted((tracked_ids - desired_ids) & current_ids)
+        else:
+            to_remove = sorted(current_ids - desired_ids)
 
         if to_add:
             actions.append(
@@ -188,6 +206,7 @@ def _apply_create(action: AlbumAction, client: ImmichClient, state: StateDB) -> 
     result = client.create_album(action.album_name, action.asset_ids)
     album_id: str = result["id"]
     state.upsert_album_ownership(action.lr_collection_id, album_id, action.album_name)
+    state.replace_synced_album_assets(album_id, set(action.asset_ids))
     state.append_audit_log(
         "create_album",
         "album",
@@ -218,6 +237,7 @@ def _apply_add_assets(
     if not action.immich_album_id:
         return
     client.add_album_assets(action.immich_album_id, action.asset_ids)
+    state.add_synced_album_assets(action.immich_album_id, set(action.asset_ids))
     state.append_audit_log(
         "add_assets",
         "album",
@@ -232,6 +252,7 @@ def _apply_remove_assets(
     if not action.immich_album_id:
         return
     client.remove_album_assets(action.immich_album_id, action.asset_ids)
+    state.remove_synced_album_assets(action.immich_album_id, set(action.asset_ids))
     state.append_audit_log(
         "remove_assets",
         "album",
@@ -258,9 +279,16 @@ def _apply_delete(action: AlbumAction, client: ImmichClient, state: StateDB) -> 
         return
     client.delete_album(action.immich_album_id)
     state.remove_album_ownership(action.lr_collection_id)
+    state.clear_synced_album_assets(action.immich_album_id)
     state.append_audit_log(
         "delete_album", "album", action.immich_album_id, {"name": action.album_name}
     )
+
+
+def _apply_track_assets(action: AlbumAction, state: StateDB) -> None:
+    if not action.immich_album_id:
+        return
+    state.replace_synced_album_assets(action.immich_album_id, set(action.asset_ids))
 
 
 def apply_album_sync(
@@ -284,3 +312,5 @@ def apply_album_sync(
                 _apply_share(action, client, state, created)
             case "delete":
                 _apply_delete(action, client, state)
+            case "track_assets":
+                _apply_track_assets(action, state)
