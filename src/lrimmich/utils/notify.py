@@ -1,6 +1,10 @@
+import logging
+
 import httpx
 
 from lrimmich.sync.summary import SyncSummary
+
+logger = logging.getLogger(__name__)
 
 
 def send_notification(
@@ -15,5 +19,6 @@ def send_notification(
         resp = httpx.post(url, json=payload, timeout=10)
         resp.raise_for_status()
         return True
-    except (httpx.HTTPError, httpx.TimeoutException):
+    except httpx.HTTPError as exc:
+        logger.warning("Notification to %s failed: %s", url, exc)
         return False
