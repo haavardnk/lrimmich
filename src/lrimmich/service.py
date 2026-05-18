@@ -60,37 +60,29 @@ WantedBy=timers.target
 """
 
 
+def _service_spec(interval: int) -> tuple[str, dict[Path, str]]:
+    exe = shutil.which("lrimmich") or "lrimmich"
+    if platform.system() == "Darwin":
+        log_dir = str(Path("~/Library/Logs/lrimmich").expanduser())
+        plist = Path("~/Library/LaunchAgents/com.lrimmich.sync.plist").expanduser()
+        return "launchd", {
+            plist: LAUNCHD_PLIST.format(exe=exe, interval=interval, log_dir=log_dir),
+        }
+    base = Path("~/.config/systemd/user").expanduser()
+    return "systemd", {
+        base / "lrimmich.service": SYSTEMD_UNIT_SERVICE.format(exe=exe),
+        base / "lrimmich.timer": SYSTEMD_UNIT_TIMER.format(interval=interval),
+    }
+
+
 def service_paths() -> tuple[str, list[Path]]:
-    system = platform.system()
-    if system == "Darwin":
-        return "launchd", [
-            Path("~/Library/LaunchAgents/com.lrimmich.sync.plist").expanduser(),
-        ]
-    return "systemd", [
-        Path("~/.config/systemd/user/lrimmich.service").expanduser(),
-        Path("~/.config/systemd/user/lrimmich.timer").expanduser(),
-    ]
+    kind, files = _service_spec(interval=0)
+    return kind, list(files)
 
 
 def generate_service(interval: int = 300) -> tuple[str, dict[str, str]]:
-    exe = shutil.which("lrimmich") or "lrimmich"
-    system = platform.system()
-
-    if system == "Darwin":
-        log_dir = str(Path("~/Library/Logs/lrimmich").expanduser())
-        content = LAUNCHD_PLIST.format(exe=exe, interval=interval, log_dir=log_dir)
-        target = str(
-            Path("~/Library/LaunchAgents/com.lrimmich.sync.plist").expanduser()
-        )
-        return "launchd", {target: content}
-
-    service = SYSTEMD_UNIT_SERVICE.format(exe=exe)
-    timer = SYSTEMD_UNIT_TIMER.format(interval=interval)
-    base = Path("~/.config/systemd/user").expanduser()
-    return "systemd", {
-        str(base / "lrimmich.service"): service,
-        str(base / "lrimmich.timer"): timer,
-    }
+    kind, files = _service_spec(interval)
+    return kind, {str(p): c for p, c in files.items()}
 
 
 @app.command(name="install-service")
