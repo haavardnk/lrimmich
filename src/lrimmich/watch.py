@@ -52,35 +52,51 @@ def watch(
     if not quiet:
         typer.echo(f"Watching {catalog_path} (debounce={debounce}ms)")
 
-    for _ in watch_files(
-        *watched,
-        debounce=debounce,
-        stop_event=stop_event,
-        raise_interrupt=False,
-    ):
-        _log("Change detected, syncing...")
-        client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
-        state = StateDB()
-        try:
-            summary = run_sync(
-                cfg,
-                client,
-                state,
-                dry_run=False,
-                force=force,
-                no_delete=no_delete,
-            )
-            if not quiet:
-                print_summary(summary, cfg.sync)
-                for err in summary.errors:
-                    typer.echo(f"ERROR: {err}", err=True)
-            _log("Sync complete")
-        except Exception:
-            logger.exception("Sync error")
-            _log("Sync failed")
-        finally:
-            state.close()
-            client.close()
+    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
+    state = StateDB()
+    failures = 0
+    MAX_FAILURES = 5
+
+    try:
+        for _ in watch_files(
+            *watched,
+            debounce=debounce,
+            stop_event=stop_event,
+            raise_interrupt=False,
+        ):
+            _log("Change detected, syncing...")
+            try:
+                summary = run_sync(
+                    cfg,
+                    client,
+                    state,
+                    dry_run=False,
+                    force=force,
+                    no_delete=no_delete,
+                )
+                if not quiet:
+                    print_summary(summary, cfg.sync)
+                    for err in summary.errors:
+                        typer.echo(f"ERROR: {err}", err=True)
+                _log("Sync complete")
+                failures = 0
+            except Exception:
+                failures += 1
+                logger.exception("Sync error (failure %d/%d)", failures, MAX_FAILURES)
+                _log(f"Sync failed ({failures}/{MAX_FAILURES})")
+                if failures >= MAX_FAILURES:
+                    typer.echo(
+                        f"Aborting watch after {MAX_FAILURES} consecutive failures",
+                        err=True,
+                    )
+                    raise typer.Exit(1) from None
+                client.close()
+                state.close()
+                client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
+                state = StateDB()
+    finally:
+        state.close()
+        client.close()
 
     if not quiet:
         typer.echo("Stopped")
