@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 
@@ -53,27 +53,15 @@ class SyncSummary:
 
     @property
     def has_drift(self) -> bool:
-        return any(
-            [
-                self.albums_created,
-                self.albums_renamed,
-                self.albums_deleted,
-                self.assets_added,
-                self.assets_removed,
-                self.favorites.favorited,
-                self.favorites.unfavorited,
-                self.ratings.set,
-                self.ratings.cleared,
-                self.rejects.archived,
-                self.rejects.unarchived,
-                self.color_labels.tagged,
-                self.color_labels.untagged,
-                self.keywords.tagged,
-                self.keywords.untagged,
-                self.covers.set,
-                self.covers.cleared,
-            ]
-        )
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if isinstance(val, int) and val:
+                return True
+            if hasattr(val, "__dataclass_fields__"):
+                for sub_f in fields(val):
+                    if getattr(val, sub_f.name):
+                        return True
+        return False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
