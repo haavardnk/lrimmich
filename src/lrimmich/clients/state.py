@@ -1,6 +1,8 @@
 import json
 import sqlite3
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Self
 
@@ -70,8 +72,10 @@ CREATE TABLE IF NOT EXISTS synced_album_assets (
 class StateDB:
     def __init__(self, path: Path = DEFAULT_STATE_PATH) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(path))
+        self._conn = sqlite3.connect(str(path), isolation_level=None)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
         self._migrate()
 
     def __enter__(self) -> Self:
@@ -80,15 +84,25 @@ class StateDB:
     def __exit__(self, *args: object) -> None:
         self.close()
 
+    @contextmanager
+    def transaction(self) -> Generator[None]:
+        self._conn.execute("BEGIN")
+        try:
+            yield
+            self._conn.execute("COMMIT")
+        except BaseException:
+            self._conn.execute("ROLLBACK")
+            raise
+
     def _migrate(self) -> None:
         current = self._get_schema_version()
+        if current >= SCHEMA_VERSION:
+            return
         if current < 1:
             self._conn.executescript(SCHEMA_V1)
         if current < 2:
             self._conn.executescript(SCHEMA_V2)
-        if current < SCHEMA_VERSION:
-            self._set_meta("schema_version", str(SCHEMA_VERSION))
-            self._conn.commit()
+        self._set_meta("schema_version", str(SCHEMA_VERSION))
 
     def _get_schema_version(self) -> int:
         try:
@@ -113,7 +127,6 @@ class StateDB:
 
     def set_meta(self, key: str, value: str) -> None:
         self._set_meta(key, value)
-        self._conn.commit()
 
     def get_cached_asset(self, relative_path: str) -> str | None:
         row = self._conn.execute(
@@ -135,20 +148,19 @@ class StateDB:
             "VALUES (?, ?, ?, ?)",
             (relative_path, asset_id, original_path, now),
         )
-        self._conn.commit()
 
     def upsert_path_cache_bulk(
         self,
         entries: list[tuple[str, str, str]],
     ) -> None:
         now = int(time.time())
-        self._conn.executemany(
-            "INSERT OR REPLACE INTO path_cache"
-            "(relative_path, asset_id, original_path, last_verified_at) "
-            "VALUES (?, ?, ?, ?)",
-            [(rp, aid, op, now) for rp, aid, op in entries],
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO path_cache"
+                "(relative_path, asset_id, original_path, last_verified_at) "
+                "VALUES (?, ?, ?, ?)",
+                [(rp, aid, op, now) for rp, aid, op in entries],
+            )
 
     def get_all_cached_paths(self) -> dict[str, str]:
         rows = self._conn.execute(
@@ -187,14 +199,12 @@ class StateDB:
             "VALUES (?, ?, ?, ?)",
             (lr_collection_id, immich_album_id, name, now),
         )
-        self._conn.commit()
 
     def remove_album_ownership(self, lr_collection_id: int) -> None:
         self._conn.execute(
             "DELETE FROM album_ownership WHERE lr_collection_id = ?",
             (lr_collection_id,),
         )
-        self._conn.commit()
 
     def get_synced_ratings(self) -> dict[str, int]:
         rows = self._conn.execute(
@@ -203,12 +213,12 @@ class StateDB:
         return {r["asset_id"]: r["rating"] for r in rows}
 
     def replace_synced_ratings(self, ratings: dict[str, int]) -> None:
-        self._conn.execute("DELETE FROM synced_ratings")
-        self._conn.executemany(
-            "INSERT INTO synced_ratings(asset_id, rating) VALUES (?, ?)",
-            ratings.items(),
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.execute("DELETE FROM synced_ratings")
+            self._conn.executemany(
+                "INSERT INTO synced_ratings(asset_id, rating) VALUES (?, ?)",
+                ratings.items(),
+            )
 
     def get_synced_covers(self) -> dict[str, str]:
         rows = self._conn.execute(
@@ -217,12 +227,12 @@ class StateDB:
         return {r["immich_album_id"]: r["asset_id"] for r in rows}
 
     def replace_synced_covers(self, covers: dict[str, str]) -> None:
-        self._conn.execute("DELETE FROM synced_covers")
-        self._conn.executemany(
-            "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
-            covers.items(),
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.execute("DELETE FROM synced_covers")
+            self._conn.executemany(
+                "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
+                covers.items(),
+            )
 
     def get_synced_favorites(self) -> set[str]:
         rows = self._conn.execute("SELECT asset_id FROM synced_favorites").fetchall()
@@ -239,12 +249,12 @@ class StateDB:
         self._replace_asset_set("synced_rejects", asset_ids)
 
     def _replace_asset_set(self, table: str, asset_ids: set[str]) -> None:
-        self._conn.execute(f"DELETE FROM {table}")
-        self._conn.executemany(
-            f"INSERT INTO {table}(asset_id) VALUES (?)",
-            [(aid,) for aid in asset_ids],
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.execute(f"DELETE FROM {table}")
+            self._conn.executemany(
+                f"INSERT INTO {table}(asset_id) VALUES (?)",
+                [(aid,) for aid in asset_ids],
+            )
 
     def append_audit_log(
         self,
@@ -260,7 +270,6 @@ class StateDB:
             "VALUES (?, ?, ?, ?, ?)",
             (now, action, target_type, target_id, payload_json),
         )
-        self._conn.commit()
 
     def get_audit_log(self, limit: int = 100) -> list[dict[str, Any]]:
         rows = self._conn.execute(
@@ -279,42 +288,42 @@ class StateDB:
     def replace_synced_album_assets(
         self, immich_album_id: str, asset_ids: set[str]
     ) -> None:
-        self._conn.execute(
-            "DELETE FROM synced_album_assets WHERE immich_album_id = ?",
-            (immich_album_id,),
-        )
-        self._conn.executemany(
-            "INSERT INTO synced_album_assets(immich_album_id, asset_id) VALUES (?, ?)",
-            [(immich_album_id, aid) for aid in asset_ids],
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.execute(
+                "DELETE FROM synced_album_assets WHERE immich_album_id = ?",
+                (immich_album_id,),
+            )
+            self._conn.executemany(
+                "INSERT INTO synced_album_assets(immich_album_id, asset_id) "
+                "VALUES (?, ?)",
+                [(immich_album_id, aid) for aid in asset_ids],
+            )
 
     def add_synced_album_assets(
         self, immich_album_id: str, asset_ids: set[str]
     ) -> None:
-        self._conn.executemany(
-            "INSERT OR IGNORE INTO synced_album_assets(immich_album_id, asset_id) "
-            "VALUES (?, ?)",
-            [(immich_album_id, aid) for aid in asset_ids],
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.executemany(
+                "INSERT OR IGNORE INTO synced_album_assets"
+                "(immich_album_id, asset_id) VALUES (?, ?)",
+                [(immich_album_id, aid) for aid in asset_ids],
+            )
 
     def remove_synced_album_assets(
         self, immich_album_id: str, asset_ids: set[str]
     ) -> None:
-        self._conn.executemany(
-            "DELETE FROM synced_album_assets "
-            "WHERE immich_album_id = ? AND asset_id = ?",
-            [(immich_album_id, aid) for aid in asset_ids],
-        )
-        self._conn.commit()
+        with self.transaction():
+            self._conn.executemany(
+                "DELETE FROM synced_album_assets "
+                "WHERE immich_album_id = ? AND asset_id = ?",
+                [(immich_album_id, aid) for aid in asset_ids],
+            )
 
     def clear_synced_album_assets(self, immich_album_id: str) -> None:
         self._conn.execute(
             "DELETE FROM synced_album_assets WHERE immich_album_id = ?",
             (immich_album_id,),
         )
-        self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
