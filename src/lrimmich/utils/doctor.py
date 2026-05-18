@@ -13,25 +13,6 @@ from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import map_path
 
 
-def _derive_section_models() -> tuple[
-    dict[str, type[BaseModel]], dict[str, type[BaseModel]]
-]:
-    sections: dict[str, type[BaseModel]] = {}
-    list_sections: dict[str, type[BaseModel]] = {}
-    for name, info in Config.model_fields.items():
-        ann = info.annotation
-        if isinstance(ann, type) and issubclass(ann, BaseModel):
-            sections[name] = ann
-        elif get_origin(ann) is list:
-            args = get_args(ann)
-            if args and isinstance(args[0], type) and issubclass(args[0], BaseModel):
-                list_sections[name] = args[0]
-    return sections, list_sections
-
-
-_SECTION_MODELS, _LIST_SECTION_MODELS = _derive_section_models()
-
-
 @dataclass
 class CheckResult:
     name: str
@@ -135,17 +116,26 @@ def check_state_db(state: StateDB) -> CheckResult:
 
 def _find_unknown_keys(raw: dict[str, Any]) -> list[str]:
     unknown: list[str] = []
-    top_valid = set(Config.model_fields.keys())
     for key in raw:
-        if key not in top_valid:
+        if key not in Config.model_fields:
             unknown.append(key)
             continue
-        model = _SECTION_MODELS.get(key)
-        if model and isinstance(raw[key], dict):
-            section_valid = set(model.model_fields.keys())
-            for sub_key in raw[key]:
-                if sub_key not in section_valid:
-                    unknown.append(f"{key}.{sub_key}")
+        ann = Config.model_fields[key].annotation
+        if isinstance(ann, type) and issubclass(ann, BaseModel):
+            if isinstance(raw[key], dict):
+                for sub_key in raw[key]:
+                    if sub_key not in ann.model_fields:
+                        unknown.append(f"{key}.{sub_key}")
+        elif get_origin(ann) is list and isinstance(raw[key], list):
+            args = get_args(ann)
+            if args and isinstance(args[0], type) and issubclass(args[0], BaseModel):
+                item_model = args[0]
+                for index, item in enumerate(raw[key]):
+                    if not isinstance(item, dict):
+                        continue
+                    for sub_key in item:
+                        if sub_key not in item_model.model_fields:
+                            unknown.append(f"{key}[{index}].{sub_key}")
     return unknown
 
 

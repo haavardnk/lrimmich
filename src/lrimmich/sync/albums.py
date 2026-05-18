@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
+from fnmatch import fnmatch
 
 from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.utils.config import AlbumMode, SafetyConfig
+from lrimmich.utils.config import AlbumFilter, AlbumMode, AlbumRule, SafetyConfig
 
 
 def format_album_name(collection: LrCollection, fmt: str = "{path}") -> str:
@@ -49,6 +50,48 @@ class AlbumAction:
     old_name: str = ""
 
 
+def resolve_album_filter(
+    collection: LrCollection,
+    album_filter: AlbumFilter,
+    album_min_rating: int,
+    album_rules: list[AlbumRule] | None,
+) -> tuple[AlbumFilter, int]:
+    for rule in album_rules or []:
+        if (rule.id is not None and rule.id == collection.id) or (
+            rule.match and fnmatch(collection.full_name, rule.match)
+        ):
+            return (
+                rule.filter or album_filter,
+                rule.min_rating if rule.min_rating is not None else album_min_rating,
+            )
+    return (album_filter, album_min_rating)
+
+
+def _filtered_asset_ids(
+    collection: LrCollection,
+    resolved: dict[str, str],
+    album_filter: AlbumFilter,
+    album_min_rating: int,
+    album_rules: list[AlbumRule] | None,
+    flagged_paths: set[str],
+    rejected_paths: set[str],
+    rated_paths: dict[str, int],
+) -> list[str]:
+    filt, min_rat = resolve_album_filter(
+        collection, album_filter, album_min_rating, album_rules
+    )
+    paths = collection.relative_paths
+    if filt == "flagged":
+        paths = [p for p in paths if p in flagged_paths]
+    elif filt == "unflagged":
+        paths = [p for p in paths if p not in rejected_paths]
+    elif filt == "rejected":
+        paths = [p for p in paths if p in rejected_paths]
+    if min_rat > 0:
+        paths = [p for p in paths if rated_paths.get(p, 0) >= min_rat]
+    return [resolved[p] for p in paths if p in resolved]
+
+
 def plan_album_sync(
     collections: list[LrCollection],
     resolved: dict[str, str],
@@ -61,9 +104,18 @@ def plan_album_sync(
     skip_empty: bool = True,
     album_name_format: str = "{path}",
     album_mode: AlbumMode = "managed",
+    album_filter: AlbumFilter = "all",
+    album_min_rating: int = 0,
+    album_rules: list[AlbumRule] | None = None,
+    flagged_paths: set[str] | None = None,
+    rejected_paths: set[str] | None = None,
+    rated_paths: dict[str, int] | None = None,
 ) -> list[AlbumAction]:
     safety = safety or SafetyConfig()
     share_with = share_with or []
+    flagged_paths = flagged_paths or set()
+    rejected_paths = rejected_paths or set()
+    rated_paths = rated_paths or {}
     actions: list[AlbumAction] = []
     lr_ids = {c.id for c in collections}
 
@@ -71,7 +123,16 @@ def plan_album_sync(
 
     for collection in collections:
         album_name = format_album_name(collection, album_name_format)
-        asset_ids = [resolved[rp] for rp in collection.relative_paths if rp in resolved]
+        asset_ids = _filtered_asset_ids(
+            collection,
+            resolved,
+            album_filter,
+            album_min_rating,
+            album_rules,
+            flagged_paths,
+            rejected_paths,
+            rated_paths,
+        )
         ownership = state.get_album_ownership(collection.id)
 
         if skip_empty and not asset_ids:

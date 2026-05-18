@@ -195,6 +195,14 @@ def test_check_config_keys_unknown_nested(tmp_path: Path) -> None:
     assert "sync.fake_option" in result.message
 
 
+def test_check_config_keys_unknown_album_rule_key(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text(VALID_TOML + '\n[[album_rules]]\nmatch = "Reise/*"\nfake = true\n')
+    result = check_config_keys(p)
+    assert not result.ok
+    assert "album_rules[0].fake" in result.message
+
+
 def test_check_config_keys_missing_file(tmp_path: Path) -> None:
     result = check_config_keys(tmp_path / "missing.toml")
     assert not result.ok

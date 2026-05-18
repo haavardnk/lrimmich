@@ -125,6 +125,8 @@ bogus_field = "should be ignored"
 def test_album_mode_default(config_file: Path) -> None:
     cfg = load_config(config_file)
     assert cfg.sync.album_mode == "managed"
+    assert cfg.sync.album_filter == "all"
+    assert cfg.sync.album_min_rating == 0
 
 
 def test_album_mode_hybrid(tmp_path: Path) -> None:
@@ -161,3 +163,86 @@ album_mode = "bogus"
 """)
     with pytest.raises(ValidationError):
         load_config(p)
+
+
+@pytest.mark.parametrize("album_filter", ["all", "flagged", "unflagged", "rejected"])
+def test_album_filter_valid(tmp_path: Path, album_filter: str) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text(f"""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+api_key = "testkey123456"
+library_path = "/immich/"
+
+[sync]
+album_filter = "{album_filter}"
+""")
+    cfg = load_config(p)
+    assert cfg.sync.album_filter == album_filter
+
+
+def test_album_filter_invalid(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text("""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+api_key = "testkey123456"
+library_path = "/immich/"
+
+[sync]
+album_filter = "bogus"
+""")
+    with pytest.raises(ValidationError):
+        load_config(p)
+
+
+@pytest.mark.parametrize("rating", [-1, 6])
+def test_album_min_rating_invalid(tmp_path: Path, rating: int) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text(f"""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+api_key = "testkey123456"
+library_path = "/immich/"
+
+[sync]
+album_min_rating = {rating}
+""")
+    with pytest.raises(ValidationError):
+        load_config(p)
+
+
+def test_album_rules(tmp_path: Path) -> None:
+    p = tmp_path / "config.toml"
+    p.write_text("""\
+[lightroom]
+catalog = "/tmp/test.lrcat"
+
+[immich]
+url = "http://localhost:2283"
+api_key = "testkey123456"
+library_path = "/immich/"
+
+[[album_rules]]
+match = "Reise/*"
+filter = "flagged"
+
+[[album_rules]]
+id = 123
+min_rating = 3
+""")
+    cfg = load_config(p)
+    assert len(cfg.album_rules) == 2
+    assert cfg.album_rules[0].match == "Reise/*"
+    assert cfg.album_rules[0].filter == "flagged"
+    assert cfg.album_rules[1].id == 123
+    assert cfg.album_rules[1].min_rating == 3

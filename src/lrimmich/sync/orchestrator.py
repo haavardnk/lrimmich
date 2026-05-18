@@ -87,10 +87,29 @@ def run_sync(
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
     state.upsert_path_cache_bulk([(rp, aid, rp) for rp, aid in resolved.items()])
 
+    flagged: set[str] | None = None
+    rejected: set[str] | None = None
+    rated: dict[str, int] | None = None
+
     if cfg.sync.albums:
         if on_status:
             on_status("Syncing albums...")
         try:
+            needs_flagged = cfg.sync.album_filter == "flagged" or any(
+                r.filter == "flagged" for r in cfg.album_rules
+            )
+            needs_rejected = cfg.sync.album_filter in ("unflagged", "rejected") or any(
+                r.filter in ("unflagged", "rejected") for r in cfg.album_rules
+            )
+            needs_rated = cfg.sync.album_min_rating > 0 or any(
+                (r.min_rating or 0) > 0 for r in cfg.album_rules
+            )
+            if needs_flagged:
+                flagged = read_flagged_images(cfg.lightroom.catalog)
+            if needs_rejected:
+                rejected = read_rejected_images(cfg.lightroom.catalog)
+            if needs_rated:
+                rated = read_rated_images(cfg.lightroom.catalog)
             album_actions = plan_album_sync(
                 collections,
                 resolved,
@@ -103,6 +122,12 @@ def run_sync(
                 skip_empty=cfg.sync.skip_empty,
                 album_name_format=cfg.sync.album_name_format,
                 album_mode=cfg.sync.album_mode,
+                album_filter=cfg.sync.album_filter,
+                album_min_rating=cfg.sync.album_min_rating,
+                album_rules=cfg.album_rules,
+                flagged_paths=flagged,
+                rejected_paths=rejected,
+                rated_paths=rated,
             )
             counts = count_album_actions(album_actions)
             summary.albums_created = counts["created"]
@@ -131,7 +156,8 @@ def run_sync(
         if on_status:
             on_status("Syncing favorites...")
         try:
-            flagged = read_flagged_images(cfg.lightroom.catalog)
+            if flagged is None:
+                flagged = read_flagged_images(cfg.lightroom.catalog)
             to_fav, to_unfav = plan_favorites_sync(
                 flagged, cfg.sync.scope, collections, state
             )
@@ -148,7 +174,8 @@ def run_sync(
         if on_status:
             on_status("Syncing ratings...")
         try:
-            rated = read_rated_images(cfg.lightroom.catalog)
+            if rated is None:
+                rated = read_rated_images(cfg.lightroom.catalog)
             to_set, to_clear = plan_ratings_sync(rated, resolved, state)
             summary.ratings = RatingsResult(set=len(to_set), cleared=len(to_clear))
             if not dry_run:
@@ -160,7 +187,8 @@ def run_sync(
         if on_status:
             on_status("Syncing rejects...")
         try:
-            rejected = read_rejected_images(cfg.lightroom.catalog)
+            if rejected is None:
+                rejected = read_rejected_images(cfg.lightroom.catalog)
             to_arch, to_unarch = plan_rejects_sync(rejected, resolved, state)
             summary.rejects = RejectsResult(
                 archived=len(to_arch),

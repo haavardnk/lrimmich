@@ -80,6 +80,8 @@ By default albums run in **managed** mode — Lightroom fully controls album con
 
 Set `album_mode = "hybrid"` under `[sync]` to let users add extra photos to albums inside Immich without them being removed. In hybrid mode lrimmich tracks which assets it placed and only removes those when they disappear from the Lightroom collection. Manually-added Immich assets are left untouched.
 
+Album membership can also be filtered globally or per collection. Use `album_filter = "flagged"` to create albums from Lightroom flagged photos only, `"unflagged"` to exclude rejects, or `album_min_rating = 3` for 3+ star albums. Add `[[album_rules]]` entries to override the filter for specific collection paths or IDs.
+
 ## Alternatives
 
 | | How it works | Uploads photos? |

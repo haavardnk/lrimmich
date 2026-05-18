@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Literal
 
 from platformdirs import user_config_path
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AlbumMode = Literal["managed", "hybrid"]
+AlbumFilter = Literal["all", "flagged", "unflagged", "rejected"]
 SyncScope = Literal["collections", "all"]
 
 DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
@@ -21,6 +22,13 @@ class ExcludeConfig(BaseConfig):
     name_patterns: list[str] = []
 
 
+class AlbumRule(BaseConfig):
+    match: str = ""
+    id: int | None = None
+    filter: AlbumFilter | None = None
+    min_rating: int | None = Field(default=None, ge=0, le=5)
+
+
 class SyncConfig(BaseConfig):
     albums: bool = True
     favorites: bool = True
@@ -30,6 +38,8 @@ class SyncConfig(BaseConfig):
     skip_empty: bool = True
     scope: SyncScope = "collections"
     album_mode: AlbumMode = "managed"
+    album_filter: AlbumFilter = "all"
+    album_min_rating: int = Field(default=0, ge=0, le=5)
     album_name_format: str = "{path}"
     notify_url: str = ""
 
@@ -62,6 +72,7 @@ class Config(BaseConfig):
     immich: ImmichConfig
     exclude: ExcludeConfig = ExcludeConfig()
     sync: SyncConfig = SyncConfig()
+    album_rules: list[AlbumRule] = []
     safety: SafetyConfig = SafetyConfig()
 
 

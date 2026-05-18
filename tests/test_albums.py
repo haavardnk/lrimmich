@@ -12,8 +12,9 @@ from lrimmich.sync.albums import (
     apply_album_sync,
     format_album_name,
     plan_album_sync,
+    resolve_album_filter,
 )
-from lrimmich.utils.config import SafetyConfig
+from lrimmich.utils.config import AlbumFilter, AlbumRule, SafetyConfig
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -85,6 +86,123 @@ def test_skip_empty_deletes_owned_album(state: StateDB, client: ImmichClient) ->
     assert len(actions) == 1
     assert actions[0].kind == "delete"
     assert actions[0].immich_album_id == "album-1"
+
+
+@pytest.mark.parametrize(
+    "album_filter,expected",
+    [
+        ("all", ["asset-1", "asset-2", "asset-3"]),
+        ("flagged", ["asset-1"]),
+        ("unflagged", ["asset-1", "asset-2"]),
+        ("rejected", ["asset-3"]),
+    ],
+)
+@respx.mock
+def test_album_filter_global(
+    state: StateDB,
+    client: ImmichClient,
+    album_filter: AlbumFilter,
+    expected: list[str],
+) -> None:
+    col = _col(
+        id=10,
+        full_name="Album",
+        relative_paths=["picked.jpg", "neutral.jpg", "rejected.jpg"],
+    )
+    resolved = {
+        "picked.jpg": "asset-1",
+        "neutral.jpg": "asset-2",
+        "rejected.jpg": "asset-3",
+    }
+
+    actions = plan_album_sync(
+        [col],
+        resolved,
+        state,
+        client,
+        album_filter=album_filter,
+        flagged_paths={"picked.jpg"},
+        rejected_paths={"rejected.jpg"},
+    )
+
+    assert len(actions) == 1
+    assert actions[0].kind == "create"
+    assert actions[0].asset_ids == expected
+
+
+@respx.mock
+def test_album_filter_min_rating(state: StateDB, client: ImmichClient) -> None:
+    col = _col(id=10, relative_paths=["a.jpg", "b.jpg", "c.jpg"])
+    resolved = {"a.jpg": "a1", "b.jpg": "a2", "c.jpg": "a3"}
+
+    actions = plan_album_sync(
+        [col],
+        resolved,
+        state,
+        client,
+        album_min_rating=3,
+        rated_paths={"a.jpg": 2, "b.jpg": 3, "c.jpg": 5},
+    )
+
+    assert len(actions) == 1
+    assert actions[0].asset_ids == ["a2", "a3"]
+
+
+@respx.mock
+def test_album_filter_combined(state: StateDB, client: ImmichClient) -> None:
+    col = _col(id=10, relative_paths=["a.jpg", "b.jpg", "c.jpg"])
+    resolved = {"a.jpg": "a1", "b.jpg": "a2", "c.jpg": "a3"}
+
+    actions = plan_album_sync(
+        [col],
+        resolved,
+        state,
+        client,
+        album_filter="flagged",
+        album_min_rating=4,
+        flagged_paths={"a.jpg", "b.jpg"},
+        rated_paths={"a.jpg": 3, "b.jpg": 4, "c.jpg": 5},
+    )
+
+    assert len(actions) == 1
+    assert actions[0].asset_ids == ["a2"]
+
+
+def test_resolve_album_filter_rule_match() -> None:
+    col = _col(id=10, full_name="Reise/Safari")
+    rules = [AlbumRule(match="Reise/*", filter="flagged", min_rating=3)]
+    filt, min_rat = resolve_album_filter(col, "all", 0, rules)
+    assert filt == "flagged"
+    assert min_rat == 3
+
+
+def test_resolve_album_filter_rule_id_first_match_wins() -> None:
+    col = _col(id=10, full_name="Reise/Safari")
+    rules = [
+        AlbumRule(match="Reise/*", filter="flagged"),
+        AlbumRule(id=10, filter="rejected"),
+    ]
+    filt, _ = resolve_album_filter(col, "all", 0, rules)
+    assert filt == "flagged"
+
+
+@respx.mock
+def test_album_filter_skip_empty_after_filter(
+    state: StateDB, client: ImmichClient
+) -> None:
+    col = _col(id=10, relative_paths=["neutral.jpg"])
+    resolved = {"neutral.jpg": "a1"}
+
+    actions = plan_album_sync(
+        [col],
+        resolved,
+        state,
+        client,
+        album_filter="flagged",
+        flagged_paths=set(),
+    )
+
+    assert actions == []
 
 
 @respx.mock
@@ -497,6 +615,37 @@ def test_hybrid_first_run_baselines_without_removal(
 
     assert not any(a.kind == "remove_assets" for a in actions)
     track = [a for a in actions if a.kind == "track_assets"]
+    assert len(track) == 1
+    assert track[0].asset_ids == ["a1"]
+
+
+@respx.mock
+def test_hybrid_tracks_filtered_assets(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "assets": [{"id": "a1"}, {"id": "a2"}],
+                "albumUsers": [],
+            },
+        )
+    )
+
+    col = _col(id=10, full_name="Album", relative_paths=["picked.jpg", "other.jpg"])
+    resolved = {"picked.jpg": "a1", "other.jpg": "a2"}
+
+    actions = plan_album_sync(
+        [col],
+        resolved,
+        state,
+        client,
+        album_mode="hybrid",
+        album_filter="flagged",
+        flagged_paths={"picked.jpg"},
+    )
+
+    track = [action for action in actions if action.kind == "track_assets"]
     assert len(track) == 1
     assert track[0].asset_ids == ["a1"]
 

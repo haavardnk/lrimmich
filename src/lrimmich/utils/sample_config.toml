@@ -35,10 +35,24 @@ scope = "collections"
 # "managed" = Lightroom fully controls album contents (non-LR assets removed)
 # "hybrid" = Lightroom syncs its assets but preserves assets added in Immich
 album_mode = "managed"
+# Album membership filter: "all", "flagged", "unflagged" (exclude rejects), or "rejected"
+album_filter = "all"
+# Minimum rating for album membership (0-5, 0 disables rating filter)
+album_min_rating = 0
 # Album naming format. Placeholders: {path} (full hierarchy), {name} (leaf), {parent} (parent set)
 # album_name_format = "{path}"
 # Webhook URL to POST sync summaries to (leave empty to disable)
 # notify_url = ""
+
+# Optional per-collection album membership rules (first match wins)
+# [[album_rules]]
+# match = "Reise/*"
+# filter = "flagged"
+# min_rating = 3
+
+# [[album_rules]]
+# id = 1284922
+# filter = "unflagged"
 
 [safety]
 # Block album deletion when more than this many albums would be removed
