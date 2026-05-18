@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -17,6 +18,8 @@ from lrimmich.sync.context import SyncContext, SyncStep
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import resolve_paths
+
+logger = logging.getLogger(__name__)
 
 STEPS: list[SyncStep[Any]] = [
     albums.Step(),
@@ -76,6 +79,7 @@ def run_sync(
     for step in STEPS:
         if not step.enabled(cfg):
             continue
+        logger.debug("Running step: %s", step.name)
         if on_status:
             on_status(step.status_msg)
         try:
@@ -83,6 +87,7 @@ def run_sync(
             if not dry_run:
                 step.apply(plan, ctx)
         except Exception as e:
+            logger.exception("Step %s failed", step.name)
             summary.errors.append(f"{step.name}: {e}")
 
     return summary

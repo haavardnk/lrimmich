@@ -1,3 +1,4 @@
+import logging
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
@@ -31,8 +32,17 @@ def _main(
         bool,
         typer.Option("--version", "-V", callback=_version_callback, is_eager=True),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable debug logging."),
+    ] = False,
 ) -> None:
-    pass
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 config_app = typer.Typer(name="config", no_args_is_help=True)

@@ -1,3 +1,4 @@
+import logging
 import threading
 from datetime import datetime
 from typing import Annotated
@@ -17,6 +18,8 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.orchestrator import run_sync
 from lrimmich.utils.config import load_config
+
+logger = logging.getLogger(__name__)
 
 
 @app.command()
@@ -72,8 +75,9 @@ def watch(
                 for err in summary.errors:
                     typer.echo(f"ERROR: {err}", err=True)
             _log("Sync complete")
-        except Exception as e:
-            _log(f"Sync error: {e}")
+        except Exception:
+            logger.exception("Sync error")
+            _log("Sync failed")
         finally:
             state.close()
             client.close()
