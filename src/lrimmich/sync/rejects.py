@@ -1,13 +1,10 @@
-from dataclasses import dataclass
-
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.context import SyncContext
+from lrimmich.sync.summary import RejectsResult, SyncSummary
+from lrimmich.utils.config import Config
 
-
-@dataclass
-class RejectsResult:
-    archived: int = 0
-    unarchived: int = 0
+RejectsPlan = tuple[list[str], list[str]]
 
 
 def plan_rejects_sync(
@@ -15,43 +12,53 @@ def plan_rejects_sync(
     resolved: dict[str, str],
     state: StateDB,
 ) -> tuple[list[str], list[str]]:
-    desired_archive: set[str] = set()
-    desired_unarchive: set[str] = set()
+    desired: set[str] = set()
+    undesired: set[str] = set()
     for rp, asset_id in resolved.items():
         if rp in rejected:
-            desired_archive.add(asset_id)
+            desired.add(asset_id)
         else:
-            desired_unarchive.add(asset_id)
+            undesired.add(asset_id)
     previous = state.get_synced_rejects()
-    to_archive = sorted(desired_archive - previous)
-    to_unarchive = sorted(desired_unarchive & previous)
-    return to_archive, to_unarchive
+    return sorted(desired - previous), sorted(undesired & previous)
 
 
 def apply_rejects_sync(
-    to_archive: list[str],
-    to_unarchive: list[str],
+    to_add: list[str],
+    to_remove: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> RejectsResult:
-    if to_archive:
-        client.bulk_update_assets(to_archive, isArchived=True)
-    if to_unarchive:
-        client.bulk_update_assets(to_unarchive, isArchived=False)
-    result = RejectsResult(
-        archived=len(to_archive),
-        unarchived=len(to_unarchive),
-    )
-    if to_archive or to_unarchive:
-        previous = state.get_synced_rejects()
-        updated = (previous | set(to_archive)) - set(to_unarchive)
+    if to_add:
+        client.bulk_update_assets(to_add, isArchived=True)
+    if to_remove:
+        client.bulk_update_assets(to_remove, isArchived=False)
+    if to_add or to_remove:
+        updated = (state.get_synced_rejects() | set(to_add)) - set(to_remove)
         state.replace_synced_rejects(updated)
         state.append_audit_log(
             "sync_rejects",
             "rejects",
-            payload={
-                "archived": result.archived,
-                "unarchived": result.unarchived,
-            },
+            payload={"archived": len(to_add), "unarchived": len(to_remove)},
         )
-    return result
+    return RejectsResult(archived=len(to_add), unarchived=len(to_remove))
+
+
+class Step:
+    name = "rejects"
+    status_msg = "Syncing rejects..."
+
+    def enabled(self, cfg: Config) -> bool:
+        return cfg.sync.rejects
+
+    def plan(self, ctx: SyncContext, summary: SyncSummary) -> RejectsPlan:
+        to_arch, to_unarch = plan_rejects_sync(
+            ctx.get_rejected(), ctx.resolved, ctx.state
+        )
+        summary.rejects = RejectsResult(
+            archived=len(to_arch), unarchived=len(to_unarch)
+        )
+        return to_arch, to_unarch
+
+    def apply(self, plan: RejectsPlan, ctx: SyncContext) -> None:
+        apply_rejects_sync(plan[0], plan[1], ctx.client, ctx.state)

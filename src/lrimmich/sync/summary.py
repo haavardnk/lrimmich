@@ -1,13 +1,39 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from lrimmich.sync.albums import AlbumAction
-from lrimmich.sync.color_labels import ColorLabelsResult
-from lrimmich.sync.covers import CoversResult
-from lrimmich.sync.favorites import FavoritesResult
-from lrimmich.sync.keywords import KeywordsResult
-from lrimmich.sync.ratings import RatingsResult
-from lrimmich.sync.rejects import RejectsResult
+
+@dataclass
+class FavoritesResult:
+    favorited: int = 0
+    unfavorited: int = 0
+
+
+@dataclass
+class RatingsResult:
+    set: int = 0
+    cleared: int = 0
+
+
+@dataclass
+class RejectsResult:
+    archived: int = 0
+    unarchived: int = 0
+
+
+@dataclass
+class CoversResult:
+    set: int = 0
+    cleared: int = 0
+
+
+@dataclass
+class TagSyncResult:
+    tagged: int = 0
+    untagged: int = 0
+
+
+ColorLabelsResult = TagSyncResult
+KeywordsResult = TagSyncResult
 
 
 @dataclass
@@ -51,26 +77,3 @@ class SyncSummary:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-
-def count_album_actions(actions: list[AlbumAction]) -> dict[str, int]:
-    counts: dict[str, int] = {
-        "created": 0,
-        "renamed": 0,
-        "deleted": 0,
-        "assets_added": 0,
-        "assets_removed": 0,
-    }
-    for a in actions:
-        match a.kind:
-            case "create":
-                counts["created"] += 1
-            case "rename":
-                counts["renamed"] += 1
-            case "delete":
-                counts["deleted"] += 1
-            case "add_assets":
-                counts["assets_added"] += len(a.asset_ids)
-            case "remove_assets":
-                counts["assets_removed"] += len(a.asset_ids)
-    return counts

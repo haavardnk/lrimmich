@@ -3,8 +3,9 @@ from dataclasses import dataclass, field
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.summary import TagSyncResult
 
-TagMap = dict[str, str]
+TagMap = dict[str, str | None]
 
 
 @dataclass
@@ -13,12 +14,6 @@ class TagAction:
     tag_id: str
     tag_name: str
     asset_ids: list[str] = field(default_factory=list)
-
-
-@dataclass
-class TagSyncResult:
-    tagged: int = 0
-    untagged: int = 0
 
 
 def ensure_tags(
@@ -39,7 +34,7 @@ def ensure_tags(
             result = client.create_tag(tag_name)
             tag_map[key] = result["id"]
         else:
-            tag_map[key] = f"pending:{tag_name}"
+            tag_map[key] = None
     return tag_map
 
 
@@ -51,19 +46,25 @@ def build_tag_actions(
 ) -> list[TagAction]:
     actions: list[TagAction] = []
     for key, asset_ids in sorted(by_tag_add.items()):
+        tag_id = tag_map.get(key)
+        if tag_id is None:
+            continue
         actions.append(
             TagAction(
                 kind="tag",
-                tag_id=tag_map[key],
+                tag_id=tag_id,
                 tag_name=prefix + key,
                 asset_ids=sorted(asset_ids),
             )
         )
     for key, asset_ids in sorted(by_tag_remove.items()):
+        tag_id = tag_map.get(key)
+        if tag_id is None:
+            continue
         actions.append(
             TagAction(
                 kind="untag",
-                tag_id=tag_map[key],
+                tag_id=tag_id,
                 tag_name=prefix + key,
                 asset_ids=sorted(asset_ids),
             )

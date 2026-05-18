@@ -1,14 +1,11 @@
-from dataclasses import dataclass
-
 from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.context import SyncContext
+from lrimmich.sync.summary import FavoritesResult, SyncSummary
+from lrimmich.utils.config import Config
 
-
-@dataclass
-class FavoritesResult:
-    favorited: int = 0
-    unfavorited: int = 0
+FavoritesPlan = tuple[list[str], list[str]]
 
 
 def _scoped_asset_ids(
@@ -32,43 +29,53 @@ def plan_favorites_sync(
     state: StateDB,
 ) -> tuple[list[str], list[str]]:
     scoped = _scoped_asset_ids(scope, collections, state)
-    desired_favs: set[str] = set()
-    desired_unfavs: set[str] = set()
+    desired: set[str] = set()
+    undesired: set[str] = set()
     for rp, asset_id in scoped.items():
         if rp in flagged:
-            desired_favs.add(asset_id)
+            desired.add(asset_id)
         else:
-            desired_unfavs.add(asset_id)
+            undesired.add(asset_id)
     previous = state.get_synced_favorites()
-    to_favorite = sorted(desired_favs - previous)
-    to_unfavorite = sorted(desired_unfavs & previous)
-    return to_favorite, to_unfavorite
+    return sorted(desired - previous), sorted(undesired & previous)
 
 
 def apply_favorites_sync(
-    to_favorite: list[str],
-    to_unfavorite: list[str],
+    to_add: list[str],
+    to_remove: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> FavoritesResult:
-    if to_favorite:
-        client.bulk_update_assets(to_favorite, isFavorite=True)
-    if to_unfavorite:
-        client.bulk_update_assets(to_unfavorite, isFavorite=False)
-    result = FavoritesResult(
-        favorited=len(to_favorite),
-        unfavorited=len(to_unfavorite),
-    )
-    if to_favorite or to_unfavorite:
-        previous = state.get_synced_favorites()
-        updated = (previous | set(to_favorite)) - set(to_unfavorite)
+    if to_add:
+        client.bulk_update_assets(to_add, isFavorite=True)
+    if to_remove:
+        client.bulk_update_assets(to_remove, isFavorite=False)
+    if to_add or to_remove:
+        updated = (state.get_synced_favorites() | set(to_add)) - set(to_remove)
         state.replace_synced_favorites(updated)
         state.append_audit_log(
             "sync_favorites",
             "favorites",
-            payload={
-                "favorited": result.favorited,
-                "unfavorited": result.unfavorited,
-            },
+            payload={"favorited": len(to_add), "unfavorited": len(to_remove)},
         )
-    return result
+    return FavoritesResult(favorited=len(to_add), unfavorited=len(to_remove))
+
+
+class Step:
+    name = "favorites"
+    status_msg = "Syncing favorites..."
+
+    def enabled(self, cfg: Config) -> bool:
+        return cfg.sync.favorites
+
+    def plan(self, ctx: SyncContext, summary: SyncSummary) -> FavoritesPlan:
+        to_fav, to_unfav = plan_favorites_sync(
+            ctx.get_flagged(), ctx.cfg.sync.scope, ctx.collections, ctx.state
+        )
+        summary.favorites = FavoritesResult(
+            favorited=len(to_fav), unfavorited=len(to_unfav)
+        )
+        return to_fav, to_unfav
+
+    def apply(self, plan: FavoritesPlan, ctx: SyncContext) -> None:
+        apply_favorites_sync(plan[0], plan[1], ctx.client, ctx.state)

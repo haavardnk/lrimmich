@@ -1,13 +1,11 @@
-from dataclasses import dataclass
-
+from lrimmich.clients.catalog import read_collection_covers
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.context import SyncContext
+from lrimmich.sync.summary import CoversResult, SyncSummary
+from lrimmich.utils.config import Config
 
-
-@dataclass
-class CoversResult:
-    set: int = 0
-    cleared: int = 0
+CoversPlan = tuple[dict[str, str], list[str]]
 
 
 def plan_covers_sync(
@@ -22,13 +20,12 @@ def plan_covers_sync(
         ownership = state.get_album_ownership(lr_id)
         if ownership is None:
             continue
-        immich_album_id: str = ownership["immich_album_id"]
-        desired[immich_album_id] = resolved[rel_path]
+        desired[ownership["immich_album_id"]] = resolved[rel_path]
     previous = state.get_synced_covers()
-    to_set: dict[str, str] = {
+    to_set = {
         aid: asset for aid, asset in desired.items() if previous.get(aid) != asset
     }
-    to_clear: list[str] = [aid for aid in previous if aid not in desired]
+    to_clear = [aid for aid in previous if aid not in desired]
     return to_set, to_clear
 
 
@@ -42,17 +39,32 @@ def apply_covers_sync(
         client.update_album(album_id, albumThumbnailAssetId=asset_id)
     for album_id in sorted(to_clear):
         client.update_album(album_id, albumThumbnailAssetId=None)
-    total_set = len(to_set)
-    total_cleared = len(to_clear)
-    if total_set or total_cleared:
-        all_desired = dict(state.get_synced_covers())
-        all_desired.update(to_set)
+    if to_set or to_clear:
+        snapshot = dict(state.get_synced_covers())
+        snapshot.update(to_set)
         for aid in to_clear:
-            all_desired.pop(aid, None)
-        state.replace_synced_covers(all_desired)
+            snapshot.pop(aid, None)
+        state.replace_synced_covers(snapshot)
         state.append_audit_log(
             "sync_covers",
             "albums",
-            payload={"set": total_set, "cleared": total_cleared},
+            payload={"set": len(to_set), "cleared": len(to_clear)},
         )
-    return CoversResult(set=total_set, cleared=total_cleared)
+    return CoversResult(set=len(to_set), cleared=len(to_clear))
+
+
+class Step:
+    name = "covers"
+    status_msg = "Syncing album covers..."
+
+    def enabled(self, cfg: Config) -> bool:
+        return cfg.sync.albums
+
+    def plan(self, ctx: SyncContext, summary: SyncSummary) -> CoversPlan:
+        cover_paths = read_collection_covers(ctx.cfg.lightroom.catalog)
+        to_set, to_clear = plan_covers_sync(cover_paths, ctx.resolved, ctx.state)
+        summary.covers = CoversResult(set=len(to_set), cleared=len(to_clear))
+        return to_set, to_clear
+
+    def apply(self, plan: CoversPlan, ctx: SyncContext) -> None:
+        apply_covers_sync(plan[0], plan[1], ctx.client, ctx.state)

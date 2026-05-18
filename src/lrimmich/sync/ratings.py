@@ -1,13 +1,10 @@
-from dataclasses import dataclass
-
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.context import SyncContext
+from lrimmich.sync.summary import RatingsResult, SyncSummary
+from lrimmich.utils.config import Config
 
-
-@dataclass
-class RatingsResult:
-    set: int = 0
-    cleared: int = 0
+RatingsPlan = tuple[dict[str, int], list[str]]
 
 
 def plan_ratings_sync(
@@ -19,11 +16,8 @@ def plan_ratings_sync(
         resolved[rp]: rating for rp, rating in rated.items() if rp in resolved
     }
     previous = state.get_synced_ratings()
-    to_set: dict[str, int] = {}
-    for asset_id, rating in desired.items():
-        if previous.get(asset_id) != rating:
-            to_set[asset_id] = rating
-    to_clear: list[str] = [aid for aid in previous if aid not in desired]
+    to_set = {aid: r for aid, r in desired.items() if previous.get(aid) != r}
+    to_clear = [aid for aid in previous if aid not in desired]
     return to_set, to_clear
 
 
@@ -40,17 +34,31 @@ def apply_ratings_sync(
         client.bulk_update_assets(sorted(asset_ids), rating=rating)
     if to_clear:
         client.bulk_update_assets(sorted(to_clear), rating=0)
-    total_set = len(to_set)
-    total_cleared = len(to_clear)
-    if total_set or total_cleared:
-        all_desired = dict(state.get_synced_ratings())
-        all_desired.update(to_set)
+    if to_set or to_clear:
+        snapshot = dict(state.get_synced_ratings())
+        snapshot.update(to_set)
         for aid in to_clear:
-            all_desired.pop(aid, None)
-        state.replace_synced_ratings(all_desired)
+            snapshot.pop(aid, None)
+        state.replace_synced_ratings(snapshot)
         state.append_audit_log(
             "sync_ratings",
             "ratings",
-            payload={"set": total_set, "cleared": total_cleared},
+            payload={"set": len(to_set), "cleared": len(to_clear)},
         )
-    return RatingsResult(set=total_set, cleared=total_cleared)
+    return RatingsResult(set=len(to_set), cleared=len(to_clear))
+
+
+class Step:
+    name = "ratings"
+    status_msg = "Syncing ratings..."
+
+    def enabled(self, cfg: Config) -> bool:
+        return cfg.sync.ratings
+
+    def plan(self, ctx: SyncContext, summary: SyncSummary) -> RatingsPlan:
+        to_set, to_clear = plan_ratings_sync(ctx.get_rated(), ctx.resolved, ctx.state)
+        summary.ratings = RatingsResult(set=len(to_set), cleared=len(to_clear))
+        return to_set, to_clear
+
+    def apply(self, plan: RatingsPlan, ctx: SyncContext) -> None:
+        apply_ratings_sync(plan[0], plan[1], ctx.client, ctx.state)

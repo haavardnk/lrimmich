@@ -32,7 +32,7 @@ def test_ensure_tags_no_create(client: ImmichClient) -> None:
     existing = [{"id": "e1", "value": "pre:red"}]
     result = ensure_tags(client, existing, {"red", "blue"}, "pre:", create=False)
     assert result["red"] == "e1"
-    assert result["blue"].startswith("pending:")
+    assert result["blue"] is None
 
 
 @respx.mock

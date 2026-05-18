@@ -1,18 +1,21 @@
 import json
 
+from lrimmich.clients.catalog import read_keywords
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.context import SyncContext
+from lrimmich.sync.summary import KeywordsResult, SyncSummary
 from lrimmich.sync.tags import (
     TagAction,
     TagMap,
-    TagSyncResult,
     apply_tag_actions,
     build_tag_actions,
+    ensure_tags,
 )
+from lrimmich.utils.config import Config
 
 KEYWORD_TAG_PREFIX = "lr:keyword:"
-
-KeywordsResult = TagSyncResult
+KeywordsPlan = tuple[list[TagAction], dict[str, list[str]]]
 
 
 def plan_keywords_sync(
@@ -62,3 +65,39 @@ def apply_keywords_sync(
     return apply_tag_actions(
         actions, desired, client, state, "keywords_snapshot", "sync_keywords"
     )
+
+
+class Step:
+    name = "keywords"
+    status_msg = "Syncing keywords..."
+
+    def enabled(self, cfg: Config) -> bool:
+        return cfg.sync.tags
+
+    def plan(self, ctx: SyncContext, summary: SyncSummary) -> KeywordsPlan:
+        kw_data = read_keywords(ctx.cfg.lightroom.catalog)
+        needed_kws: set[str] = set()
+        for kws in kw_data.values():
+            needed_kws.update(kws)
+        kw_tag_map = ensure_tags(
+            ctx.client,
+            ctx.get_existing_tags(),
+            needed_kws,
+            KEYWORD_TAG_PREFIX,
+            create=not ctx.dry_run,
+        )
+        kw_actions = plan_keywords_sync(kw_data, ctx.resolved, kw_tag_map, ctx.state)
+        kw_desired: dict[str, list[str]] = {}
+        for rp, kws in kw_data.items():
+            if rp in ctx.resolved:
+                valid = sorted(k for k in kws if k in kw_tag_map)
+                if valid:
+                    kw_desired[ctx.resolved[rp]] = valid
+        summary.keywords = KeywordsResult(
+            tagged=sum(len(a.asset_ids) for a in kw_actions if a.kind == "tag"),
+            untagged=sum(len(a.asset_ids) for a in kw_actions if a.kind == "untag"),
+        )
+        return kw_actions, kw_desired
+
+    def apply(self, plan: KeywordsPlan, ctx: SyncContext) -> None:
+        apply_keywords_sync(plan[0], plan[1], ctx.client, ctx.state)
