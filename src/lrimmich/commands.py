@@ -95,7 +95,8 @@ def doctor(
     state = StateDB()
     report = DoctorReport()
     try:
-        report = run_doctor(cfg, client, state)
+        config_path = config or DEFAULT_CONFIG_PATH
+        report = run_doctor(cfg, client, state, config_path=config_path)
         for check in report.checks:
             check_status = "OK" if check.ok else "FAIL"
             typer.echo(f"[{check_status}] {check.name}: {check.message}")

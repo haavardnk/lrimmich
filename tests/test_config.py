@@ -105,7 +105,7 @@ scope = "invalid"
         load_config(p)
 
 
-def test_extra_field_rejected(tmp_path: Path) -> None:
+def test_extra_field_ignored(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
 [lightroom]
@@ -115,10 +115,11 @@ catalog = "/tmp/test.lrcat"
 url = "http://localhost:2283"
 api_key = "testkey123456"
 library_path = "/immich/"
-bogus_field = "should fail"
+bogus_field = "should be ignored"
 """)
-    with pytest.raises(ValidationError):
-        load_config(p)
+    cfg = load_config(p)
+    assert cfg.immich.url == "http://localhost:2283"
+    assert not hasattr(cfg.immich, "bogus_field")
 
 
 def test_album_mode_default(config_file: Path) -> None:

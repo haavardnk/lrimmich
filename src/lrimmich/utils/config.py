@@ -13,7 +13,7 @@ DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
 
 
 class BaseConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
 
 class ExcludeConfig(BaseConfig):
