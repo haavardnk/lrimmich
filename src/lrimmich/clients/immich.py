@@ -114,7 +114,7 @@ class ImmichClient:
         max_results: int | None = None,
     ) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
-        page = 1
+        page: int | str = 1
         while True:
             payload: dict[str, Any] = {"page": page, "size": size}
             if filename is not None:
@@ -124,13 +124,15 @@ class ImmichClient:
                 "/search/metadata",
                 payload,
             )
-            items = resp.get("assets", {}).get("items", [])
+            assets = resp.get("assets", {})
+            items = assets.get("items", [])
             results.extend(items)
             if max_results is not None and len(results) >= max_results:
                 return results[:max_results]
-            if len(items) < size:
+            next_page = assets.get("nextPage")
+            if next_page is None:
                 break
-            page += 1
+            page = next_page
         return results
 
     def bulk_update_assets(self, asset_ids: list[str], **fields: Any) -> None:

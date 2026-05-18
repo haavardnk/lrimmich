@@ -141,7 +141,7 @@ def test_search_metadata_pagination(client: ImmichClient, api_url: str) -> None:
     page2 = [{"id": "x250"}]
     route = respx.post(f"{api_url}/search/metadata")
     route.side_effect = [
-        httpx.Response(200, json={"assets": {"items": page1}}),
+        httpx.Response(200, json={"assets": {"items": page1, "nextPage": "2"}}),
         httpx.Response(200, json={"assets": {"items": page2}}),
     ]
     results = client.search_metadata("file.jpg")
