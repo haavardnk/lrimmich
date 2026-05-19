@@ -14,7 +14,6 @@ from lrimmich.sync.tags import (
 )
 from lrimmich.utils.config import Config
 
-COLOR_TAG_PREFIX = "lr:color:"
 VALID_COLORS = {"Red", "Yellow", "Green", "Blue", "Purple"}
 ColorLabelsPlan = tuple[list[TagAction], dict[str, str]]
 
@@ -24,6 +23,7 @@ def plan_color_labels_sync(
     resolved: dict[str, str],
     tag_map: TagMap,
     state: StateDB,
+    prefix: str = "lr:color:",
 ) -> list[TagAction]:
     previous = state.get_meta("color_labels_snapshot")
     prev_assignments: dict[str, str] = json.loads(previous) if previous else {}
@@ -49,7 +49,7 @@ def plan_color_labels_sync(
         if asset_id not in desired and old_color in tag_map:
             by_tag_remove.setdefault(old_color, []).append(asset_id)
 
-    return build_tag_actions(by_tag_add, by_tag_remove, tag_map, COLOR_TAG_PREFIX)
+    return build_tag_actions(by_tag_add, by_tag_remove, tag_map, prefix)
 
 
 def apply_color_labels_sync(
@@ -71,15 +71,18 @@ class Step:
         return cfg.sync.tags
 
     def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
+        prefix = ctx.cfg.sync.color_prefix
         labels = read_color_labels(ctx.cfg.lightroom.catalog)
         tag_map = ensure_tags(
             ctx.client,
             ctx.get_existing_tags(),
             {c.lower() for c in VALID_COLORS},
-            COLOR_TAG_PREFIX,
+            prefix,
             create=not ctx.dry_run,
         )
-        actions = plan_color_labels_sync(labels, ctx.resolved, tag_map, ctx.state)
+        actions = plan_color_labels_sync(
+            labels, ctx.resolved, tag_map, ctx.state, prefix
+        )
         desired = {
             ctx.resolved[rp]: color.lower()
             for rp, color in labels.items()

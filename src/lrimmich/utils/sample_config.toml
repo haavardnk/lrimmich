@@ -41,6 +41,10 @@ album_filter = "all"
 album_min_rating = 0
 # Album naming format. Placeholders: {path} (full hierarchy), {name} (leaf), {parent} (parent set)
 # album_name_format = "{path}"
+# Tag prefix for synced keywords (default: "lr:keyword:")
+# keyword_prefix = "lr:keyword:"
+# Tag prefix for synced color labels (default: "lr:color:")
+# color_prefix = "lr:color:"
 
 # Optional per-collection album membership rules (first match wins)
 # [[album_rules]]

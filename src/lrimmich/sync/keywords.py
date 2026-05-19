@@ -14,7 +14,6 @@ from lrimmich.sync.tags import (
 )
 from lrimmich.utils.config import Config
 
-KEYWORD_TAG_PREFIX = "lr:keyword:"
 KeywordsPlan = tuple[list[TagAction], dict[str, list[str]]]
 
 
@@ -23,6 +22,7 @@ def plan_keywords_sync(
     resolved: dict[str, str],
     tag_map: TagMap,
     state: StateDB,
+    prefix: str = "lr:keyword:",
 ) -> list[TagAction]:
     previous = state.get_meta("keywords_snapshot")
     prev_assignments: dict[str, list[str]] = json.loads(previous) if previous else {}
@@ -53,7 +53,7 @@ def plan_keywords_sync(
                 if kw in tag_map:
                     by_tag_remove.setdefault(kw, []).append(asset_id)
 
-    return build_tag_actions(by_tag_add, by_tag_remove, tag_map, KEYWORD_TAG_PREFIX)
+    return build_tag_actions(by_tag_add, by_tag_remove, tag_map, prefix)
 
 
 def apply_keywords_sync(
@@ -75,6 +75,7 @@ class Step:
         return cfg.sync.tags
 
     def plan(self, ctx: SyncContext, summary: SyncSummary) -> KeywordsPlan:
+        prefix = ctx.cfg.sync.keyword_prefix
         kw_data = read_keywords(ctx.cfg.lightroom.catalog)
         needed_kws: set[str] = set()
         for kws in kw_data.values():
@@ -83,10 +84,12 @@ class Step:
             ctx.client,
             ctx.get_existing_tags(),
             needed_kws,
-            KEYWORD_TAG_PREFIX,
+            prefix,
             create=not ctx.dry_run,
         )
-        kw_actions = plan_keywords_sync(kw_data, ctx.resolved, kw_tag_map, ctx.state)
+        kw_actions = plan_keywords_sync(
+            kw_data, ctx.resolved, kw_tag_map, ctx.state, prefix
+        )
         kw_desired: dict[str, list[str]] = {}
         for rp, kws in kw_data.items():
             if rp in ctx.resolved:

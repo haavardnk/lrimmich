@@ -5,7 +5,6 @@ import respx
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.keywords import (
-    KEYWORD_TAG_PREFIX,
     KeywordsResult,
     apply_keywords_sync,
     plan_keywords_sync,
@@ -77,7 +76,7 @@ def test_plan_hierarchy_preserved(state: StateDB) -> None:
     actions = plan_keywords_sync(keywords, resolved, TAG_MAP, state)
     tag_actions = [a for a in actions if a.kind == "tag"]
     assert len(tag_actions) == 1
-    assert tag_actions[0].tag_name == f"{KEYWORD_TAG_PREFIX}Nature/Trees"
+    assert tag_actions[0].tag_name == "lr:keyword:Nature/Trees"
 
 
 @respx.mock
@@ -88,13 +87,13 @@ def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
         TagAction(
             kind="tag",
             tag_id="t-nature",
-            tag_name=f"{KEYWORD_TAG_PREFIX}Nature",
+            tag_name="lr:keyword:Nature",
             asset_ids=["a1"],
         ),
         TagAction(
             kind="untag",
             tag_id="t-travel",
-            tag_name=f"{KEYWORD_TAG_PREFIX}Travel",
+            tag_name="lr:keyword:Travel",
             asset_ids=["a2"],
         ),
     ]
@@ -111,7 +110,7 @@ def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
         TagAction(
             kind="tag",
             tag_id="t-nature",
-            tag_name=f"{KEYWORD_TAG_PREFIX}Nature",
+            tag_name="lr:keyword:Nature",
             asset_ids=["a1"],
         ),
     ]
