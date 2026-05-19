@@ -21,13 +21,16 @@ def detect_schema(conn: sqlite3.Connection) -> LrSchema:
     columns = {
         r["name"] for r in conn.execute("PRAGMA table_info(Adobe_images)").fetchall()
     }
-    has_caption = "caption" in columns
+    tables = {
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    has_caption = "AgLibraryIPTC" in tables
     has_touch_time = "touchTime" in columns
     has_stack = "stack" in columns
-    if (has_caption and has_touch_time) or has_caption:
-        version = LrVersion.V7_PLUS
-    else:
-        version = LrVersion.V6
+    version = LrVersion.V7_PLUS if has_touch_time else LrVersion.V6
     return LrSchema(
         version=version,
         has_caption=has_caption,
@@ -89,10 +92,14 @@ COLOR_LABELS = (
     f"{SELECT_PATH}, ai.colorLabels{IMAGE_PATH_JOIN}    WHERE ai.colorLabels != ''"
 )
 
-CAPTIONS = (
-    f"{SELECT_PATH}, ai.caption{IMAGE_PATH_JOIN}"
-    "    WHERE ai.caption IS NOT NULL AND ai.caption != ''"
-)
+CAPTIONS = """
+    SELECT af.pathFromRoot, lf.idx_filename, iptc.caption
+    FROM AgLibraryIPTC iptc
+    JOIN Adobe_images ai ON iptc.image = ai.id_local
+    JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
+    JOIN AgLibraryFolder af ON lf.folder = af.id_local
+    WHERE iptc.caption IS NOT NULL AND iptc.caption != ''
+"""
 
 KEYWORDS_TREE = "SELECT id_local, name, parent FROM AgLibraryKeyword"
 

@@ -22,10 +22,15 @@ CREATE TABLE Adobe_images (
     pick INTEGER DEFAULT 0,
     rating INTEGER DEFAULT 0,
     colorLabels TEXT DEFAULT '',
-    caption TEXT DEFAULT '',
     touchTime REAL DEFAULT 0.0,
     stack INTEGER,
     stackPosition INTEGER DEFAULT 0
+);
+
+CREATE TABLE AgLibraryIPTC (
+    id_local INTEGER PRIMARY KEY,
+    caption TEXT DEFAULT '',
+    image INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE AgLibraryFile (
@@ -127,21 +132,25 @@ class CatalogBuilder:
         )
         self._conn.execute(
             "INSERT INTO Adobe_images"
-            "(id_local, rootFile, pick, rating, colorLabels, caption,"
+            "(id_local, rootFile, pick, rating, colorLabels,"
             " touchTime, stack, stackPosition) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 id,
                 file_id,
                 pick,
                 rating,
                 color_labels,
-                caption,
                 touch_time,
                 stack,
                 stack_position,
             ),
         )
+        if caption:
+            self._conn.execute(
+                "INSERT INTO AgLibraryIPTC(image, caption) VALUES (?, ?)",
+                (id, caption),
+            )
         return self
 
     def add_collection_image(
