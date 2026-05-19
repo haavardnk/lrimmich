@@ -64,7 +64,8 @@ def _walk_ancestors(
     current: int | None = node_id
     while current is not None and current in tree:
         name, parent_id = tree[current]
-        parts.append(name)
+        if name is not None:
+            parts.append(name)
         current = parent_id
     parts.reverse()
     return "/".join(parts)
