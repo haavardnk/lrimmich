@@ -53,6 +53,8 @@ album_min_rating = 0
 # match = "Reise/*"
 # filter = "flagged"
 # min_rating = 3
+# description = "Travel photos from trips"
+# order = "desc"
 
 # [[album_rules]]
 # id = 1284922

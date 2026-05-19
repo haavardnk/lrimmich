@@ -12,7 +12,7 @@ from lrimmich.sync.albums import (
     apply_album_sync,
     format_album_name,
     plan_album_sync,
-    resolve_album_filter,
+    resolve_album_rule,
 )
 from lrimmich.utils.config import AlbumFilter, AlbumRule, SafetyConfig
 
@@ -176,22 +176,36 @@ async def test_album_filter_combined(state: StateDB, client: ImmichClient) -> No
     assert actions[0].asset_ids == ["a2"]
 
 
-def test_resolve_album_filter_rule_match() -> None:
+def test_resolve_album_rule_match() -> None:
     col = _col(id=10, full_name="Reise/Safari")
     rules = [AlbumRule(match="Reise/*", filter="flagged", min_rating=3)]
-    filt, min_rat = resolve_album_filter(col, "all", 0, rules)
-    assert filt == "flagged"
-    assert min_rat == 3
+    result = resolve_album_rule(col, "all", 0, rules)
+    assert result.filter == "flagged"
+    assert result.min_rating == 3
 
 
-def test_resolve_album_filter_rule_id_first_match_wins() -> None:
+def test_resolve_album_rule_id_first_match_wins() -> None:
     col = _col(id=10, full_name="Reise/Safari")
     rules = [
         AlbumRule(match="Reise/*", filter="flagged"),
         AlbumRule(id=10, filter="rejected"),
     ]
-    filt, _ = resolve_album_filter(col, "all", 0, rules)
-    assert filt == "flagged"
+    result = resolve_album_rule(col, "all", 0, rules)
+    assert result.filter == "flagged"
+
+
+def test_resolve_album_rule_description() -> None:
+    col = _col(id=10, full_name="Reise/Safari")
+    rules = [AlbumRule(match="Reise/*", description="Travel photos")]
+    result = resolve_album_rule(col, "all", 0, rules)
+    assert result.description == "Travel photos"
+
+
+def test_resolve_album_rule_order() -> None:
+    col = _col(id=10, full_name="Reise/Safari")
+    rules = [AlbumRule(match="Reise/*", order="desc")]
+    result = resolve_album_rule(col, "all", 0, rules)
+    assert result.order == "desc"
 
 
 @respx.mock
@@ -283,6 +297,148 @@ async def test_apply_create_and_share(state: StateDB, client: ImmichClient) -> N
 
 @respx.mock
 @pytest.mark.anyio
+async def test_apply_create_with_description(
+    state: StateDB, client: ImmichClient
+) -> None:
+    respx.post(f"{API}/albums").mock(
+        return_value=httpx.Response(200, json={"id": "imm-desc"})
+    )
+
+    actions = [
+        AlbumAction(
+            kind="create",
+            lr_collection_id=10,
+            album_name="Described",
+            asset_ids=["a1"],
+            description="My album desc",
+        ),
+    ]
+    await apply_album_sync(actions, client, state)
+
+    body = respx.calls[0].request.content
+    import json
+
+    payload = json.loads(body)
+    assert payload["description"] == "My album desc"
+    assert state.get_meta("album_desc:10") == "My album desc"
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_apply_set_description(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.patch(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(200, json={"id": "imm-1"})
+    )
+
+    actions = [
+        AlbumAction(
+            kind="set_description",
+            lr_collection_id=10,
+            immich_album_id="imm-1",
+            album_name="Album",
+            description="Updated desc",
+        ),
+    ]
+    await apply_album_sync(actions, client, state)
+
+    assert state.get_meta("album_desc:10") == "Updated desc"
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_plan_set_description_on_existing(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={"assets": [], "albumUsers": []},
+        )
+    )
+
+    col = _col(id=10, full_name="Album")
+    rules = [AlbumRule(match="Album", description="New desc")]
+    actions = await plan_album_sync(
+        [col], {}, state, client, album_rules=rules, skip_empty=False
+    )
+
+    desc_actions = [a for a in actions if a.kind == "set_description"]
+    assert len(desc_actions) == 1
+    assert desc_actions[0].description == "New desc"
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_apply_set_order(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.patch(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(200, json={"id": "imm-1"})
+    )
+
+    actions = [
+        AlbumAction(
+            kind="set_order",
+            lr_collection_id=10,
+            immich_album_id="imm-1",
+            album_name="Album",
+            order="desc",
+        ),
+    ]
+    await apply_album_sync(actions, client, state)
+
+    assert state.get_meta("album_order:10") == "desc"
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_plan_set_order_on_existing(state: StateDB, client: ImmichClient) -> None:
+    state.upsert_album_ownership(10, "imm-1", "Album")
+    respx.get(f"{API}/albums/imm-1").mock(
+        return_value=httpx.Response(
+            200,
+            json={"assets": [], "albumUsers": []},
+        )
+    )
+
+    col = _col(id=10, full_name="Album")
+    rules = [AlbumRule(match="Album", order="desc")]
+    actions = await plan_album_sync(
+        [col], {}, state, client, album_rules=rules, skip_empty=False
+    )
+
+    order_actions = [a for a in actions if a.kind == "set_order"]
+    assert len(order_actions) == 1
+    assert order_actions[0].order == "desc"
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_create_with_order(state: StateDB, client: ImmichClient) -> None:
+    respx.post(f"{API}/albums").mock(
+        return_value=httpx.Response(200, json={"id": "imm-ord"})
+    )
+    respx.patch(f"{API}/albums/imm-ord").mock(
+        return_value=httpx.Response(200, json={"id": "imm-ord"})
+    )
+
+    actions = [
+        AlbumAction(
+            kind="create",
+            lr_collection_id=10,
+            album_name="Ordered",
+            asset_ids=["a1"],
+            order="desc",
+        ),
+    ]
+    await apply_album_sync(actions, client, state)
+
+    assert state.get_meta("album_order:10") == "desc"
+
+
+@respx.mock
+@pytest.mark.anyio
 async def test_update_assets(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
     respx.get(f"{API}/albums/imm-1").mock(
@@ -336,7 +492,7 @@ async def test_format_change_triggers_rename(
 
     col = _col(id=10, full_name="Travel/Japan")
     actions = await plan_album_sync(
-        [col], {}, state, client, skip_empty=False, album_name_format="{name}"
+        [col], {}, state, client, album_name_format="{name}", skip_empty=False
     )
 
     rename = [a for a in actions if a.kind == "rename"]
@@ -393,7 +549,7 @@ async def test_force_allows_delete(state: StateDB, client: ImmichClient) -> None
     for i in range(3):
         state.upsert_album_ownership(100 + i, f"imm-{i}", f"Gone{i}")
 
-    actions = await plan_album_sync([], {}, state, client, safety=safety, force=True)
+    actions = await plan_album_sync([], {}, state, client, force=True, safety=safety)
 
     assert len(actions) == 3
     assert all(a.kind == "delete" for a in actions)
@@ -501,7 +657,7 @@ async def test_remove_percent_limit_force(state: StateDB, client: ImmichClient) 
     resolved = {"x.jpg": "a0"}
 
     actions = await plan_album_sync(
-        [col], resolved, state, client, safety=safety, force=True
+        [col], resolved, state, client, force=True, safety=safety
     )
 
     assert any(a.kind == "remove_assets" for a in actions)

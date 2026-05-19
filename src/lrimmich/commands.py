@@ -128,13 +128,14 @@ def adopt(
     config: ConfigOption = None,
     apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
 ) -> None:
-    async def _run() -> list:
+    async def _run() -> tuple[list, StateDB]:
         cfg = load_config(config)
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
             state = StateDB()
             try:
                 collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
-                return await find_adopt_candidates(collections, client, state), state
+                candidates = await find_adopt_candidates(collections, client, state)
+                return candidates, state
             except Exception:
                 state.close()
                 raise

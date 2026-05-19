@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 AlbumMode = Literal["managed", "hybrid"]
 AlbumFilter = Literal["all", "flagged", "unflagged", "rejected"]
+AssetOrder = Literal["asc", "desc"]
 SyncScope = Literal["collections", "all"]
 
 DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
@@ -61,6 +62,8 @@ class AlbumRule(BaseConfig):
     id: int | None = None
     filter: AlbumFilter | None = None
     min_rating: int | None = Field(default=None, ge=0, le=5)
+    description: str | None = None
+    order: AssetOrder | None = None
 
 
 class SafetyConfig(BaseConfig):

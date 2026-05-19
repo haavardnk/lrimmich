@@ -10,6 +10,7 @@ from lrimmich.utils.config import (
     AlbumFilter,
     AlbumMode,
     AlbumRule,
+    AssetOrder,
     Config,
     SafetyConfig,
 )
@@ -56,23 +57,42 @@ class AlbumAction:
     asset_ids: list[str] = field(default_factory=list)
     user_ids: list[str] = field(default_factory=list)
     old_name: str = ""
+    description: str | None = None
+    order: AssetOrder | None = None
 
 
-def resolve_album_filter(
+@dataclass
+class AlbumRuleResult:
+    filter: AlbumFilter
+    min_rating: int
+    description: str | None
+    order: AssetOrder | None
+
+
+def resolve_album_rule(
     collection: LrCollection,
     album_filter: AlbumFilter,
     album_min_rating: int,
     album_rules: list[AlbumRule] | None,
-) -> tuple[AlbumFilter, int]:
+) -> AlbumRuleResult:
     for rule in album_rules or []:
         if (rule.id is not None and rule.id == collection.id) or (
             rule.match and fnmatch(collection.full_name, rule.match)
         ):
-            return (
-                rule.filter or album_filter,
-                rule.min_rating if rule.min_rating is not None else album_min_rating,
+            return AlbumRuleResult(
+                filter=rule.filter or album_filter,
+                min_rating=rule.min_rating
+                if rule.min_rating is not None
+                else album_min_rating,
+                description=rule.description,
+                order=rule.order,
             )
-    return (album_filter, album_min_rating)
+    return AlbumRuleResult(
+        filter=album_filter,
+        min_rating=album_min_rating,
+        description=None,
+        order=None,
+    )
 
 
 def _filtered_asset_ids(
@@ -85,18 +105,16 @@ def _filtered_asset_ids(
     rejected_paths: set[str],
     rated_paths: dict[str, int],
 ) -> list[str]:
-    filt, min_rat = resolve_album_filter(
-        collection, album_filter, album_min_rating, album_rules
-    )
+    rule = resolve_album_rule(collection, album_filter, album_min_rating, album_rules)
     paths = collection.relative_paths
-    if filt == "flagged":
+    if rule.filter == "flagged":
         paths = [p for p in paths if p in flagged_paths]
-    elif filt == "unflagged":
+    elif rule.filter == "unflagged":
         paths = [p for p in paths if p not in rejected_paths]
-    elif filt == "rejected":
+    elif rule.filter == "rejected":
         paths = [p for p in paths if p in rejected_paths]
-    if min_rat > 0:
-        paths = [p for p in paths if rated_paths.get(p, 0) >= min_rat]
+    if rule.min_rating > 0:
+        paths = [p for p in paths if rated_paths.get(p, 0) >= rule.min_rating]
     return [resolved[p] for p in paths if p in resolved]
 
 
@@ -127,6 +145,9 @@ async def _plan_collection(
     all_albums: dict[str, dict],
 ) -> tuple[list[AlbumAction], bool]:
     album_name = format_album_name(collection, ctx.album_name_format)
+    rule = resolve_album_rule(
+        collection, ctx.album_filter, ctx.album_min_rating, ctx.album_rules
+    )
     asset_ids = _filtered_asset_ids(
         collection,
         ctx.resolved,
@@ -150,6 +171,8 @@ async def _plan_collection(
                 lr_collection_id=collection.id,
                 album_name=album_name,
                 asset_ids=asset_ids,
+                description=rule.description,
+                order=rule.order,
             )
         )
         if ctx.share_with:
@@ -173,6 +196,30 @@ async def _plan_collection(
                 immich_album_id=immich_album_id,
                 album_name=album_name,
                 old_name=ownership["last_name"],
+            )
+        )
+
+    last_desc = ctx.state.get_meta(f"album_desc:{collection.id}")
+    if rule.description != last_desc:
+        actions.append(
+            AlbumAction(
+                kind="set_description",
+                lr_collection_id=collection.id,
+                immich_album_id=immich_album_id,
+                album_name=album_name,
+                description=rule.description,
+            )
+        )
+
+    last_order = ctx.state.get_meta(f"album_order:{collection.id}")
+    if rule.order and rule.order != last_order:
+        actions.append(
+            AlbumAction(
+                kind="set_order",
+                lr_collection_id=collection.id,
+                immich_album_id=immich_album_id,
+                album_name=album_name,
+                order=rule.order,
             )
         )
 
@@ -300,19 +347,19 @@ async def plan_album_sync(
     resolved: dict[str, str],
     state: StateDB,
     client: ImmichClient,
-    share_with: list[str] | None = None,
-    safety: SafetyConfig | None = None,
-    force: bool = False,
-    no_delete: bool = False,
-    skip_empty: bool = True,
-    album_name_format: str = "{path}",
-    album_mode: AlbumMode = "managed",
     album_filter: AlbumFilter = "all",
     album_min_rating: int = 0,
+    album_mode: AlbumMode = "managed",
+    album_name_format: str = "{path}",
     album_rules: list[AlbumRule] | None = None,
     flagged_paths: set[str] | None = None,
-    rejected_paths: set[str] | None = None,
+    force: bool = False,
+    no_delete: bool = False,
     rated_paths: dict[str, int] | None = None,
+    rejected_paths: set[str] | None = None,
+    safety: SafetyConfig | None = None,
+    share_with: list[str] | None = None,
+    skip_empty: bool = True,
 ) -> list[AlbumAction]:
     ctx = AlbumPlanContext(
         collections=collections,
@@ -354,10 +401,17 @@ async def plan_album_sync(
 async def _apply_create(
     action: AlbumAction, client: ImmichClient, state: StateDB
 ) -> str:
-    result = await client.create_album(action.album_name, action.asset_ids)
+    result = await client.create_album(
+        action.album_name, action.asset_ids, description=action.description or ""
+    )
     album_id: str = result["id"]
+    if action.order:
+        await client.update_album(album_id, order=action.order)
+        state.set_meta(f"album_order:{action.lr_collection_id}", action.order)
     state.upsert_album_ownership(action.lr_collection_id, album_id, action.album_name)
     state.replace_synced_album_assets(album_id, set(action.asset_ids))
+    if action.description:
+        state.set_meta(f"album_desc:{action.lr_collection_id}", action.description)
     state.append_audit_log(
         "create_album",
         "album",
@@ -446,6 +500,30 @@ def _apply_track_assets(action: AlbumAction, state: StateDB) -> None:
     state.replace_synced_album_assets(action.immich_album_id, set(action.asset_ids))
 
 
+async def _apply_set_description(
+    action: AlbumAction, client: ImmichClient, state: StateDB
+) -> None:
+    if not action.immich_album_id:
+        return
+    await client.update_album(
+        action.immich_album_id, description=action.description or ""
+    )
+    meta_key = f"album_desc:{action.lr_collection_id}"
+    if action.description:
+        state.set_meta(meta_key, action.description)
+    else:
+        state.set_meta(meta_key, "")
+
+
+async def _apply_set_order(
+    action: AlbumAction, client: ImmichClient, state: StateDB
+) -> None:
+    if not action.immich_album_id or not action.order:
+        return
+    await client.update_album(action.immich_album_id, order=action.order)
+    state.set_meta(f"album_order:{action.lr_collection_id}", action.order)
+
+
 async def apply_album_sync(
     actions: list[AlbumAction],
     client: ImmichClient,
@@ -471,6 +549,10 @@ async def apply_album_sync(
                 await _apply_delete(action, client, state)
             case "track_assets":
                 _apply_track_assets(action, state)
+            case "set_description":
+                await _apply_set_description(action, client, state)
+            case "set_order":
+                await _apply_set_order(action, client, state)
 
 
 def count_album_actions(actions: list[AlbumAction]) -> dict[str, int]:
@@ -519,19 +601,19 @@ class Step:
             ctx.resolved,
             ctx.state,
             ctx.client,
-            share_with=ctx.cfg.immich.share_albums_with,
-            safety=ctx.cfg.safety,
-            force=ctx.force,
-            no_delete=ctx.no_delete,
-            skip_empty=ctx.cfg.sync.skip_empty,
-            album_name_format=ctx.cfg.sync.album_name_format,
-            album_mode=ctx.cfg.sync.album_mode,
             album_filter=ctx.cfg.sync.album_filter,
             album_min_rating=ctx.cfg.sync.album_min_rating,
+            album_mode=ctx.cfg.sync.album_mode,
+            album_name_format=ctx.cfg.sync.album_name_format,
             album_rules=ctx.cfg.album_rules,
             flagged_paths=ctx.get_flagged() if needs_flagged else None,
-            rejected_paths=ctx.get_rejected() if needs_rejected else None,
+            force=ctx.force,
+            no_delete=ctx.no_delete,
             rated_paths=ctx.get_rated() if needs_rated else None,
+            rejected_paths=ctx.get_rejected() if needs_rejected else None,
+            safety=ctx.cfg.safety,
+            share_with=ctx.cfg.immich.share_albums_with,
+            skip_empty=ctx.cfg.sync.skip_empty,
         )
         counts = count_album_actions(actions)
         summary.albums_created = counts["created"]
