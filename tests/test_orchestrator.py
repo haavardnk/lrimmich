@@ -117,7 +117,6 @@ def test_summary_has_drift() -> None:
 async def test_skip_sync_when_catalog_unchanged(
     cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
 ) -> None:
-    respx.route().respond(json=[])
     respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
     respx.get(f"{API}/view/folder").respond(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
@@ -127,8 +126,11 @@ async def test_skip_sync_when_catalog_unchanged(
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
-    respx.get(f"{API}/albums").respond(json=[])
     respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [], "albumUsers": []}
+    )
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
@@ -144,7 +146,6 @@ async def test_skip_sync_when_catalog_unchanged(
 async def test_force_ignores_fingerprint(
     cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
 ) -> None:
-    respx.route().respond(json=[])
     respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
     respx.get(f"{API}/view/folder").respond(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
@@ -154,19 +155,34 @@ async def test_force_ignores_fingerprint(
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
-    respx.get(f"{API}/albums").respond(json=[])
     respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [], "albumUsers": []}
+    )
+    respx.put(url__regex=rf"{API}/albums/.*/assets").respond(json=[])
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
     respx.reset()
-    respx.route().respond(json=[])
     respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
     respx.get(f"{API}/view/folder").respond(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
     respx.get(f"{API}/albums").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [{"id": "a1"}], "albumUsers": []}
+    )
+    respx.put(url__regex=rf"{API}/albums/.*/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [], "albumUsers": []}
+    )
 
     await run_sync(cfg, cfg.catalogs[0], client, state, force=True)
 
@@ -184,6 +200,9 @@ async def test_on_confirm_skips_rejected_steps(
     )
     respx.get(f"{API}/tags").respond(json=[])
     respx.get(f"{API}/albums").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.put(f"{API}/assets").respond(json=[])
 
     confirmed: list[str] = []
 

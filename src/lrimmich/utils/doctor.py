@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
+import httpx
 from pydantic import BaseModel
 
 from lrimmich.clients.immich import ImmichClient
@@ -57,7 +58,7 @@ async def check_immich_reachable(client: ImmichClient) -> CheckResult:
     try:
         await client.server_about()
         return CheckResult("immich", True, "Reachable")
-    except Exception as e:
+    except httpx.HTTPError as e:
         return CheckResult("immich", False, str(e))
 
 
@@ -66,7 +67,7 @@ async def check_api_permissions(client: ImmichClient) -> CheckResult:
         await client.get_albums()
         await client.get_tags()
         return CheckResult("api_perms", True, "Key has needed permissions")
-    except Exception as e:
+    except httpx.HTTPError as e:
         return CheckResult("api_perms", False, str(e))
 
 
@@ -100,7 +101,7 @@ async def check_path_mapping(
             False,
             "No asset matched for any library path",
         )
-    except Exception as e:
+    except (httpx.HTTPError, sqlite3.Error) as e:
         return CheckResult("path_mapping", False, str(e))
 
 
@@ -111,7 +112,7 @@ def check_state_db(state: StateDB) -> CheckResult:
         if val != "ok":
             return CheckResult("state_db", False, "Read-back failed")
         return CheckResult("state_db", True, "Writable")
-    except Exception as e:
+    except sqlite3.Error as e:
         return CheckResult("state_db", False, str(e))
 
 
@@ -144,7 +145,7 @@ def check_config_keys(config_path: Path) -> CheckResult:
     try:
         with open(config_path, "rb") as f:
             raw = tomllib.load(f)
-    except Exception as e:
+    except (OSError, tomllib.TOMLDecodeError) as e:
         return CheckResult("config", False, f"Failed to read: {e}")
     unknown = _find_unknown_keys(raw)
     if unknown:

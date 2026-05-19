@@ -2,11 +2,13 @@ import asyncio
 import json
 import os
 import platform
+import sqlite3
 import subprocess
 from datetime import UTC
 from importlib import resources
 from typing import Annotated
 
+import httpx
 import tomli_w
 import typer
 
@@ -148,7 +150,7 @@ def adopt(
                     collections = read_collections(catalog.catalog, catalog)
                     candidates = await find_adopt_candidates(collections, client, state)
                     all_candidates.extend(candidates)
-                except Exception:
+                except (httpx.HTTPError, sqlite3.Error):
                     for s in states:
                         s.close()
                     raise
@@ -323,7 +325,7 @@ def albums_purge(
                     for a in owned:
                         try:
                             await client.delete_album(a["immich_album_id"])
-                        except Exception as e:
+                        except httpx.HTTPError as e:
                             typer.echo(
                                 f"  failed to delete {a['immich_album_id']}: {e}",
                                 err=True,

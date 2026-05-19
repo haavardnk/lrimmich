@@ -1,8 +1,10 @@
 import asyncio
+import sqlite3
 from collections.abc import Callable
 from hashlib import sha256
 from typing import Any
 
+import httpx
 import structlog
 
 from lrimmich.clients.catalog import read_catalog_fingerprint, read_collections
@@ -56,7 +58,7 @@ async def _run_step(
         plan = await step.plan(ctx, summary)
         if not dry_run:
             await step.apply(plan, ctx)
-    except Exception as e:
+    except (httpx.HTTPError, sqlite3.Error) as e:
         logger.exception("step_failed", step=step.name)
         summary.errors.append(f"{step.name}: {e}")
 
@@ -179,7 +181,7 @@ async def run_sync(
                 if on_confirm and not on_confirm(step.name, step.status_msg):
                     continue
                 await step.apply(plan, ctx)
-        except Exception as e:
+        except (httpx.HTTPError, sqlite3.Error) as e:
             logger.exception("step_failed", step=step.name)
             summary.errors.append(f"{step.name}: {e}")
 
@@ -196,7 +198,7 @@ async def run_sync(
                         if not on_confirm(step.name, step.status_msg):
                             continue
                         await step.apply(plan, ctx)
-                except Exception as e:
+                except (httpx.HTTPError, sqlite3.Error) as e:
                     logger.exception("step_failed", step=step.name)
                     summary.errors.append(f"{step.name}: {e}")
         else:

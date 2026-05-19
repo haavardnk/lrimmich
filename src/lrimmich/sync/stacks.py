@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import httpx
 import structlog
 
 from lrimmich.clients.catalog import LrStack, read_stacks
@@ -140,7 +141,7 @@ async def apply_stack_sync(
             case "delete":
                 try:
                     await client.delete_stack(action.immich_stack_id)
-                except Exception:
+                except httpx.HTTPError:
                     logger.warning(
                         "delete_stack_failed",
                         stack_id=action.immich_stack_id,
