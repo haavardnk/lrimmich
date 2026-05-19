@@ -87,6 +87,8 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
             f"-{summary.color_labels.untagged}"
         )
         typer.echo(f"keywords: +{summary.keywords.tagged} -{summary.keywords.untagged}")
+    if sync.captions:
+        typer.echo(f"captions: +{summary.captions.set} -{summary.captions.cleared}")
 
 
 def run_with_progress(

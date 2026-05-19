@@ -7,6 +7,7 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync import (
     albums,
+    captions,
     color_labels,
     covers,
     favorites,
@@ -29,6 +30,7 @@ STEPS: list[SyncStep[Any]] = [
     rejects.Step(),
     color_labels.Step(),
     keywords.Step(),
+    captions.Step(),
 ]
 
 

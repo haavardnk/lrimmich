@@ -44,6 +44,7 @@ class SyncConfig(BaseConfig):
     favorites: bool = True
     ratings: bool = True
     tags: bool = True
+    captions: bool = True
     rejects: bool = False
     skip_empty: bool = True
     scope: SyncScope = "collections"

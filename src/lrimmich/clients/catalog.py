@@ -227,6 +227,13 @@ def read_color_labels(catalog: Path) -> dict[str, str]:
     return {r["pathFromRoot"] + r["idx_filename"]: r["colorLabels"] for r in rows}
 
 
+def read_captions(catalog: Path) -> dict[str, str]:
+    rows = _image_query(
+        catalog, ", ai.caption", "ai.caption IS NOT NULL AND ai.caption != ''"
+    )
+    return {r["pathFromRoot"] + r["idx_filename"]: r["caption"] for r in rows}
+
+
 def read_keywords(catalog: Path) -> dict[str, list[str]]:
     with closing(_connect(catalog)) as conn:
         return _read_keywords_inner(conn)

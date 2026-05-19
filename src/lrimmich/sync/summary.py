@@ -37,6 +37,12 @@ KeywordsResult = TagSyncResult
 
 
 @dataclass
+class CaptionsResult:
+    set: int = 0
+    cleared: int = 0
+
+
+@dataclass
 class SyncSummary:
     albums_created: int = 0
     albums_renamed: int = 0
@@ -48,6 +54,7 @@ class SyncSummary:
     rejects: RejectsResult = field(default_factory=RejectsResult)
     color_labels: ColorLabelsResult = field(default_factory=ColorLabelsResult)
     keywords: KeywordsResult = field(default_factory=KeywordsResult)
+    captions: CaptionsResult = field(default_factory=CaptionsResult)
     covers: CoversResult = field(default_factory=CoversResult)
     errors: list[str] = field(default_factory=list)
 

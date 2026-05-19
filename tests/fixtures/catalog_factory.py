@@ -21,7 +21,8 @@ CREATE TABLE Adobe_images (
     rootFile INTEGER NOT NULL,
     pick INTEGER DEFAULT 0,
     rating INTEGER DEFAULT 0,
-    colorLabels TEXT DEFAULT ''
+    colorLabels TEXT DEFAULT '',
+    caption TEXT DEFAULT ''
 );
 
 CREATE TABLE AgLibraryFile (
@@ -108,6 +109,7 @@ class CatalogBuilder:
         pick: int = 0,
         rating: int = 0,
         color_labels: str = "",
+        caption: str = "",
     ) -> "CatalogBuilder":
         folder_id = self._ensure_folder(folder_path)
         file_id = self._next_file_id
@@ -119,9 +121,9 @@ class CatalogBuilder:
         )
         self._conn.execute(
             "INSERT INTO Adobe_images"
-            "(id_local, rootFile, pick, rating, colorLabels) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (id, file_id, pick, rating, color_labels),
+            "(id_local, rootFile, pick, rating, colorLabels, caption) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (id, file_id, pick, rating, color_labels, caption),
         )
         return self
 
