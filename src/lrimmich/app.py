@@ -4,7 +4,15 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+)
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
@@ -105,21 +113,35 @@ def run_with_progress(
     state = StateDB()
     try:
         show_progress = not quiet and not json_output
-        with Progress(
+        status_progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             transient=True,
             disable=not show_progress,
-        ) as progress:
-            task = progress.add_task("Starting...", total=None)
+        )
+        resolve_progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            disable=not show_progress,
+        )
+        with status_progress, resolve_progress:
+            status_task = status_progress.add_task("Starting...", total=None)
+            resolve_task: TaskID | None = None
 
             def on_status(msg: str) -> None:
-                progress.update(task, description=msg)
+                status_progress.update(status_task, description=msg)
 
             def on_progress(current: int, total: int) -> None:
-                progress.update(
-                    task, description=f"Resolving paths... {current}/{total}"
-                )
+                nonlocal resolve_task
+                if resolve_task is None:
+                    resolve_task = resolve_progress.add_task(
+                        "Resolving paths...", total=total
+                    )
+                resolve_progress.update(resolve_task, completed=current, total=total)
 
             summary = run_sync(
                 cfg,

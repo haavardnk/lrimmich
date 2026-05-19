@@ -28,6 +28,7 @@ favorites = true
 ratings = true
 tags = true
 captions = true
+rejects = false
 # Skip creating albums for collections with no resolved assets
 skip_empty = true
 # "collections" = only sync metadata for assets in synced collections
