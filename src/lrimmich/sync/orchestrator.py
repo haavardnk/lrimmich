@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from lrimmich.clients.catalog import read_collections
+from lrimmich.clients.catalog import read_catalog_fingerprint, read_collections
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync import (
@@ -58,6 +58,18 @@ async def run_sync(
     if on_status:
         on_status("Reading catalog...")
     collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
+
+    fingerprint = read_catalog_fingerprint(cfg.lightroom.catalog)
+    last_fingerprint = state.get_meta("catalog_fingerprint")
+    if (
+        not force
+        and not refresh_cache
+        and last_fingerprint
+        and fingerprint == last_fingerprint
+    ):
+        logger.debug("Catalog unchanged (fingerprint=%s), skipping sync", fingerprint)
+        return summary
+
     all_paths: set[str] = set()
     for col in collections:
         all_paths.update(col.relative_paths)
@@ -101,5 +113,8 @@ async def run_sync(
         except Exception as e:
             logger.exception("Step %s failed", step.name)
             summary.errors.append(f"{step.name}: {e}")
+
+    if not dry_run and not summary.errors:
+        state.set_meta("catalog_fingerprint", fingerprint)
 
     return summary

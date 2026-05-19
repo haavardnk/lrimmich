@@ -105,3 +105,59 @@ def test_summary_no_drift() -> None:
 def test_summary_has_drift() -> None:
     s = SyncSummary(albums_created=1)
     assert s.has_drift
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_skip_sync_when_catalog_unchanged(
+    cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
+) -> None:
+    respx.route().respond(json=[])
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.put(f"{API}/assets").respond(json=[])
+
+    await run_sync(cfg, client, state, dry_run=False)
+
+    respx.reset()
+
+    summary = await run_sync(cfg, client, state)
+
+    assert not summary.has_drift
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_force_ignores_fingerprint(
+    cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
+) -> None:
+    respx.route().respond(json=[])
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.put(f"{API}/assets").respond(json=[])
+
+    await run_sync(cfg, client, state, dry_run=False)
+
+    respx.reset()
+    respx.route().respond(json=[])
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+
+    await run_sync(cfg, client, state, force=True)
+
+    assert respx.calls.call_count > 0

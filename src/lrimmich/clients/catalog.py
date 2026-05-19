@@ -3,6 +3,7 @@ from collections import defaultdict
 from contextlib import closing
 from dataclasses import dataclass
 from fnmatch import fnmatch
+from hashlib import sha256
 from pathlib import Path
 
 from lrimmich.utils.config import BaseConfig, ExcludeConfig
@@ -292,3 +293,38 @@ def read_stacks(catalog: Path) -> list[LrStack]:
         for sid, paths in groups.items()
         if len(paths) >= 2
     ]
+
+
+def read_catalog_fingerprint(catalog: Path) -> str:
+    with closing(_connect(catalog)) as conn:
+        row = conn.execute("""
+            SELECT MAX(touchTime) AS max_touch,
+                   COUNT(*) AS img_count
+            FROM Adobe_images
+        """).fetchone()
+        col_row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM AgLibraryCollectionImage"
+        ).fetchone()
+    parts = f"{row['max_touch']}:{row['img_count']}:{col_row['cnt']}"
+    return sha256(parts.encode()).hexdigest()[:16]
+
+
+def read_changed_paths(catalog: Path, since_touch_time: float) -> set[str]:
+    with closing(_connect(catalog)) as conn:
+        rows = conn.execute(
+            """
+            SELECT af.pathFromRoot || lf.idx_filename AS path
+            FROM Adobe_images ai
+            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
+            JOIN AgLibraryFolder af ON lf.folder = af.id_local
+            WHERE ai.touchTime > ?
+            """,
+            (since_touch_time,),
+        ).fetchall()
+    return {r["path"] for r in rows}
+
+
+def read_max_touch_time(catalog: Path) -> float:
+    with closing(_connect(catalog)) as conn:
+        row = conn.execute("SELECT MAX(touchTime) AS mt FROM Adobe_images").fetchone()
+    return row["mt"] or 0.0
