@@ -1,7 +1,10 @@
+import asyncio
 from collections.abc import Callable
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+
+CONCURRENCY = 10
 
 
 def map_path(relative_path: str, immich_library_path: str, strip: str = "") -> str:
@@ -10,12 +13,12 @@ def map_path(relative_path: str, immich_library_path: str, strip: str = "") -> s
     return immich_library_path + relative_path
 
 
-def _build_immich_index(
+async def _build_immich_index(
     immich_library_path: str,
     client: ImmichClient,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, str]:
-    all_folders = client.get_folder_paths()
+    all_folders = await client.get_folder_paths()
     if immich_library_path:
         prefix = immich_library_path.rstrip("/")
         relevant = [f for f in all_folders if f == prefix or f.startswith(prefix + "/")]
@@ -23,18 +26,32 @@ def _build_immich_index(
         relevant = all_folders
     index: dict[str, str] = {}
     total = len(relevant)
-    for i, folder in enumerate(relevant):
-        if on_progress:
-            on_progress(i + 1, total)
-        assets = client.get_folder_assets(folder)
-        for asset in assets:
-            orig = asset.get("originalPath", "")
-            if orig and not asset.get("isTrashed", False):
-                index[orig] = asset["id"]
+    sem = asyncio.Semaphore(CONCURRENCY)
+    done = 0
+
+    async def _fetch(folder: str) -> list[tuple[str, str]]:
+        nonlocal done
+        async with sem:
+            assets = await client.get_folder_assets(folder)
+            done += 1
+            if on_progress:
+                on_progress(done, total)
+            return [
+                (a.get("originalPath", ""), a["id"])
+                for a in assets
+                if a.get("originalPath") and not a.get("isTrashed", False)
+            ]
+
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(_fetch(f)) for f in relevant]
+
+    for task in tasks:
+        for orig, asset_id in task.result():
+            index[orig] = asset_id
     return index
 
 
-def resolve_paths(
+async def resolve_paths(
     relative_paths: set[str],
     immich_library_path: str,
     client: ImmichClient,
@@ -56,7 +73,7 @@ def resolve_paths(
         missing = relative_paths
 
     if missing:
-        index = _build_immich_index(immich_library_path, client, on_progress)
+        index = await _build_immich_index(immich_library_path, client, on_progress)
         for rp in missing:
             expected = map_path(rp, immich_library_path, strip)
             asset_id = index.get(expected)

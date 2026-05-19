@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import respx
 
 from lrimmich.clients.immich import ImmichClient
@@ -58,38 +59,42 @@ def test_plan_no_false_unarchive(tmp_path: Path) -> None:
 
 
 @respx.mock
-def test_apply_archives_and_unarchives(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_archives_and_unarchives(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     respx.put(f"{API}/assets").respond(json=None)
-    result = apply_rejects_sync(["a1"], ["a2"], client, state)
+    result = await apply_rejects_sync(["a1"], ["a2"], client, state)
     assert result == RejectsResult(archived=1, unarchived=1)
     assert state.get_synced_rejects() == {"a1"}
 
 
 @respx.mock
-def test_apply_updates_state(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_updates_state(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     state.replace_synced_rejects({"a2"})
     respx.put(f"{API}/assets").respond(json=None)
-    apply_rejects_sync(["a1"], ["a2"], client, state)
+    await apply_rejects_sync(["a1"], ["a2"], client, state)
     assert state.get_synced_rejects() == {"a1"}
 
 
-def test_apply_empty_noop(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_empty_noop(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
-    result = apply_rejects_sync([], [], client, state)
+    result = await apply_rejects_sync([], [], client, state)
     assert result == RejectsResult(archived=0, unarchived=0)
 
 
 @respx.mock
-def test_apply_logs_audit(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_logs_audit(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     respx.put(f"{API}/assets").respond(json=None)
-    apply_rejects_sync(["a1"], [], client, state)
+    await apply_rejects_sync(["a1"], [], client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_rejects"

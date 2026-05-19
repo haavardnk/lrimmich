@@ -43,6 +43,7 @@ source = "vcs"
 
 [tool.uv]
 dev-dependencies = [
+    "anyio>=4.9.0",
     "pyrefly>=1.0.0",
     "pytest>=9.0.3",
     "pytest-xdist>=3.8.0",

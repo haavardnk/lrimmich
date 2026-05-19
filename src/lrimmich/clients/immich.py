@@ -14,27 +14,27 @@ class _RetryableStatusError(httpx.HTTPStatusError):
 
 class ImmichClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 30.0) -> None:
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/") + "/api",
             headers={"x-api-key": api_key},
             timeout=timeout,
         )
 
-    def __enter__(self) -> Self:
+    async def __aenter__(self) -> Self:
         return self
 
-    def __exit__(self, *args: object) -> None:
-        self.close()
+    async def __aexit__(self, *args: object) -> None:
+        await self.close()
 
     @stamina.retry(on=_RetryableStatusError, attempts=MAX_RETRIES)
-    def _request(
+    async def _request(
         self,
         method: str,
         path: str,
         json: dict[str, Any] | None = None,
         params: dict[str, str] | None = None,
     ) -> Any:
-        response = self._client.request(method, path, json=json, params=params)
+        response = await self._client.request(method, path, json=json, params=params)
         if response.status_code in RETRYABLE_STATUSES:
             raise _RetryableStatusError(
                 message=f"{response.status_code}",
@@ -46,22 +46,22 @@ class ImmichClient:
             return None
         return response.json()
 
-    def close(self) -> None:
-        self._client.close()
+    async def close(self) -> None:
+        await self._client.aclose()
 
-    def server_about(self) -> dict[str, Any]:
-        return self._request("GET", "/server/about")
+    async def server_about(self) -> dict[str, Any]:
+        return await self._request("GET", "/server/about")
 
-    def server_config(self) -> dict[str, Any]:
-        return self._request("GET", "/server/config")
+    async def server_config(self) -> dict[str, Any]:
+        return await self._request("GET", "/server/config")
 
-    def get_albums(self) -> list[dict[str, Any]]:
-        return self._request("GET", "/albums") or []
+    async def get_albums(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "/albums") or []
 
-    def get_album(self, album_id: str) -> dict[str, Any]:
-        return self._request("GET", f"/albums/{album_id}")
+    async def get_album(self, album_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"/albums/{album_id}")
 
-    def create_album(
+    async def create_album(
         self,
         name: str,
         asset_ids: list[str] | None = None,
@@ -72,32 +72,34 @@ class ImmichClient:
             payload["description"] = description
         if asset_ids:
             payload["assetIds"] = asset_ids
-        return self._request("POST", "/albums", payload)
+        return await self._request("POST", "/albums", payload)
 
-    def update_album(self, album_id: str, **fields: Any) -> dict[str, Any]:
-        return self._request("PATCH", f"/albums/{album_id}", fields)
+    async def update_album(self, album_id: str, **fields: Any) -> dict[str, Any]:
+        return await self._request("PATCH", f"/albums/{album_id}", fields)
 
-    def delete_album(self, album_id: str) -> None:
-        self._request("DELETE", f"/albums/{album_id}")
+    async def delete_album(self, album_id: str) -> None:
+        await self._request("DELETE", f"/albums/{album_id}")
 
-    def add_album_assets(
+    async def add_album_assets(
         self, album_id: str, asset_ids: list[str]
     ) -> list[dict[str, Any]]:
         if not asset_ids:
             return []
-        return self._request("PUT", f"/albums/{album_id}/assets", {"ids": asset_ids})
+        return await self._request(
+            "PUT", f"/albums/{album_id}/assets", {"ids": asset_ids}
+        )
 
-    def remove_album_assets(self, album_id: str, asset_ids: list[str]) -> None:
+    async def remove_album_assets(self, album_id: str, asset_ids: list[str]) -> None:
         if not asset_ids:
             return
-        self._request("DELETE", f"/albums/{album_id}/assets", {"ids": asset_ids})
+        await self._request("DELETE", f"/albums/{album_id}/assets", {"ids": asset_ids})
 
-    def add_album_users(self, album_id: str, user_ids: list[str]) -> None:
+    async def add_album_users(self, album_id: str, user_ids: list[str]) -> None:
         if not user_ids:
             return
         album_users = [{"userId": uid, "role": "editor"} for uid in user_ids]
         try:
-            self._request(
+            await self._request(
                 "PUT",
                 f"/albums/{album_id}/users",
                 {"albumUsers": album_users},
@@ -107,7 +109,7 @@ class ImmichClient:
                 return
             raise
 
-    def search_metadata(
+    async def search_metadata(
         self,
         filename: str | None = None,
         size: int = 250,
@@ -119,7 +121,7 @@ class ImmichClient:
             payload: dict[str, Any] = {"page": page, "size": size}
             if filename is not None:
                 payload["originalFileName"] = filename
-            resp = self._request(
+            resp = await self._request(
                 "POST",
                 "/search/metadata",
                 payload,
@@ -135,34 +137,34 @@ class ImmichClient:
             page = next_page
         return results
 
-    def bulk_update_assets(self, asset_ids: list[str], **fields: Any) -> None:
+    async def bulk_update_assets(self, asset_ids: list[str], **fields: Any) -> None:
         if not asset_ids:
             return
         for i in range(0, len(asset_ids), CHUNK_SIZE):
             chunk = asset_ids[i : i + CHUNK_SIZE]
-            self._request("PUT", "/assets", {"ids": chunk, **fields})
+            await self._request("PUT", "/assets", {"ids": chunk, **fields})
 
-    def update_asset(self, asset_id: str, **fields: Any) -> dict[str, Any]:
-        return self._request("PUT", f"/assets/{asset_id}", fields)
+    async def update_asset(self, asset_id: str, **fields: Any) -> dict[str, Any]:
+        return await self._request("PUT", f"/assets/{asset_id}", fields)
 
-    def get_tags(self) -> list[dict[str, Any]]:
-        return self._request("GET", "/tags") or []
+    async def get_tags(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "/tags") or []
 
-    def create_tag(self, name: str) -> dict[str, Any]:
-        return self._request("POST", "/tags", {"name": name})
+    async def create_tag(self, name: str) -> dict[str, Any]:
+        return await self._request("POST", "/tags", {"name": name})
 
-    def tag_assets(self, tag_id: str, asset_ids: list[str]) -> None:
+    async def tag_assets(self, tag_id: str, asset_ids: list[str]) -> None:
         if not asset_ids:
             return
-        self._request("PUT", f"/tags/{tag_id}/assets", {"ids": asset_ids})
+        await self._request("PUT", f"/tags/{tag_id}/assets", {"ids": asset_ids})
 
-    def untag_assets(self, tag_id: str, asset_ids: list[str]) -> None:
+    async def untag_assets(self, tag_id: str, asset_ids: list[str]) -> None:
         if not asset_ids:
             return
-        self._request("DELETE", f"/tags/{tag_id}/assets", {"ids": asset_ids})
+        await self._request("DELETE", f"/tags/{tag_id}/assets", {"ids": asset_ids})
 
-    def get_folder_paths(self) -> list[str]:
-        return self._request("GET", "/view/folder/unique-paths") or []
+    async def get_folder_paths(self) -> list[str]:
+        return await self._request("GET", "/view/folder/unique-paths") or []
 
-    def get_folder_assets(self, path: str) -> list[dict[str, Any]]:
-        return self._request("GET", "/view/folder", params={"path": path}) or []
+    async def get_folder_assets(self, path: str) -> list[dict[str, Any]]:
+        return await self._request("GET", "/view/folder", params={"path": path}) or []

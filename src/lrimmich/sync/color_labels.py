@@ -52,13 +52,13 @@ def plan_color_labels_sync(
     return build_tag_actions(by_tag_add, by_tag_remove, tag_map, prefix)
 
 
-def apply_color_labels_sync(
+async def apply_color_labels_sync(
     actions: list[TagAction],
     desired: dict[str, str],
     client: ImmichClient,
     state: StateDB,
 ) -> ColorLabelsResult:
-    return apply_tag_actions(
+    return await apply_tag_actions(
         actions, desired, client, state, "color_labels_snapshot", "sync_color_labels"
     )
 
@@ -70,12 +70,12 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.tags
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
         prefix = ctx.cfg.sync.color_prefix
         labels = read_color_labels(ctx.cfg.lightroom.catalog)
-        tag_map = ensure_tags(
+        tag_map = await ensure_tags(
             ctx.client,
-            ctx.get_existing_tags(),
+            await ctx.get_existing_tags(),
             {c.lower() for c in VALID_COLORS},
             prefix,
             create=not ctx.dry_run,
@@ -94,5 +94,5 @@ class Step:
         )
         return actions, desired
 
-    def apply(self, plan: ColorLabelsPlan, ctx: SyncContext) -> None:
-        apply_color_labels_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: ColorLabelsPlan, ctx: SyncContext) -> None:
+        await apply_color_labels_sync(plan[0], plan[1], ctx.client, ctx.state)

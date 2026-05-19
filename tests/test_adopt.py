@@ -1,4 +1,5 @@
 import httpx
+import pytest
 import respx
 
 from lrimmich.clients.catalog import LrCollection
@@ -19,7 +20,8 @@ def _col(
 
 
 @respx.mock
-def test_match_found(state: StateDB, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_match_found(state: StateDB, client: ImmichClient) -> None:
     respx.get(f"{API}/albums").mock(
         return_value=httpx.Response(
             200,
@@ -28,7 +30,7 @@ def test_match_found(state: StateDB, client: ImmichClient) -> None:
     )
     col = _col(id=10, full_name="Travel")
 
-    candidates = find_adopt_candidates([col], client, state)
+    candidates = await find_adopt_candidates([col], client, state)
 
     assert len(candidates) == 1
     assert candidates[0].immich_album_id == "imm-1"
@@ -36,7 +38,8 @@ def test_match_found(state: StateDB, client: ImmichClient) -> None:
 
 
 @respx.mock
-def test_no_match(state: StateDB, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_no_match(state: StateDB, client: ImmichClient) -> None:
     respx.get(f"{API}/albums").mock(
         return_value=httpx.Response(
             200,
@@ -45,13 +48,14 @@ def test_no_match(state: StateDB, client: ImmichClient) -> None:
     )
     col = _col(id=10, full_name="Travel")
 
-    candidates = find_adopt_candidates([col], client, state)
+    candidates = await find_adopt_candidates([col], client, state)
 
     assert len(candidates) == 0
 
 
 @respx.mock
-def test_already_owned_skipped(state: StateDB, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_already_owned_skipped(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Travel")
     respx.get(f"{API}/albums").mock(
         return_value=httpx.Response(
@@ -61,13 +65,14 @@ def test_already_owned_skipped(state: StateDB, client: ImmichClient) -> None:
     )
     col = _col(id=10, full_name="Travel")
 
-    candidates = find_adopt_candidates([col], client, state)
+    candidates = await find_adopt_candidates([col], client, state)
 
     assert len(candidates) == 0
 
 
 @respx.mock
-def test_conflict_state_owner(state: StateDB, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_conflict_state_owner(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(99, "imm-1", "OldOwner")
     respx.get(f"{API}/albums").mock(
         return_value=httpx.Response(
@@ -77,7 +82,7 @@ def test_conflict_state_owner(state: StateDB, client: ImmichClient) -> None:
     )
     col = _col(id=10, full_name="Travel")
 
-    candidates = find_adopt_candidates([col], client, state)
+    candidates = await find_adopt_candidates([col], client, state)
 
     assert len(candidates) == 1
     assert candidates[0].conflict

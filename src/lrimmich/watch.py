@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 from datetime import datetime
@@ -52,10 +53,24 @@ def watch(
     if not quiet:
         typer.echo(f"Watching {catalog_path} (debounce={debounce}ms)")
 
-    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
     state = StateDB()
     failures = 0
     MAX_FAILURES = 5
+
+    async def _do_sync() -> None:
+        async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
+            summary = await run_sync(
+                cfg,
+                client,
+                state,
+                dry_run=False,
+                force=force,
+                no_delete=no_delete,
+            )
+        if not quiet:
+            print_summary(summary, cfg.sync)
+            for err in summary.errors:
+                typer.echo(f"ERROR: {err}", err=True)
 
     try:
         for _ in watch_files(
@@ -66,18 +81,7 @@ def watch(
         ):
             _log("Change detected, syncing...")
             try:
-                summary = run_sync(
-                    cfg,
-                    client,
-                    state,
-                    dry_run=False,
-                    force=force,
-                    no_delete=no_delete,
-                )
-                if not quiet:
-                    print_summary(summary, cfg.sync)
-                    for err in summary.errors:
-                        typer.echo(f"ERROR: {err}", err=True)
+                asyncio.run(_do_sync())
                 _log("Sync complete")
                 failures = 0
             except Exception:
@@ -90,13 +94,10 @@ def watch(
                         err=True,
                     )
                     raise typer.Exit(1) from None
-                client.close()
                 state.close()
-                client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
                 state = StateDB()
     finally:
         state.close()
-        client.close()
 
     if not quiet:
         typer.echo("Stopped")

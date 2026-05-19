@@ -56,13 +56,13 @@ def plan_keywords_sync(
     return build_tag_actions(by_tag_add, by_tag_remove, tag_map, prefix)
 
 
-def apply_keywords_sync(
+async def apply_keywords_sync(
     actions: list[TagAction],
     desired: dict[str, list[str]],
     client: ImmichClient,
     state: StateDB,
 ) -> KeywordsResult:
-    return apply_tag_actions(
+    return await apply_tag_actions(
         actions, desired, client, state, "keywords_snapshot", "sync_keywords"
     )
 
@@ -74,15 +74,15 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.tags
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> KeywordsPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> KeywordsPlan:
         prefix = ctx.cfg.sync.keyword_prefix
         kw_data = read_keywords(ctx.cfg.lightroom.catalog)
         needed_kws: set[str] = set()
         for kws in kw_data.values():
             needed_kws.update(kws)
-        kw_tag_map = ensure_tags(
+        kw_tag_map = await ensure_tags(
             ctx.client,
-            ctx.get_existing_tags(),
+            await ctx.get_existing_tags(),
             needed_kws,
             prefix,
             create=not ctx.dry_run,
@@ -102,5 +102,5 @@ class Step:
         )
         return kw_actions, kw_desired
 
-    def apply(self, plan: KeywordsPlan, ctx: SyncContext) -> None:
-        apply_keywords_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: KeywordsPlan, ctx: SyncContext) -> None:
+        await apply_keywords_sync(plan[0], plan[1], ctx.client, ctx.state)

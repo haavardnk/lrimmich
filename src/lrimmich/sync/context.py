@@ -1,3 +1,4 @@
+from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
 
@@ -20,8 +21,10 @@ class SyncStep(Protocol[PlanT]):
     status_msg: str
 
     def enabled(self, cfg: Config) -> bool: ...
-    def plan(self, ctx: "SyncContext", summary: SyncSummary) -> PlanT: ...
-    def apply(self, plan: PlanT, ctx: "SyncContext") -> None: ...
+    def plan(
+        self, ctx: "SyncContext", summary: SyncSummary
+    ) -> Coroutine[Any, Any, PlanT]: ...
+    def apply(self, plan: PlanT, ctx: "SyncContext") -> Coroutine[Any, Any, None]: ...
 
 
 @dataclass
@@ -54,7 +57,7 @@ class SyncContext:
             self._rated = read_rated_images(self.cfg.lightroom.catalog)
         return self._rated
 
-    def get_existing_tags(self) -> list[dict[str, Any]]:
+    async def get_existing_tags(self) -> list[dict[str, Any]]:
         if self._existing_tags is None:
-            self._existing_tags = self.client.get_tags()
+            self._existing_tags = await self.client.get_tags()
         return self._existing_tags

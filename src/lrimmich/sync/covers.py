@@ -29,16 +29,16 @@ def plan_covers_sync(
     return to_set, to_clear
 
 
-def apply_covers_sync(
+async def apply_covers_sync(
     to_set: dict[str, str],
     to_clear: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> CoversResult:
     for album_id, asset_id in sorted(to_set.items()):
-        client.update_album(album_id, albumThumbnailAssetId=asset_id)
+        await client.update_album(album_id, albumThumbnailAssetId=asset_id)
     for album_id in sorted(to_clear):
-        client.update_album(album_id, albumThumbnailAssetId=None)
+        await client.update_album(album_id, albumThumbnailAssetId=None)
     if to_set or to_clear:
         snapshot = dict(state.get_synced_covers())
         snapshot.update(to_set)
@@ -60,11 +60,11 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.albums
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> CoversPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> CoversPlan:
         cover_paths = read_collection_covers(ctx.cfg.lightroom.catalog)
         to_set, to_clear = plan_covers_sync(cover_paths, ctx.resolved, ctx.state)
         summary.covers = CoversResult(set=len(to_set), cleared=len(to_clear))
         return to_set, to_clear
 
-    def apply(self, plan: CoversPlan, ctx: SyncContext) -> None:
-        apply_covers_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: CoversPlan, ctx: SyncContext) -> None:
+        await apply_covers_sync(plan[0], plan[1], ctx.client, ctx.state)

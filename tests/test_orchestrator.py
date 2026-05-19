@@ -32,7 +32,8 @@ def cfg(catalog: Path) -> Config:
 
 
 @respx.mock
-def test_dry_run_no_mutations(
+@pytest.mark.anyio
+async def test_dry_run_no_mutations(
     cfg: Config, client: ImmichClient, state: StateDB
 ) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
@@ -42,7 +43,7 @@ def test_dry_run_no_mutations(
     respx.get(f"{API}/tags").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "created"})
 
-    summary = run_sync(cfg, client, state, dry_run=True)
+    summary = await run_sync(cfg, client, state, dry_run=True)
 
     assert summary.albums_created == 1
     assert summary.favorites.favorited == 1
@@ -56,11 +57,12 @@ def test_dry_run_no_mutations(
 
 
 @respx.mock
-def test_json_shape(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_json_shape(cfg: Config, client: ImmichClient, state: StateDB) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=[])
     respx.get(f"{API}/tags").respond(json=[])
 
-    summary = run_sync(cfg, client, state, dry_run=True)
+    summary = await run_sync(cfg, client, state, dry_run=True)
     d = summary.to_dict()
 
     assert "albums_created" in d
@@ -69,24 +71,28 @@ def test_json_shape(cfg: Config, client: ImmichClient, state: StateDB) -> None:
 
 
 @respx.mock
-def test_status_stable(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_status_stable(cfg: Config, client: ImmichClient, state: StateDB) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=[])
     respx.get(f"{API}/tags").respond(json=[])
 
-    s1 = run_sync(cfg, client, state, dry_run=True)
-    s2 = run_sync(cfg, client, state, dry_run=True)
+    s1 = await run_sync(cfg, client, state, dry_run=True)
+    s2 = await run_sync(cfg, client, state, dry_run=True)
 
     assert s1.to_dict() == s2.to_dict()
 
 
 @respx.mock
-def test_partial_failure(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_partial_failure(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=[])
     respx.get(f"{API}/tags").respond(json=[])
     cfg.sync.albums = True
     cfg.sync.favorites = True
 
-    summary = run_sync(cfg, client, state, dry_run=True)
+    summary = await run_sync(cfg, client, state, dry_run=True)
 
     assert isinstance(summary, SyncSummary)
 

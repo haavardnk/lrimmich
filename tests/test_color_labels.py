@@ -1,5 +1,6 @@
 import json
 
+import pytest
 import respx
 
 from lrimmich.clients.immich import ImmichClient
@@ -64,7 +65,8 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
 
 
 @respx.mock
-def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
     respx.put(f"{API}/tags/t-red/assets").respond(json=None)
     respx.delete(f"{API}/tags/t-blue/assets").respond(json=None)
 
@@ -76,20 +78,21 @@ def test_apply_tags_and_untags(client: ImmichClient, state: StateDB) -> None:
             kind="untag", tag_id="t-blue", tag_name="lr:color:blue", asset_ids=["a2"]
         ),
     ]
-    result = apply_color_labels_sync(actions, {"a1": "red"}, client, state)
+    result = await apply_color_labels_sync(actions, {"a1": "red"}, client, state)
     assert result == ColorLabelsResult(tagged=1, untagged=1)
     snapshot = json.loads(state.get_meta("color_labels_snapshot") or "{}")
     assert snapshot == {"a1": "red"}
 
 
 @respx.mock
-def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
     respx.put(f"{API}/tags/t-red/assets").respond(json=None)
 
     actions = [
         TagAction(kind="tag", tag_id="t-red", tag_name="lr:color:red", asset_ids=["a1"])
     ]
-    apply_color_labels_sync(actions, {"a1": "red"}, client, state)
+    await apply_color_labels_sync(actions, {"a1": "red"}, client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_color_labels"

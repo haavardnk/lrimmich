@@ -40,16 +40,16 @@ def plan_favorites_sync(
     return sorted(desired - previous), sorted(undesired & previous)
 
 
-def apply_favorites_sync(
+async def apply_favorites_sync(
     to_add: list[str],
     to_remove: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> FavoritesResult:
     if to_add:
-        client.bulk_update_assets(to_add, isFavorite=True)
+        await client.bulk_update_assets(to_add, isFavorite=True)
     if to_remove:
-        client.bulk_update_assets(to_remove, isFavorite=False)
+        await client.bulk_update_assets(to_remove, isFavorite=False)
     if to_add or to_remove:
         updated = (state.get_synced_favorites() | set(to_add)) - set(to_remove)
         state.replace_synced_favorites(updated)
@@ -68,7 +68,7 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.favorites
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> FavoritesPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> FavoritesPlan:
         to_fav, to_unfav = plan_favorites_sync(
             ctx.get_flagged(), ctx.cfg.sync.scope, ctx.collections, ctx.state
         )
@@ -77,5 +77,5 @@ class Step:
         )
         return to_fav, to_unfav
 
-    def apply(self, plan: FavoritesPlan, ctx: SyncContext) -> None:
-        apply_favorites_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: FavoritesPlan, ctx: SyncContext) -> None:
+        await apply_favorites_sync(plan[0], plan[1], ctx.client, ctx.state)

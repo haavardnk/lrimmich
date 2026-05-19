@@ -37,7 +37,7 @@ STEPS: list[SyncStep[Any]] = [
 CACHE_TTL_SECONDS: int = 7_776_000
 
 
-def run_sync(
+async def run_sync(
     cfg: Config,
     client: ImmichClient,
     state: StateDB,
@@ -62,7 +62,7 @@ def run_sync(
 
     if on_status:
         on_status(f"Resolving {len(all_paths)} paths...")
-    resolved = resolve_paths(
+    resolved = await resolve_paths(
         all_paths,
         cfg.immich.library_path,
         client,
@@ -93,9 +93,9 @@ def run_sync(
         if on_status:
             on_status(step.status_msg)
         try:
-            plan = step.plan(ctx, summary)
+            plan = await step.plan(ctx, summary)
             if not dry_run:
-                step.apply(plan, ctx)
+                await step.apply(plan, ctx)
         except Exception as e:
             logger.exception("Step %s failed", step.name)
             summary.errors.append(f"{step.name}: {e}")

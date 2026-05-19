@@ -23,16 +23,16 @@ def plan_rejects_sync(
     return sorted(desired - previous), sorted(undesired & previous)
 
 
-def apply_rejects_sync(
+async def apply_rejects_sync(
     to_add: list[str],
     to_remove: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> RejectsResult:
     if to_add:
-        client.bulk_update_assets(to_add, isArchived=True)
+        await client.bulk_update_assets(to_add, isArchived=True)
     if to_remove:
-        client.bulk_update_assets(to_remove, isArchived=False)
+        await client.bulk_update_assets(to_remove, isArchived=False)
     if to_add or to_remove:
         updated = (state.get_synced_rejects() | set(to_add)) - set(to_remove)
         state.replace_synced_rejects(updated)
@@ -51,7 +51,7 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.rejects
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> RejectsPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> RejectsPlan:
         to_arch, to_unarch = plan_rejects_sync(
             ctx.get_rejected(), ctx.resolved, ctx.state
         )
@@ -60,5 +60,5 @@ class Step:
         )
         return to_arch, to_unarch
 
-    def apply(self, plan: RejectsPlan, ctx: SyncContext) -> None:
-        apply_rejects_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: RejectsPlan, ctx: SyncContext) -> None:
+        await apply_rejects_sync(plan[0], plan[1], ctx.client, ctx.state)

@@ -16,7 +16,7 @@ class TagAction:
     asset_ids: list[str] = field(default_factory=list)
 
 
-def ensure_tags(
+async def ensure_tags(
     client: ImmichClient,
     existing_tags: list[dict[str, str]],
     needed: set[str],
@@ -31,7 +31,7 @@ def ensure_tags(
         if tag_name in existing_by_name:
             tag_map[key] = existing_by_name[tag_name]
         elif create:
-            result = client.create_tag(tag_name)
+            result = await client.create_tag(tag_name)
             tag_map[key] = result["id"]
         else:
             tag_map[key] = None
@@ -72,7 +72,7 @@ def build_tag_actions(
     return actions
 
 
-def apply_tag_actions(
+async def apply_tag_actions(
     actions: list[TagAction],
     desired: dict[str, str] | dict[str, list[str]],
     client: ImmichClient,
@@ -84,10 +84,10 @@ def apply_tag_actions(
     untagged = 0
     for action in actions:
         if action.kind == "tag":
-            client.tag_assets(action.tag_id, action.asset_ids)
+            await client.tag_assets(action.tag_id, action.asset_ids)
             tagged += len(action.asset_ids)
         elif action.kind == "untag":
-            client.untag_assets(action.tag_id, action.asset_ids)
+            await client.untag_assets(action.tag_id, action.asset_ids)
             untagged += len(action.asset_ids)
 
     state.set_meta(snapshot_key, json.dumps(desired))

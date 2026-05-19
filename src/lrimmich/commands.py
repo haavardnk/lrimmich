@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import platform
@@ -104,19 +105,20 @@ def status(
 def doctor(
     config: ConfigOption = None,
 ) -> None:
-    cfg = load_config(config)
-    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
-    state = StateDB()
-    report = DoctorReport()
-    try:
-        config_path = config or DEFAULT_CONFIG_PATH
-        report = run_doctor(cfg, client, state, config_path=config_path)
-        for check in report.checks:
-            check_status = "OK" if check.ok else "FAIL"
-            typer.echo(f"[{check_status}] {check.name}: {check.message}")
-    finally:
-        state.close()
-        client.close()
+    async def _run() -> DoctorReport:
+        cfg = load_config(config)
+        async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
+            state = StateDB()
+            try:
+                config_path = config or DEFAULT_CONFIG_PATH
+                return await run_doctor(cfg, client, state, config_path=config_path)
+            finally:
+                state.close()
+
+    report = asyncio.run(_run())
+    for check in report.checks:
+        check_status = "OK" if check.ok else "FAIL"
+        typer.echo(f"[{check_status}] {check.name}: {check.message}")
     if not report.all_ok:
         raise typer.Exit(1)
 
@@ -126,12 +128,19 @@ def adopt(
     config: ConfigOption = None,
     apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
 ) -> None:
-    cfg = load_config(config)
-    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
-    state = StateDB()
+    async def _run() -> list:
+        cfg = load_config(config)
+        async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
+            state = StateDB()
+            try:
+                collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
+                return await find_adopt_candidates(collections, client, state), state
+            except Exception:
+                state.close()
+                raise
+
+    candidates, state = asyncio.run(_run())
     try:
-        collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
-        candidates = find_adopt_candidates(collections, client, state)
         for c in candidates:
             tag = " [CONFLICT]" if c.conflict else ""
             typer.echo(f"{c.collection_name} -> {c.immich_album_id}{tag}")
@@ -144,7 +153,6 @@ def adopt(
             typer.echo("Run with --apply to commit")
     finally:
         state.close()
-        client.close()
 
 
 @config_app.command("init")

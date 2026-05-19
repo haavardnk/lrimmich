@@ -14,12 +14,12 @@ class AdoptCandidate:
     conflict_owner: int | None = None
 
 
-def find_adopt_candidates(
+async def find_adopt_candidates(
     collections: list[LrCollection],
     client: ImmichClient,
     state: StateDB,
 ) -> list[AdoptCandidate]:
-    albums = client.get_albums()
+    albums = await client.get_albums()
     name_to_album: dict[str, dict[str, str]] = {}
     for album in albums:
         name_to_album[album["albumName"]] = album

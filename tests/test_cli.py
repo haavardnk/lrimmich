@@ -1,6 +1,6 @@
 from importlib import resources
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -247,13 +247,16 @@ def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
         'api_key = "k"\n'
         'library_path = "/ext/"\n'
     )
+    mock_client = AsyncMock()
+    mock_cls = MagicMock(return_value=mock_client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
     with (
         patch("lrimmich.app.run_sync", side_effect=RuntimeError("boom")),
-        patch("lrimmich.app.ImmichClient") as mock_cls,
+        patch("lrimmich.app.ImmichClient", mock_cls),
         patch("lrimmich.app.StateDB") as mock_state_cls,
     ):
-        mock_client = mock_cls.return_value
         mock_state = mock_state_cls.return_value
         runner.invoke(app, ["sync", "--config", str(cfg_path)])
-        mock_client.close.assert_called_once()
+        mock_client.__aexit__.assert_called_once()
         mock_state.close.assert_called_once()

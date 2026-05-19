@@ -75,19 +75,20 @@ def _mock_album_crud() -> dict[str, list[dict[str, str]]]:
 
 
 @respx.mock
-def test_status_then_sync_idempotency(
+@pytest.mark.anyio
+async def test_status_then_sync_idempotency(
     cfg: Config, client: ImmichClient, state: StateDB
 ) -> None:
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    status1 = run_sync(cfg, client, state, dry_run=True)
+    status1 = await run_sync(cfg, client, state, dry_run=True)
     assert status1.has_drift
     assert status1.albums_created == 1
 
-    run_sync(cfg, client, state, dry_run=False)
+    await run_sync(cfg, client, state, dry_run=False)
 
-    status2 = run_sync(cfg, client, state, dry_run=True)
+    status2 = await run_sync(cfg, client, state, dry_run=True)
     assert status2.albums_created == 0
     assert status2.albums_renamed == 0
     assert status2.albums_deleted == 0
@@ -96,11 +97,14 @@ def test_status_then_sync_idempotency(
 
 
 @respx.mock
-def test_drift_detection(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_drift_detection(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    summary = run_sync(cfg, client, state, dry_run=True)
+    summary = await run_sync(cfg, client, state, dry_run=True)
 
     assert summary.has_drift
     assert summary.albums_created > 0
@@ -108,11 +112,14 @@ def test_drift_detection(cfg: Config, client: ImmichClient, state: StateDB) -> N
 
 
 @respx.mock
-def test_audit_log_entries(cfg: Config, client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_audit_log_entries(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    run_sync(cfg, client, state, dry_run=False)
+    await run_sync(cfg, client, state, dry_run=False)
 
     logs = state.get_audit_log()
     actions = {log["action"] for log in logs}
@@ -121,13 +128,14 @@ def test_audit_log_entries(cfg: Config, client: ImmichClient, state: StateDB) ->
 
 
 @respx.mock
-def test_sync_json_shape_stable(
+@pytest.mark.anyio
+async def test_sync_json_shape_stable(
     cfg: Config, client: ImmichClient, state: StateDB
 ) -> None:
     _mock_folders({})
 
-    s1 = run_sync(cfg, client, state, dry_run=True)
-    s2 = run_sync(cfg, client, state, dry_run=True)
+    s1 = await run_sync(cfg, client, state, dry_run=True)
+    s2 = await run_sync(cfg, client, state, dry_run=True)
 
     d1 = s1.to_dict()
     d2 = s2.to_dict()
@@ -136,13 +144,14 @@ def test_sync_json_shape_stable(
 
 
 @respx.mock
-def test_multi_domain_orchestration(
+@pytest.mark.anyio
+async def test_multi_domain_orchestration(
     cfg: Config, client: ImmichClient, state: StateDB
 ) -> None:
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    summary = run_sync(cfg, client, state, dry_run=False)
+    summary = await run_sync(cfg, client, state, dry_run=False)
 
     assert not summary.errors
     assert state.get_album_ownership(1) is not None

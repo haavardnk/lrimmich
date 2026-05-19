@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import respx
 
 from lrimmich.clients.immich import ImmichClient
@@ -77,11 +78,12 @@ def test_plan_skips_unowned(tmp_path: Path) -> None:
 
 
 @respx.mock
-def test_apply_sets_cover(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_sets_cover(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     respx.patch(f"{API}/albums/imm-1").respond(json={"id": "imm-1"})
-    result = apply_covers_sync({"imm-1": "a1"}, [], client, state)
+    result = await apply_covers_sync({"imm-1": "a1"}, [], client, state)
     assert result == CoversResult(set=1, cleared=0)
     req = respx.calls[0].request
     assert b"albumThumbnailAssetId" in req.content
@@ -89,38 +91,42 @@ def test_apply_sets_cover(tmp_path: Path) -> None:
 
 
 @respx.mock
-def test_apply_clears_cover(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_clears_cover(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     state.replace_synced_covers({"imm-1": "a1"})
     respx.patch(f"{API}/albums/imm-1").respond(json={"id": "imm-1"})
-    result = apply_covers_sync({}, ["imm-1"], client, state)
+    result = await apply_covers_sync({}, ["imm-1"], client, state)
     assert result == CoversResult(set=0, cleared=1)
     assert state.get_synced_covers() == {}
 
 
 @respx.mock
-def test_apply_updates_state(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_updates_state(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     respx.patch(f"{API}/albums/imm-1").respond(json={"id": "imm-1"})
-    apply_covers_sync({"imm-1": "a1"}, [], client, state)
+    await apply_covers_sync({"imm-1": "a1"}, [], client, state)
     assert state.get_synced_covers() == {"imm-1": "a1"}
 
 
 @respx.mock
-def test_apply_logs_audit(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_logs_audit(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     respx.patch(f"{API}/albums/imm-1").respond(json={"id": "imm-1"})
-    apply_covers_sync({"imm-1": "a1"}, [], client, state)
+    await apply_covers_sync({"imm-1": "a1"}, [], client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_covers"
 
 
-def test_apply_empty_noop(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_apply_empty_noop(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
-    result = apply_covers_sync({}, [], client, state)
+    result = await apply_covers_sync({}, [], client, state)
     assert result == CoversResult(set=0, cleared=0)

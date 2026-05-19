@@ -53,24 +53,24 @@ def check_wal_lock(catalog: Path) -> CheckResult:
         return CheckResult("wal_lock", False, "WAL locked (Lightroom open?)")
 
 
-def check_immich_reachable(client: ImmichClient) -> CheckResult:
+async def check_immich_reachable(client: ImmichClient) -> CheckResult:
     try:
-        client.server_about()
+        await client.server_about()
         return CheckResult("immich", True, "Reachable")
     except Exception as e:
         return CheckResult("immich", False, str(e))
 
 
-def check_api_permissions(client: ImmichClient) -> CheckResult:
+async def check_api_permissions(client: ImmichClient) -> CheckResult:
     try:
-        client.get_albums()
-        client.get_tags()
+        await client.get_albums()
+        await client.get_tags()
         return CheckResult("api_perms", True, "Key has needed permissions")
     except Exception as e:
         return CheckResult("api_perms", False, str(e))
 
 
-def check_path_mapping(
+async def check_path_mapping(
     immich_library_path: str,
     catalog: Path,
     client: ImmichClient,
@@ -90,7 +90,7 @@ def check_path_mapping(
         relative_path = row["pathFromRoot"] + row["idx_filename"]
         expected = map_path(relative_path, immich_library_path, strip)
         expected_folder = expected.rsplit("/", 1)[0]
-        assets = client.get_folder_assets(expected_folder)
+        assets = await client.get_folder_assets(expected_folder)
         for asset in assets:
             if asset.get("originalPath", "") == expected:
                 return CheckResult("path_mapping", True, f"Verified: {expected}")
@@ -151,7 +151,7 @@ def check_config_keys(config_path: Path) -> CheckResult:
     return CheckResult("config", True, "Valid")
 
 
-def run_doctor(
+async def run_doctor(
     cfg: Config,
     client: ImmichClient,
     state: StateDB,
@@ -162,10 +162,10 @@ def run_doctor(
         report.checks.append(check_config_keys(config_path))
     report.checks.append(check_catalog(cfg.lightroom.catalog))
     report.checks.append(check_wal_lock(cfg.lightroom.catalog))
-    report.checks.append(check_immich_reachable(client))
-    report.checks.append(check_api_permissions(client))
+    report.checks.append(await check_immich_reachable(client))
+    report.checks.append(await check_api_permissions(client))
     report.checks.append(
-        check_path_mapping(
+        await check_path_mapping(
             cfg.immich.library_path,
             cfg.lightroom.catalog,
             client,

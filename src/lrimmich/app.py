@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from importlib.metadata import version
 from pathlib import Path
@@ -99,7 +100,7 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
         typer.echo(f"captions: +{summary.captions.set} -{summary.captions.cleared}")
 
 
-def run_with_progress(
+async def _run_with_progress(
     cfg_path: Path | None,
     dry_run: bool = False,
     force: bool = False,
@@ -109,52 +110,69 @@ def run_with_progress(
     refresh_cache: bool = False,
 ) -> tuple[SyncSummary, Config]:
     cfg = load_config(cfg_path)
-    client = ImmichClient(cfg.immich.url, cfg.immich.api_key)
-    state = StateDB()
-    try:
-        show_progress = not quiet and not json_output
-        status_progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=True,
-            disable=not show_progress,
-        )
-        resolve_progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            disable=not show_progress,
-        )
-        with status_progress, resolve_progress:
-            status_task = status_progress.add_task("Starting...", total=None)
-            resolve_task: TaskID | None = None
-
-            def on_status(msg: str) -> None:
-                status_progress.update(status_task, description=msg)
-
-            def on_progress(current: int, total: int) -> None:
-                nonlocal resolve_task
-                if resolve_task is None:
-                    resolve_task = resolve_progress.add_task(
-                        "Resolving paths...", total=total
-                    )
-                resolve_progress.update(resolve_task, completed=current, total=total)
-
-            summary = run_sync(
-                cfg,
-                client,
-                state,
-                dry_run=dry_run,
-                force=force,
-                no_delete=no_delete,
-                on_status=on_status,
-                on_progress=on_progress,
-                refresh_cache=refresh_cache,
+    async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
+        state = StateDB()
+        try:
+            show_progress = not quiet and not json_output
+            status_progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                transient=True,
+                disable=not show_progress,
             )
-    finally:
-        state.close()
-        client.close()
+            resolve_progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
+                transient=True,
+                disable=not show_progress,
+            )
+            with status_progress, resolve_progress:
+                status_task = status_progress.add_task("Starting...", total=None)
+                resolve_task: TaskID | None = None
+
+                def on_status(msg: str) -> None:
+                    status_progress.update(status_task, description=msg)
+
+                def on_progress(current: int, total: int) -> None:
+                    nonlocal resolve_task
+                    if resolve_task is None:
+                        resolve_task = resolve_progress.add_task(
+                            "Resolving paths...", total=total
+                        )
+                    resolve_progress.update(
+                        resolve_task, completed=current, total=total
+                    )
+
+                summary = await run_sync(
+                    cfg,
+                    client,
+                    state,
+                    dry_run=dry_run,
+                    force=force,
+                    no_delete=no_delete,
+                    on_status=on_status,
+                    on_progress=on_progress,
+                    refresh_cache=refresh_cache,
+                )
+        finally:
+            state.close()
     return summary, cfg
+
+
+def run_with_progress(
+    cfg_path: Path | None,
+    dry_run: bool = False,
+    force: bool = False,
+    no_delete: bool = False,
+    quiet: bool = False,
+    json_output: bool = False,
+    refresh_cache: bool = False,
+) -> tuple[SyncSummary, Config]:
+    return asyncio.run(
+        _run_with_progress(
+            cfg_path, dry_run, force, no_delete, quiet, json_output, refresh_cache
+        )
+    )

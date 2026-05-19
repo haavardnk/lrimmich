@@ -112,12 +112,13 @@ def test_dry_run_no_mutations(state: StateDB) -> None:
 
 
 @respx.mock
-def test_apply(state: StateDB, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_apply(state: StateDB, client: ImmichClient) -> None:
     respx.put(f"{API}/assets").mock(
         return_value=__import__("httpx").Response(200, json=None)
     )
 
-    result = apply_favorites_sync(["asset-a"], ["asset-b"], client, state)
+    result = await apply_favorites_sync(["asset-a"], ["asset-b"], client, state)
 
     assert result == FavoritesResult(favorited=1, unfavorited=1)
     assert respx.calls.call_count == 2
@@ -128,20 +129,22 @@ def test_apply(state: StateDB, client: ImmichClient) -> None:
 
 
 @respx.mock
-def test_apply_updates_state(state: StateDB, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_apply_updates_state(state: StateDB, client: ImmichClient) -> None:
     state.replace_synced_favorites({"asset-b"})
     respx.put(f"{API}/assets").mock(
         return_value=__import__("httpx").Response(200, json=None)
     )
 
-    apply_favorites_sync(["asset-a"], ["asset-b"], client, state)
+    await apply_favorites_sync(["asset-a"], ["asset-b"], client, state)
 
     assert state.get_synced_favorites() == {"asset-a"}
 
 
 @respx.mock
-def test_idempotency_no_changes(state: StateDB, client: ImmichClient) -> None:
-    result = apply_favorites_sync([], [], client, state)
+@pytest.mark.anyio
+async def test_idempotency_no_changes(state: StateDB, client: ImmichClient) -> None:
+    result = await apply_favorites_sync([], [], client, state)
 
     assert result == FavoritesResult(favorited=0, unfavorited=0)
     assert respx.calls.call_count == 0

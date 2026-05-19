@@ -21,7 +21,7 @@ def plan_ratings_sync(
     return to_set, to_clear
 
 
-def apply_ratings_sync(
+async def apply_ratings_sync(
     to_set: dict[str, int],
     to_clear: list[str],
     client: ImmichClient,
@@ -31,9 +31,9 @@ def apply_ratings_sync(
     for asset_id, rating in to_set.items():
         by_rating.setdefault(rating, []).append(asset_id)
     for rating, asset_ids in by_rating.items():
-        client.bulk_update_assets(sorted(asset_ids), rating=rating)
+        await client.bulk_update_assets(sorted(asset_ids), rating=rating)
     if to_clear:
-        client.bulk_update_assets(sorted(to_clear), rating=0)
+        await client.bulk_update_assets(sorted(to_clear), rating=0)
     if to_set or to_clear:
         snapshot = dict(state.get_synced_ratings())
         snapshot.update(to_set)
@@ -55,10 +55,10 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.ratings
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> RatingsPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> RatingsPlan:
         to_set, to_clear = plan_ratings_sync(ctx.get_rated(), ctx.resolved, ctx.state)
         summary.ratings = RatingsResult(set=len(to_set), cleared=len(to_clear))
         return to_set, to_clear
 
-    def apply(self, plan: RatingsPlan, ctx: SyncContext) -> None:
-        apply_ratings_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: RatingsPlan, ctx: SyncContext) -> None:
+        await apply_ratings_sync(plan[0], plan[1], ctx.client, ctx.state)

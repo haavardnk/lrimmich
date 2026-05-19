@@ -1,5 +1,6 @@
 import json
 
+import pytest
 import respx
 
 from lrimmich.clients.immich import ImmichClient
@@ -57,19 +58,21 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
 
 
 @respx.mock
-def test_apply_sets_descriptions(client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_apply_sets_descriptions(client: ImmichClient, state: StateDB) -> None:
     respx.put(f"{API}/assets/a1").respond(json={"id": "a1"})
     respx.put(f"{API}/assets/a2").respond(json={"id": "a2"})
-    result = apply_captions_sync({"a1": "Sunset"}, ["a2"], client, state)
+    result = await apply_captions_sync({"a1": "Sunset"}, ["a2"], client, state)
     assert result == CaptionsResult(set=1, cleared=1)
     snapshot = json.loads(state.get_meta("captions_snapshot") or "{}")
     assert snapshot == {"a1": "Sunset"}
 
 
 @respx.mock
-def test_apply_audit_log(client: ImmichClient, state: StateDB) -> None:
+@pytest.mark.anyio
+async def test_apply_audit_log(client: ImmichClient, state: StateDB) -> None:
     respx.put(f"{API}/assets/a1").respond(json={"id": "a1"})
-    apply_captions_sync({"a1": "Hello"}, [], client, state)
+    await apply_captions_sync({"a1": "Hello"}, [], client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_captions"

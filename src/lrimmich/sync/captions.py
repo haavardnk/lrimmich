@@ -29,16 +29,16 @@ def plan_captions_sync(
     return to_set, to_clear
 
 
-def apply_captions_sync(
+async def apply_captions_sync(
     to_set: dict[str, str],
     to_clear: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> CaptionsResult:
     for asset_id, caption in sorted(to_set.items()):
-        client.update_asset(asset_id, description=caption)
+        await client.update_asset(asset_id, description=caption)
     for asset_id in sorted(to_clear):
-        client.update_asset(asset_id, description="")
+        await client.update_asset(asset_id, description="")
     if to_set or to_clear:
         snapshot = dict(json.loads(state.get_meta("captions_snapshot") or "{}"))
         snapshot.update(to_set)
@@ -60,11 +60,11 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.captions
 
-    def plan(self, ctx: SyncContext, summary: SyncSummary) -> CaptionsPlan:
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> CaptionsPlan:
         captions = read_captions(ctx.cfg.lightroom.catalog)
         to_set, to_clear = plan_captions_sync(captions, ctx.resolved, ctx.state)
         summary.captions = CaptionsResult(set=len(to_set), cleared=len(to_clear))
         return to_set, to_clear
 
-    def apply(self, plan: CaptionsPlan, ctx: SyncContext) -> None:
-        apply_captions_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: CaptionsPlan, ctx: SyncContext) -> None:
+        await apply_captions_sync(plan[0], plan[1], ctx.client, ctx.state)

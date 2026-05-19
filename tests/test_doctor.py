@@ -57,64 +57,73 @@ def test_check_wal_unlocked(catalog: Path) -> None:
 
 
 @respx.mock
-def test_check_immich_reachable_pass(client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_immich_reachable_pass(client: ImmichClient) -> None:
     respx.get(f"{API}/server/about").mock(
         return_value=httpx.Response(200, json={"version": "1.0"})
     )
-    result = check_immich_reachable(client)
+    result = await check_immich_reachable(client)
     assert result.ok
 
 
 @respx.mock
-def test_check_immich_reachable_fail(client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_immich_reachable_fail(client: ImmichClient) -> None:
     respx.get(f"{API}/server/about").mock(return_value=httpx.Response(500))
-    result = check_immich_reachable(client)
+    result = await check_immich_reachable(client)
     assert not result.ok
 
 
 @respx.mock
-def test_check_api_permissions_pass(client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_api_permissions_pass(client: ImmichClient) -> None:
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(200, json=[]))
     respx.get(f"{API}/tags").mock(return_value=httpx.Response(200, json=[]))
-    result = check_api_permissions(client)
+    result = await check_api_permissions(client)
     assert result.ok
 
 
 @respx.mock
-def test_check_api_permissions_fail(client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_api_permissions_fail(client: ImmichClient) -> None:
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(401))
-    result = check_api_permissions(client)
+    result = await check_api_permissions(client)
     assert not result.ok
 
 
 @respx.mock
-def test_check_path_mapping_pass(catalog: Path, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_path_mapping_pass(catalog: Path, client: ImmichClient) -> None:
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(
             200,
             json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
-    result = check_path_mapping("/ext/", catalog, client)
+    result = await check_path_mapping("/ext/", catalog, client)
     assert result.ok
 
 
 @respx.mock
-def test_check_path_mapping_no_assets(catalog: Path, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_path_mapping_no_assets(
+    catalog: Path, client: ImmichClient
+) -> None:
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(200, json=[]),
     )
-    result = check_path_mapping("/ext/", catalog, client)
+    result = await check_path_mapping("/ext/", catalog, client)
     assert not result.ok
 
 
 @respx.mock
-def test_check_path_mapping_empty(catalog: Path) -> None:
+@pytest.mark.anyio
+async def test_check_path_mapping_empty(catalog: Path) -> None:
     client = ImmichClient(IMMICH_URL, "test-key")
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(200, json=[]),
     )
-    result = check_path_mapping("", catalog, client)
+    result = await check_path_mapping("", catalog, client)
     assert not result.ok
 
 
@@ -124,7 +133,8 @@ def test_check_state_db_pass(state: StateDB) -> None:
 
 
 @respx.mock
-def test_run_doctor_all_pass(
+@pytest.mark.anyio
+async def test_run_doctor_all_pass(
     catalog: Path, client: ImmichClient, state: StateDB
 ) -> None:
     respx.get(f"{API}/server/about").mock(
@@ -142,13 +152,14 @@ def test_run_doctor_all_pass(
         lightroom={"catalog": catalog},
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
     )
-    report = run_doctor(cfg, client, state)
+    report = await run_doctor(cfg, client, state)
     assert report.all_ok
     assert len(report.checks) == 6
 
 
 @respx.mock
-def test_run_doctor_partial_fail(
+@pytest.mark.anyio
+async def test_run_doctor_partial_fail(
     tmp_path: Path, client: ImmichClient, state: StateDB
 ) -> None:
     respx.get(f"{API}/server/about").mock(return_value=httpx.Response(500))
@@ -157,7 +168,7 @@ def test_run_doctor_partial_fail(
         lightroom={"catalog": tmp_path / "missing.lrcat"},
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
     )
-    report = run_doctor(cfg, client, state)
+    report = await run_doctor(cfg, client, state)
     assert not report.all_ok
 
 
@@ -210,7 +221,10 @@ def test_check_config_keys_missing_file(tmp_path: Path) -> None:
 
 
 @respx.mock
-def test_check_path_mapping_with_strip(tmp_path: Path, client: ImmichClient) -> None:
+@pytest.mark.anyio
+async def test_check_path_mapping_with_strip(
+    tmp_path: Path, client: ImmichClient
+) -> None:
     builder = CatalogBuilder(tmp_path / "test.lrcat")
     builder.add_image(1, "img.jpg", "Root/photos/")
     catalog = builder.build()
@@ -220,5 +234,5 @@ def test_check_path_mapping_with_strip(tmp_path: Path, client: ImmichClient) -> 
             json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
-    result = check_path_mapping("/ext/", catalog, client, strip="Root/")
+    result = await check_path_mapping("/ext/", catalog, client, strip="Root/")
     assert result.ok
