@@ -46,8 +46,9 @@ async def run_sync(
     dry_run: bool = False,
     force: bool = False,
     no_delete: bool = False,
-    on_status: Callable[[str], None] | None = None,
+    on_confirm: Callable[[str, str], bool] | None = None,
     on_progress: Callable[[int, int], None] | None = None,
+    on_status: Callable[[str], None] | None = None,
     refresh_cache: bool = False,
 ) -> SyncSummary:
     summary = SyncSummary()
@@ -81,10 +82,10 @@ async def run_sync(
         all_paths,
         cfg.immich.library_path,
         client,
-        state=state,
-        on_progress=on_progress,
-        strip=cfg.lightroom.strip,
         max_cache_age=None if refresh_cache else cache_ttl,
+        on_progress=on_progress,
+        state=state,
+        strip=cfg.lightroom.strip,
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
@@ -125,6 +126,8 @@ async def run_sync(
         try:
             plan = await step.plan(ctx, summary)
             if not dry_run:
+                if on_confirm and not on_confirm(step.name, step.status_msg):
+                    continue
                 await step.apply(plan, ctx)
         except Exception as e:
             logger.exception("step_failed", step=step.name)

@@ -59,10 +59,13 @@ ConfigOption = Annotated[
 DryRunOption = Annotated[
     bool, typer.Option("--dry-run", help="Preview without changes.")
 ]
-JsonOption = Annotated[bool, typer.Option("--json", help="Output as JSON.")]
-QuietOption = Annotated[bool, typer.Option("--quiet", "-q", help="Suppress output.")]
 ForceOption = Annotated[bool, typer.Option("--force", help="Skip safety guards.")]
+InteractiveOption = Annotated[
+    bool, typer.Option("--interactive", "-i", help="Confirm each step before applying.")
+]
+JsonOption = Annotated[bool, typer.Option("--json", help="Output as JSON.")]
 NoDeleteOption = Annotated[bool, typer.Option("--no-delete", help="Skip all deletes.")]
+QuietOption = Annotated[bool, typer.Option("--quiet", "-q", help="Suppress output.")]
 
 
 def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
@@ -105,9 +108,10 @@ async def _run_with_progress(
     cfg_path: Path | None,
     dry_run: bool = False,
     force: bool = False,
+    interactive: bool = False,
+    json_output: bool = False,
     no_delete: bool = False,
     quiet: bool = False,
-    json_output: bool = False,
     refresh_cache: bool = False,
 ) -> tuple[SyncSummary, Config]:
     cfg = load_config(cfg_path)
@@ -147,6 +151,9 @@ async def _run_with_progress(
                         resolve_task, completed=current, total=total
                     )
 
+                def on_confirm(step_name: str, step_msg: str) -> bool:
+                    return typer.confirm(f"Apply {step_name}?", default=True)
+
                 summary = await run_sync(
                     cfg,
                     client,
@@ -154,8 +161,9 @@ async def _run_with_progress(
                     dry_run=dry_run,
                     force=force,
                     no_delete=no_delete,
-                    on_status=on_status,
+                    on_confirm=on_confirm if interactive else None,
                     on_progress=on_progress,
+                    on_status=on_status,
                     refresh_cache=refresh_cache,
                 )
         finally:
@@ -167,13 +175,21 @@ def run_with_progress(
     cfg_path: Path | None,
     dry_run: bool = False,
     force: bool = False,
+    interactive: bool = False,
+    json_output: bool = False,
     no_delete: bool = False,
     quiet: bool = False,
-    json_output: bool = False,
     refresh_cache: bool = False,
 ) -> tuple[SyncSummary, Config]:
     return asyncio.run(
         _run_with_progress(
-            cfg_path, dry_run, force, no_delete, quiet, json_output, refresh_cache
+            cfg_path,
+            dry_run,
+            force,
+            interactive,
+            json_output,
+            no_delete,
+            quiet,
+            refresh_cache,
         )
     )

@@ -162,3 +162,31 @@ async def test_force_ignores_fingerprint(
     await run_sync(cfg, client, state, force=True)
 
     assert respx.calls.call_count > 0
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_on_confirm_skips_rejected_steps(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+
+    confirmed: list[str] = []
+
+    def on_confirm(name: str, msg: str) -> bool:
+        confirmed.append(name)
+        return name != "albums"
+
+    await run_sync(cfg, client, state, on_confirm=on_confirm)
+
+    assert "albums" in confirmed
+    album_creates = [
+        c
+        for c in respx.calls
+        if c.request.method == "POST" and "/albums" in str(c.request.url)
+    ]
+    assert len(album_creates) == 0

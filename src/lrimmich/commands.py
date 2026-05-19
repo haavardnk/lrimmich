@@ -15,6 +15,7 @@ from lrimmich.app import (
     ConfigOption,
     DryRunOption,
     ForceOption,
+    InteractiveOption,
     JsonOption,
     NoDeleteOption,
     QuietOption,
@@ -36,14 +37,15 @@ from lrimmich.utils.notify import send_notification
 def sync(
     config: ConfigOption = None,
     dry_run: DryRunOption = False,
-    json_output: JsonOption = False,
-    quiet: QuietOption = False,
     force: ForceOption = False,
+    interactive: InteractiveOption = False,
+    json_output: JsonOption = False,
     no_delete: NoDeleteOption = False,
     notify_on_drift: Annotated[
         bool,
         typer.Option("--notify-on-drift", help="Notify only on drift."),
     ] = False,
+    quiet: QuietOption = False,
     refresh_cache: Annotated[
         bool,
         typer.Option("--refresh-cache", help="Ignore cached path resolutions."),
@@ -53,9 +55,10 @@ def sync(
         config,
         dry_run=dry_run,
         force=force,
+        interactive=interactive,
+        json_output=json_output,
         no_delete=no_delete,
         quiet=quiet,
-        json_output=json_output,
         refresh_cache=refresh_cache,
     )
     if json_output:
