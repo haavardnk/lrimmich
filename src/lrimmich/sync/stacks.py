@@ -1,5 +1,6 @@
-from contextlib import suppress
 from dataclasses import dataclass
+
+import structlog
 
 from lrimmich.clients.catalog import LrStack, read_stacks
 from lrimmich.clients.immich import ImmichClient
@@ -7,6 +8,8 @@ from lrimmich.clients.state import StateDB
 from lrimmich.sync.context import SyncContext
 from lrimmich.sync.summary import StacksResult, SyncSummary
 from lrimmich.utils.config import Config
+
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -135,8 +138,13 @@ async def apply_stack_sync(
                 )
                 result.updated += 1
             case "delete":
-                with suppress(Exception):
+                try:
                     await client.delete_stack(action.immich_stack_id)
+                except Exception:
+                    logger.warning(
+                        "delete_stack_failed",
+                        stack_id=action.immich_stack_id,
+                    )
                 state.set_meta(f"stack:{action.lr_stack_id}", "")
                 state.append_audit_log(
                     "delete_stack",
