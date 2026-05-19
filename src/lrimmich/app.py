@@ -15,8 +15,7 @@ from rich.progress import (
 )
 
 from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
-from lrimmich.sync.orchestrator import run_sync
+from lrimmich.sync.orchestrator import run_multi_sync
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config, SyncConfig, load_config
 from lrimmich.utils.logging import configure_logging
@@ -116,58 +115,51 @@ async def _run_with_progress(
 ) -> tuple[SyncSummary, Config]:
     cfg = load_config(cfg_path)
     async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-        state = StateDB()
-        try:
-            show_progress = not quiet and not json_output
-            status_progress = Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                transient=True,
-                disable=not show_progress,
-            )
-            resolve_progress = Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TimeRemainingColumn(),
-                transient=True,
-                disable=not show_progress,
-            )
-            with status_progress, resolve_progress:
-                status_task = status_progress.add_task("Starting...", total=None)
-                resolve_task: TaskID | None = None
+        show_progress = not quiet and not json_output
+        status_progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+            disable=not show_progress,
+        )
+        resolve_progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+            transient=True,
+            disable=not show_progress,
+        )
+        with status_progress, resolve_progress:
+            status_task = status_progress.add_task("Starting...", total=None)
+            resolve_task: TaskID | None = None
 
-                def on_status(msg: str) -> None:
-                    status_progress.update(status_task, description=msg)
+            def on_status(msg: str) -> None:
+                status_progress.update(status_task, description=msg)
 
-                def on_progress(current: int, total: int) -> None:
-                    nonlocal resolve_task
-                    if resolve_task is None:
-                        resolve_task = resolve_progress.add_task(
-                            "Resolving paths...", total=total
-                        )
-                    resolve_progress.update(
-                        resolve_task, completed=current, total=total
+            def on_progress(current: int, total: int) -> None:
+                nonlocal resolve_task
+                if resolve_task is None:
+                    resolve_task = resolve_progress.add_task(
+                        "Resolving paths...", total=total
                     )
+                resolve_progress.update(resolve_task, completed=current, total=total)
 
-                def on_confirm(step_name: str, step_msg: str) -> bool:
-                    return typer.confirm(f"Apply {step_name}?", default=True)
+            def on_confirm(step_name: str, step_msg: str) -> bool:
+                return typer.confirm(f"Apply {step_name}?", default=True)
 
-                summary = await run_sync(
-                    cfg,
-                    client,
-                    state,
-                    dry_run=dry_run,
-                    force=force,
-                    no_delete=no_delete,
-                    on_confirm=on_confirm if interactive else None,
-                    on_progress=on_progress,
-                    on_status=on_status,
-                    refresh_cache=refresh_cache,
-                )
-        finally:
-            state.close()
+            summary = await run_multi_sync(
+                cfg,
+                client,
+                dry_run=dry_run,
+                force=force,
+                no_delete=no_delete,
+                on_confirm=on_confirm if interactive else None,
+                on_progress=on_progress,
+                on_status=on_status,
+                refresh_cache=refresh_cache,
+            )
     return summary, cfg
 
 

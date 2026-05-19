@@ -80,3 +80,21 @@ class SyncSummary:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def merge(self, other: "SyncSummary") -> None:
+        self.albums_created += other.albums_created
+        self.albums_renamed += other.albums_renamed
+        self.albums_deleted += other.albums_deleted
+        self.assets_added += other.assets_added
+        self.assets_removed += other.assets_removed
+        for f in fields(self):
+            val_self = getattr(self, f.name)
+            val_other = getattr(other, f.name)
+            if hasattr(val_self, "__dataclass_fields__"):
+                for sub_f in fields(val_self):
+                    setattr(
+                        val_self,
+                        sub_f.name,
+                        getattr(val_self, sub_f.name) + getattr(val_other, sub_f.name),
+                    )
+        self.errors.extend(other.errors)

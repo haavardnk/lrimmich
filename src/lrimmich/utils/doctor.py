@@ -8,7 +8,7 @@ from typing import Any, get_args, get_origin
 from pydantic import BaseModel
 
 from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
+from lrimmich.clients.state import StateDB, state_path_for_catalog
 from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import map_path
 
@@ -154,23 +154,27 @@ def check_config_keys(config_path: Path) -> CheckResult:
 async def run_doctor(
     cfg: Config,
     client: ImmichClient,
-    state: StateDB,
     config_path: Path | None = None,
 ) -> DoctorReport:
     report = DoctorReport()
     if config_path:
         report.checks.append(check_config_keys(config_path))
-    report.checks.append(check_catalog(cfg.lightroom.catalog))
-    report.checks.append(check_wal_lock(cfg.lightroom.catalog))
     report.checks.append(await check_immich_reachable(client))
     report.checks.append(await check_api_permissions(client))
-    report.checks.append(
-        await check_path_mapping(
-            cfg.immich.library_path,
-            cfg.lightroom.catalog,
-            client,
-            cfg.lightroom.strip,
+    for catalog in cfg.catalogs:
+        report.checks.append(check_catalog(catalog.catalog))
+        report.checks.append(check_wal_lock(catalog.catalog))
+        report.checks.append(
+            await check_path_mapping(
+                cfg.immich.library_path,
+                catalog.catalog,
+                client,
+                catalog.strip,
+            )
         )
-    )
-    report.checks.append(check_state_db(state))
+        state = StateDB(state_path_for_catalog(catalog.key))
+        try:
+            report.checks.append(check_state_db(state))
+        finally:
+            state.close()
     return report

@@ -1,11 +1,13 @@
 import os
 import tomllib
+from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
 from platformdirs import user_config_path
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+AlbumCollision = Literal["merge", "prefix"]
 AlbumMode = Literal["managed", "hybrid"]
 AlbumFilter = Literal["all", "flagged", "unflagged", "rejected"]
 AssetOrder = Literal["asc", "desc"]
@@ -18,14 +20,20 @@ class BaseConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class LightroomConfig(BaseConfig):
+class CatalogConfig(BaseConfig):
     catalog: Path
     strip: str = ""
+    exclude_collections: list[int] = []
+    exclude_patterns: list[str] = []
 
     @field_validator("catalog")
     @classmethod
     def expand_catalog(cls, v: Path) -> Path:
         return v.expanduser()
+
+    @property
+    def key(self) -> str:
+        return sha256(str(self.catalog).encode()).hexdigest()[:12]
 
 
 class ImmichConfig(BaseConfig):
@@ -33,11 +41,6 @@ class ImmichConfig(BaseConfig):
     api_key: str = ""
     library_path: str
     share_albums_with: list[str] = []
-
-
-class ExcludeConfig(BaseConfig):
-    collection_ids: list[int] = []
-    name_patterns: list[str] = []
 
 
 class SyncConfig(BaseConfig):
@@ -51,6 +54,7 @@ class SyncConfig(BaseConfig):
     scope: SyncScope = "collections"
     skip_empty: bool = True
     album_mode: AlbumMode = "managed"
+    album_collision: AlbumCollision = "merge"
     album_filter: AlbumFilter = "all"
     album_min_rating: int = Field(default=0, ge=0, le=5)
     album_name_format: str = "{path}"
@@ -83,9 +87,8 @@ class NotificationConfig(BaseConfig):
 
 
 class Config(BaseConfig):
-    lightroom: LightroomConfig
+    catalogs: list[CatalogConfig]
     immich: ImmichConfig
-    exclude: ExcludeConfig = ExcludeConfig()
     sync: SyncConfig = SyncConfig()
     cache: CacheConfig = CacheConfig()
     album_rules: list[AlbumRule] = []

@@ -26,7 +26,7 @@ from lrimmich.app import (
 )
 from lrimmich.clients.catalog import read_collection_tree, read_collections
 from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import DEFAULT_STATE_PATH, StateDB
+from lrimmich.clients.state import DEFAULT_STATE_DIR, StateDB, state_path_for_catalog
 from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.utils.config import DEFAULT_CONFIG_PATH, load_config
 from lrimmich.utils.doctor import DoctorReport, run_doctor
@@ -111,12 +111,8 @@ def doctor(
     async def _run() -> DoctorReport:
         cfg = load_config(config)
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-            state = StateDB()
-            try:
-                config_path = config or DEFAULT_CONFIG_PATH
-                return await run_doctor(cfg, client, state, config_path=config_path)
-            finally:
-                state.close()
+            config_path = config or DEFAULT_CONFIG_PATH
+            return await run_doctor(cfg, client, config_path=config_path)
 
     report = asyncio.run(_run())
     for check in report.checks:
@@ -131,19 +127,25 @@ def adopt(
     config: ConfigOption = None,
     apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
 ) -> None:
-    async def _run() -> tuple[list, StateDB]:
+    async def _run() -> tuple[list, list[StateDB]]:
         cfg = load_config(config)
+        all_candidates: list = []
+        states: list[StateDB] = []
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-            state = StateDB()
-            try:
-                collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
-                candidates = await find_adopt_candidates(collections, client, state)
-                return candidates, state
-            except Exception:
-                state.close()
-                raise
+            for catalog in cfg.catalogs:
+                state = StateDB(state_path_for_catalog(catalog.key))
+                states.append(state)
+                try:
+                    collections = read_collections(catalog.catalog, catalog)
+                    candidates = await find_adopt_candidates(collections, client, state)
+                    all_candidates.extend(candidates)
+                except Exception:
+                    for s in states:
+                        s.close()
+                    raise
+        return all_candidates, states
 
-    candidates, state = asyncio.run(_run())
+    candidates, states = asyncio.run(_run())
     try:
         for c in candidates:
             tag = " [CONFLICT]" if c.conflict else ""
@@ -151,12 +153,15 @@ def adopt(
         if not candidates:
             typer.echo("No albums to adopt")
         elif apply:
-            adopted = apply_adopt(candidates, state)
-            typer.echo(f"Adopted {adopted} albums")
+            total = 0
+            for state in states:
+                total += apply_adopt(candidates, state)
+            typer.echo(f"Adopted {total} albums")
         else:
             typer.echo("Run with --apply to commit")
     finally:
-        state.close()
+        for state in states:
+            state.close()
 
 
 @config_app.command("init")
@@ -200,11 +205,15 @@ def log(
     limit: Annotated[int, typer.Option("--limit", "-n")] = 20,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
-    state = StateDB(DEFAULT_STATE_PATH)
-    try:
-        entries = state.get_audit_log(limit=limit)
-    finally:
-        state.close()
+    all_entries: list[dict] = []
+    for db_path in DEFAULT_STATE_DIR.glob("state*.db"):
+        state = StateDB(db_path)
+        try:
+            all_entries.extend(state.get_audit_log(limit=limit))
+        finally:
+            state.close()
+    all_entries.sort(key=lambda e: e.get("ts", 0), reverse=True)
+    entries = all_entries[:limit]
     if not entries:
         typer.echo("No log entries.")
         return
@@ -224,15 +233,18 @@ def log(
 def reset(
     force: Annotated[bool, typer.Option("--force", "-f")] = False,
 ) -> None:
-    if not DEFAULT_STATE_PATH.exists():
-        typer.echo("No state database found.")
+    state_files = list(DEFAULT_STATE_DIR.glob("state*.db"))
+    if not state_files:
+        typer.echo("No state databases found.")
         return
     if not force:
         typer.confirm(
-            f"Delete {DEFAULT_STATE_PATH}? Next sync will rebuild from scratch.",
+            f"Delete {len(state_files)} state database(s)?"
+            " Next sync will rebuild from scratch.",
             abort=True,
         )
-    DEFAULT_STATE_PATH.unlink()
+    for f in state_files:
+        f.unlink()
     typer.echo("State cleared.")
 
 
@@ -242,20 +254,27 @@ def collections(
     json_output: JsonOption = False,
 ) -> None:
     cfg = load_config(config)
-    tree = read_collection_tree(cfg.lightroom.catalog)
-    if json_output:
-        typer.echo(json.dumps([n.model_dump() for n in tree], indent=2))
-        return
     from lrimmich.clients.catalog import LrCollectionTreeNode
 
-    def _print_tree(nodes: list[LrCollectionTreeNode], indent: int = 0) -> None:
-        for node in nodes:
-            prefix = "  " * indent
-            label = "set" if node.kind == "set" else "col"
-            typer.echo(f"{prefix}[{label}] {node.name}  (id={node.id})")
-            _print_tree(node.children, indent + 1)
+    all_nodes: list[dict] = []
+    for catalog in cfg.catalogs:
+        tree = read_collection_tree(catalog.catalog)
+        if json_output:
+            all_nodes.extend(n.model_dump() for n in tree)
+        else:
+            if len(cfg.catalogs) > 1:
+                typer.echo(f"\n{catalog.catalog.name}:")
 
-    _print_tree(tree)
+            def _print_tree(nodes: list[LrCollectionTreeNode], indent: int = 0) -> None:
+                for node in nodes:
+                    pfx = "  " * indent
+                    label = "set" if node.kind == "set" else "col"
+                    typer.echo(f"{pfx}[{label}] {node.name}  (id={node.id})")
+                    _print_tree(node.children, indent + 1)
+
+            _print_tree(tree)
+    if json_output:
+        typer.echo(json.dumps(all_nodes, indent=2))
 
 
 @app.command()

@@ -7,7 +7,7 @@ import structlog
 
 from lrimmich.clients.catalog import read_catalog_fingerprint, read_collections
 from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
+from lrimmich.clients.state import StateDB, state_path_for_catalog
 from lrimmich.sync import (
     albums,
     captions,
@@ -21,7 +21,7 @@ from lrimmich.sync import (
 )
 from lrimmich.sync.context import SyncContext, SyncStep
 from lrimmich.sync.summary import SyncSummary
-from lrimmich.utils.config import Config
+from lrimmich.utils.config import CatalogConfig, Config
 from lrimmich.utils.resolver import resolve_paths, spot_check_cache
 
 logger = structlog.get_logger(__name__)
@@ -62,6 +62,7 @@ async def _run_step(
 
 async def run_sync(
     cfg: Config,
+    catalog: CatalogConfig,
     client: ImmichClient,
     state: StateDB,
     dry_run: bool = False,
@@ -79,10 +80,10 @@ async def run_sync(
         state.clear_path_cache()
 
     if on_status:
-        on_status("Reading catalog...")
-    collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
+        on_status(f"Reading catalog {catalog.catalog.name}...")
+    collections = read_collections(catalog.catalog, catalog)
 
-    fingerprint = read_catalog_fingerprint(cfg.lightroom.catalog)
+    fingerprint = read_catalog_fingerprint(catalog.catalog)
     config_hash = sha256(cfg.model_dump_json().encode()).hexdigest()[:16]
     combined_fingerprint = f"{fingerprint}:{config_hash}"
     last_fingerprint = state.get_meta("catalog_fingerprint")
@@ -108,7 +109,7 @@ async def run_sync(
         max_cache_age=None if refresh_cache else cache_ttl,
         on_progress=on_progress,
         state=state,
-        strip=cfg.lightroom.strip,
+        strip=catalog.strip,
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
@@ -122,7 +123,7 @@ async def run_sync(
             client,
             state,
             pct=cfg.cache.spot_check_pct,
-            strip=cfg.lightroom.strip,
+            strip=catalog.strip,
         )
         if invalidated:
             logger.info("cache_spot_check", invalidated=invalidated)
@@ -131,6 +132,7 @@ async def run_sync(
 
     ctx = SyncContext(
         cfg=cfg,
+        catalog=catalog,
         client=client,
         state=state,
         collections=collections,
@@ -183,3 +185,38 @@ async def run_sync(
         state.set_meta("catalog_fingerprint", combined_fingerprint)
 
     return summary
+
+
+async def run_multi_sync(
+    cfg: Config,
+    client: ImmichClient,
+    dry_run: bool = False,
+    force: bool = False,
+    no_delete: bool = False,
+    on_confirm: Callable[[str, str], bool] | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
+    on_status: Callable[[str], None] | None = None,
+    refresh_cache: bool = False,
+) -> SyncSummary:
+    combined = SyncSummary()
+    for catalog in cfg.catalogs:
+        state_db = state_path_for_catalog(catalog.key)
+        state = StateDB(state_db)
+        try:
+            summary = await run_sync(
+                cfg,
+                catalog,
+                client,
+                state,
+                dry_run=dry_run,
+                force=force,
+                no_delete=no_delete,
+                on_confirm=on_confirm,
+                on_progress=on_progress,
+                on_status=on_status,
+                refresh_cache=refresh_cache,
+            )
+            combined.merge(summary)
+        finally:
+            state.close()
+    return combined

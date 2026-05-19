@@ -27,7 +27,7 @@ from lrimmich.clients.queries import (
     LrSchema,
     detect_schema,
 )
-from lrimmich.utils.config import BaseConfig, ExcludeConfig
+from lrimmich.utils.config import BaseConfig, CatalogConfig
 
 
 class LrCollection(BaseConfig):
@@ -73,10 +73,10 @@ def _walk_ancestors(
 
 def read_collections(
     catalog: Path,
-    exclude: ExcludeConfig | None = None,
+    cat_cfg: CatalogConfig | None = None,
 ) -> list[LrCollection]:
     with closing(_connect(catalog)) as conn:
-        return _read_collections_inner(conn, exclude)
+        return _read_collections_inner(conn, cat_cfg)
 
 
 def read_collection_tree(catalog: Path) -> list[LrCollectionTreeNode]:
@@ -117,15 +117,15 @@ def read_collection_tree(catalog: Path) -> list[LrCollectionTreeNode]:
 
 def _read_collections_inner(
     conn: sqlite3.Connection,
-    exclude: ExcludeConfig | None,
+    cat_cfg: CatalogConfig | None,
 ) -> list[LrCollection]:
     all_rows = conn.execute(COLLECTIONS_ALL).fetchall()
     tree: dict[int, tuple[str | None, int | None]] = {
         r["id_local"]: (r["name"], r["parent"]) for r in all_rows
     }
 
-    exclude_ids = set(exclude.collection_ids) if exclude else set()
-    exclude_patterns = exclude.name_patterns if exclude else []
+    exclude_ids = set(cat_cfg.exclude_collections) if cat_cfg else set()
+    exclude_patterns = cat_cfg.exclude_patterns if cat_cfg else []
 
     def _is_excluded(col_id: int) -> bool:
         current: int | None = col_id

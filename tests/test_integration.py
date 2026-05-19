@@ -28,7 +28,7 @@ def catalog(tmp_path: Path) -> Path:
 @pytest.fixture()
 def cfg(catalog: Path) -> Config:
     return Config(
-        lightroom={"catalog": catalog},
+        catalogs=[{"catalog": catalog}],
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": ""},
         cache={"spot_check_pct": 0},
     )
@@ -83,13 +83,13 @@ async def test_status_then_sync_idempotency(
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    status1 = await run_sync(cfg, client, state, dry_run=True)
+    status1 = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
     assert status1.has_drift
     assert status1.albums_created == 1
 
-    await run_sync(cfg, client, state, dry_run=False)
+    await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
-    status2 = await run_sync(cfg, client, state, dry_run=True)
+    status2 = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
     assert status2.albums_created == 0
     assert status2.albums_renamed == 0
     assert status2.albums_deleted == 0
@@ -105,7 +105,7 @@ async def test_drift_detection(
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    summary = await run_sync(cfg, client, state, dry_run=True)
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
 
     assert summary.has_drift
     assert summary.albums_created > 0
@@ -120,7 +120,7 @@ async def test_audit_log_entries(
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    await run_sync(cfg, client, state, dry_run=False)
+    await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
     logs = state.get_audit_log()
     actions = {log["action"] for log in logs}
@@ -135,8 +135,8 @@ async def test_sync_json_shape_stable(
 ) -> None:
     _mock_folders({})
 
-    s1 = await run_sync(cfg, client, state, dry_run=True)
-    s2 = await run_sync(cfg, client, state, dry_run=True)
+    s1 = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+    s2 = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
 
     d1 = s1.to_dict()
     d2 = s2.to_dict()
@@ -152,7 +152,7 @@ async def test_multi_domain_orchestration(
     _mock_folders({"beach.jpg": "a1", "mountain.jpg": "a2"})
     _mock_album_crud()
 
-    summary = await run_sync(cfg, client, state, dry_run=False)
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
     assert not summary.errors
     assert state.get_album_ownership(1) is not None

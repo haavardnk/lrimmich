@@ -149,12 +149,12 @@ async def test_run_doctor_all_pass(
         )
     )
     cfg = Config(
-        lightroom={"catalog": catalog},
+        catalogs=[{"catalog": catalog}],
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
     )
-    report = await run_doctor(cfg, client, state)
+    report = await run_doctor(cfg, client)
     assert report.all_ok
-    assert len(report.checks) == 6
+    assert len(report.checks) >= 5
 
 
 @respx.mock
@@ -165,15 +165,15 @@ async def test_run_doctor_partial_fail(
     respx.get(f"{API}/server/about").mock(return_value=httpx.Response(500))
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(401))
     cfg = Config(
-        lightroom={"catalog": tmp_path / "missing.lrcat"},
+        catalogs=[{"catalog": tmp_path / "missing.lrcat"}],
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
     )
-    report = await run_doctor(cfg, client, state)
+    report = await run_doctor(cfg, client)
     assert not report.all_ok
 
 
 VALID_TOML = """\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]

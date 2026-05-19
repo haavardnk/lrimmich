@@ -76,7 +76,7 @@ class Step:
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> KeywordsPlan:
         prefix = ctx.cfg.sync.keyword_prefix or ""
-        kw_data = read_keywords(ctx.cfg.lightroom.catalog)
+        kw_data = read_keywords(ctx.catalog.catalog)
         needed_kws: set[str] = set()
         for kws in kw_data.values():
             needed_kws.update(kws)

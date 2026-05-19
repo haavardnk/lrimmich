@@ -28,7 +28,7 @@ lrimmich config edit
 
 Fill in at minimum:
 
-- `lightroom.catalog` — path to your `.lrcat` file
+- `catalogs` — at least one `[[catalogs]]` entry with a `catalog` path to your `.lrcat` file
 - `immich.url` — your Immich server URL
 - `immich.api_key` — an Immich API key (or set `LRIMMICH_API_KEY` env var instead)
 - `immich.library_path` — the external library path in Immich where your photos live

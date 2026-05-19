@@ -26,7 +26,7 @@ The `library_path` in your config doesn't match the folder structure Immich sees
 
 - The path matches exactly what Immich shows in Administration → External Libraries
 - The folder hierarchy under that path mirrors your Lightroom catalog's folder layout
-- If your LR paths have a prefix that doesn't exist in Immich, set `lightroom.strip` to remove it
+- If your LR paths have a prefix that doesn't exist in Immich, set `strip` in the `[[catalogs]]` entry to remove it
 
 ### "API key required"
 

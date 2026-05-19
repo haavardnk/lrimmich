@@ -9,6 +9,12 @@ from typing import Any, Self
 from platformdirs import user_state_path
 
 DEFAULT_STATE_PATH = user_state_path("lrimmich") / "state.db"
+DEFAULT_STATE_DIR = user_state_path("lrimmich")
+
+
+def state_path_for_catalog(catalog_key: str) -> Path:
+    return DEFAULT_STATE_DIR / f"state_{catalog_key}.db"
+
 
 SCHEMA_VERSION = 2
 

@@ -16,8 +16,7 @@ from lrimmich.app import (
     print_summary,
 )
 from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
-from lrimmich.sync.orchestrator import run_sync
+from lrimmich.sync.orchestrator import run_multi_sync
 from lrimmich.utils.config import load_config
 
 logger = structlog.get_logger(__name__)
@@ -34,15 +33,17 @@ def watch(
     ] = 5000,
 ) -> None:
     cfg = load_config(config)
-    catalog_path = cfg.lightroom.catalog
-    if not catalog_path.exists():
-        typer.echo(f"Catalog not found: {catalog_path}", err=True)
-        raise typer.Exit(1)
 
-    watched = [
-        str(catalog_path.with_name(catalog_path.name + suffix))
-        for suffix in ("", "-wal", "-shm")
-    ]
+    watched: list[str] = []
+    for catalog in cfg.catalogs:
+        if not catalog.catalog.exists():
+            typer.echo(f"Catalog not found: {catalog.catalog}", err=True)
+            raise typer.Exit(1)
+        for suffix in ("", "-wal", "-shm"):
+            watched.append(
+                str(catalog.catalog.with_name(catalog.catalog.name + suffix))
+            )
+
     stop_event = threading.Event()
 
     def _log(msg: str) -> None:
@@ -51,18 +52,17 @@ def watch(
             typer.echo(f"[{ts}] {msg}")
 
     if not quiet:
-        typer.echo(f"Watching {catalog_path} (debounce={debounce}ms)")
+        names = ", ".join(c.catalog.name for c in cfg.catalogs)
+        typer.echo(f"Watching {names} (debounce={debounce}ms)")
 
-    state = StateDB()
     failures = 0
     MAX_FAILURES = 5
 
     async def _do_sync() -> None:
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-            summary = await run_sync(
+            summary = await run_multi_sync(
                 cfg,
                 client,
-                state,
                 dry_run=False,
                 force=force,
                 no_delete=no_delete,
@@ -96,10 +96,8 @@ def watch(
                         err=True,
                     )
                     raise typer.Exit(1) from None
-                state.close()
-                state = StateDB()
-    finally:
-        state.close()
+    except KeyboardInterrupt:
+        pass
 
     if not quiet:
         typer.echo("Stopped")

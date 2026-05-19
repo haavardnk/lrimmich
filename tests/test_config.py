@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from lrimmich.utils.config import load_config
 
 MINIMAL_TOML = """\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -25,7 +25,7 @@ def config_file(tmp_path: Path) -> Path:
 
 def test_load_basic(config_file: Path) -> None:
     cfg = load_config(config_file)
-    assert cfg.lightroom.catalog == Path("/tmp/test.lrcat")
+    assert cfg.catalogs[0].catalog == Path("/tmp/test.lrcat")
     assert cfg.immich.url == "http://localhost:2283"
     assert cfg.immich.api_key == "testkey123456"
     assert cfg.immich.library_path == "/immich/"
@@ -34,7 +34,7 @@ def test_load_basic(config_file: Path) -> None:
 def test_missing_api_key(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -48,7 +48,7 @@ library_path = "/immich/"
 def test_api_key_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -68,7 +68,7 @@ def test_missing_config_file() -> None:
 def test_missing_required_field(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -90,7 +90,7 @@ def test_defaults(config_file: Path) -> None:
 def test_invalid_sync_scope(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -108,7 +108,7 @@ scope = "invalid"
 def test_extra_field_ignored(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -132,7 +132,7 @@ def test_album_mode_default(config_file: Path) -> None:
 def test_album_mode_hybrid(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -150,7 +150,7 @@ album_mode = "hybrid"
 def test_album_mode_invalid(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -169,7 +169,7 @@ album_mode = "bogus"
 def test_album_filter_valid(tmp_path: Path, album_filter: str) -> None:
     p = tmp_path / "config.toml"
     p.write_text(f"""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -187,7 +187,7 @@ album_filter = "{album_filter}"
 def test_album_filter_invalid(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -206,7 +206,7 @@ album_filter = "bogus"
 def test_album_min_rating_invalid(tmp_path: Path, rating: int) -> None:
     p = tmp_path / "config.toml"
     p.write_text(f"""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -224,7 +224,7 @@ album_min_rating = {rating}
 def test_album_rules(tmp_path: Path) -> None:
     p = tmp_path / "config.toml"
     p.write_text("""\
-[lightroom]
+[[catalogs]]
 catalog = "/tmp/test.lrcat"
 
 [immich]
@@ -246,3 +246,4 @@ min_rating = 3
     assert cfg.album_rules[0].filter == "flagged"
     assert cfg.album_rules[1].id == 123
     assert cfg.album_rules[1].min_rating == 3
+

@@ -156,7 +156,7 @@ class Step:
         return cfg.sync.stacks
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> StackPlan:
-        lr_stacks = read_stacks(ctx.cfg.lightroom.catalog)
+        lr_stacks = read_stacks(ctx.catalog.catalog)
         actions = await plan_stack_sync(lr_stacks, ctx.resolved, ctx.state, ctx.client)
         summary.stacks = StacksResult(
             created=sum(1 for a in actions if a.kind == "create"),

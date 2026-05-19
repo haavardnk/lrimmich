@@ -12,7 +12,7 @@ from lrimmich.clients.catalog import (
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.summary import SyncSummary
-from lrimmich.utils.config import Config
+from lrimmich.utils.config import CatalogConfig, Config
 
 PlanT = TypeVar("PlanT")
 
@@ -31,6 +31,7 @@ class SyncStep(Protocol[PlanT]):
 @dataclass
 class SyncContext:
     cfg: Config
+    catalog: CatalogConfig
     client: ImmichClient
     state: StateDB
     collections: list[LrCollection]
@@ -46,17 +47,17 @@ class SyncContext:
 
     def get_flagged(self) -> set[str]:
         if self._flagged is None:
-            self._flagged = read_flagged_images(self.cfg.lightroom.catalog)
+            self._flagged = read_flagged_images(self.catalog.catalog)
         return self._flagged
 
     def get_rejected(self) -> set[str]:
         if self._rejected is None:
-            self._rejected = read_rejected_images(self.cfg.lightroom.catalog)
+            self._rejected = read_rejected_images(self.catalog.catalog)
         return self._rejected
 
     def get_rated(self) -> dict[str, int]:
         if self._rated is None:
-            self._rated = read_rated_images(self.cfg.lightroom.catalog)
+            self._rated = read_rated_images(self.catalog.catalog)
         return self._rated
 
     async def get_existing_tags(self) -> list[dict[str, Any]]:

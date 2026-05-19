@@ -15,7 +15,7 @@ from lrimmich.clients.catalog import (
     read_rejected_images,
     read_stacks,
 )
-from lrimmich.utils.config import ExcludeConfig
+from lrimmich.utils.config import CatalogConfig
 from tests.fixtures.catalog_factory import CatalogBuilder
 
 
@@ -91,8 +91,8 @@ def test_skip_parent_filter(catalog_path: Path) -> None:
         .add_collection_image(2, 10)
         .build()
     )
-    exclude = ExcludeConfig(collection_ids=[67])
-    cols = read_collections(catalog_path, exclude=exclude)
+    cat_cfg = CatalogConfig(catalog=catalog_path, exclude_collections=[67])
+    cols = read_collections(catalog_path, cat_cfg=cat_cfg)
     assert len(cols) == 1
     assert cols[0].name == "Local Album"
 
@@ -105,8 +105,8 @@ def test_name_pattern_filter(catalog_path: Path) -> None:
         .add_collection(3, "Keepers")
         .build()
     )
-    exclude = ExcludeConfig(name_patterns=["_tmp/*"])
-    cols = read_collections(catalog_path, exclude=exclude)
+    cat_cfg = CatalogConfig(catalog=catalog_path, exclude_patterns=["_tmp/*"])
+    cols = read_collections(catalog_path, cat_cfg=cat_cfg)
     assert len(cols) == 1
     assert cols[0].name == "Keepers"
 

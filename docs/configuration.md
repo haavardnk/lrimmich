@@ -8,12 +8,28 @@ nav_order: 4
 
 The config file is TOML. Run `lrimmich config init` to generate one, or `lrimmich config show` to see the resolved values (secrets redacted).
 
-## `[lightroom]`
+## `[[catalogs]]`
+
+Each `[[catalogs]]` entry defines a Lightroom catalog to sync. Add multiple entries to sync multiple catalogs into the same Immich server.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `catalog` | string | *required* | Path to your `.lrcat` file. Tilde expansion is supported. |
 | `strip` | string | `""` | Prefix to strip from Lightroom-relative paths before matching against Immich. Useful when your Lightroom folder structure has a prefix that doesn't exist in the external library mount. |
+| `exclude_collections` | list[int] | `[]` | Collection or collection set IDs to skip. Find IDs via `lrimmich collections`. |
+| `exclude_patterns` | list[string] | `[]` | Glob patterns matched against the full collection path, e.g. `"Exports/*"` or `"*/WIP"`. |
+
+Example with two catalogs:
+
+```toml
+[[catalogs]]
+catalog = "~/Pictures/Personal/Personal.lrcat"
+
+[[catalogs]]
+catalog = "~/Pictures/Work/Work.lrcat"
+strip = "raw/"
+exclude_patterns = ["Exports/*"]
+```
 
 ## `[immich]`
 
@@ -23,13 +39,6 @@ The config file is TOML. Run `lrimmich config init` to generate one, or `lrimmic
 | `api_key` | string | `""` | Immich API key. Can also be set via the `LRIMMICH_API_KEY` environment variable, which takes precedence. Generate one at Immich → Account Settings → API Keys. |
 | `library_path` | string | *required* | External library path where your photos are stored. The folder structure must mirror your Lightroom catalog's folder layout. |
 | `share_albums_with` | list[string] | `[]` | Immich user IDs to share every synced album with. |
-
-## `[exclude]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `collection_ids` | list[int] | `[]` | Collection or collection set IDs to skip. Find IDs via `lrimmich collections`. |
-| `name_patterns` | list[string] | `[]` | Glob patterns matched against the full collection path, e.g. `"Exports/*"` or `"*/WIP"`. |
 
 ## `[sync]`
 
@@ -57,6 +66,7 @@ The config file is TOML. Run `lrimmich config init` to generate one, or `lrimmic
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `album_mode` | `"managed"` \| `"hybrid"` | `"managed"` | `"managed"` means Lightroom fully controls album contents — assets not in the matching collection get removed. `"hybrid"` preserves assets added manually in Immich. See [How It Works](how-it-works#album-modes). |
+| `album_collision` | `"merge"` \| `"prefix"` | `"merge"` | How to handle album name collisions across catalogs. `"merge"` combines collections with the same name into one Immich album. `"prefix"` prepends the catalog filename to each album name to keep them separate. |
 | `album_filter` | `"all"` \| `"flagged"` \| `"unflagged"` \| `"rejected"` | `"all"` | Global album membership filter. |
 | `album_min_rating` | int (0–5) | `0` | Minimum star rating for album membership. 0 disables the filter. |
 | `album_name_format` | string | `"{path}"` | Album naming format. Placeholders: `{path}` (full hierarchy), `{name}` (leaf collection name), `{parent}` (parent set name). |

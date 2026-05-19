@@ -44,7 +44,7 @@ def test_no_args_shows_help() -> None:
 def test_config_show_redacts_key(tmp_path: Path) -> None:
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        "[lightroom]\n"
+        "[[catalogs]]\n"
         'catalog = "/tmp/test.lrcat"\n'
         "[immich]\n"
         'url = "http://localhost"\n'
@@ -82,7 +82,7 @@ def test_config_edit_opens_editor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cfg = tmp_path / "config.toml"
-    cfg.write_text("[lightroom]\n")
+    cfg.write_text("[[catalogs]]\n")
     monkeypatch.setenv("EDITOR", "true")
     monkeypatch.delenv("VISUAL", raising=False)
     result = runner.invoke(app, ["config", "edit", "--config", str(cfg)])
@@ -102,7 +102,7 @@ def test_version_flag() -> None:
 
 
 def test_log_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", tmp_path / "state.db")
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_DIR", tmp_path)
     result = runner.invoke(app, ["log"])
     assert result.exit_code == 0
     assert "No log entries" in result.output
@@ -111,8 +111,8 @@ def test_log_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def test_log_shows_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from lrimmich.clients.state import StateDB
 
-    db_path = tmp_path / "state.db"
-    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    db_path = tmp_path / "state_abc123.db"
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_DIR", tmp_path)
     state = StateDB(db_path)
     state.append_audit_log("sync_albums", "albums", payload={"created": 3})
     state.close()
@@ -127,8 +127,8 @@ def test_log_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     from lrimmich.clients.state import StateDB
 
-    db_path = tmp_path / "state.db"
-    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    db_path = tmp_path / "state_abc123.db"
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_DIR", tmp_path)
     state = StateDB(db_path)
     state.append_audit_log("sync_albums", "albums")
     state.close()
@@ -140,9 +140,9 @@ def test_log_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_reset_deletes_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    db_path = tmp_path / "state.db"
+    db_path = tmp_path / "state_abc123.db"
     db_path.write_text("fake")
-    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_DIR", tmp_path)
     result = runner.invoke(app, ["reset", "--force"])
     assert result.exit_code == 0
     assert "State cleared" in result.output
@@ -150,7 +150,7 @@ def test_reset_deletes_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_reset_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", tmp_path / "nope.db")
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_DIR", tmp_path)
     result = runner.invoke(app, ["reset", "--force"])
     assert result.exit_code == 0
     assert "No state database" in result.output
@@ -159,9 +159,9 @@ def test_reset_no_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def test_reset_prompts_without_force(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    db_path = tmp_path / "state.db"
+    db_path = tmp_path / "state_abc123.db"
     db_path.write_text("fake")
-    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_PATH", db_path)
+    monkeypatch.setattr("lrimmich.commands.DEFAULT_STATE_DIR", tmp_path)
     runner.invoke(app, ["reset"], input="n\n")
     assert db_path.exists()
 
@@ -178,7 +178,7 @@ def test_collections_tree(tmp_path: Path) -> None:
 
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        "[lightroom]\n"
+        "[[catalogs]]\n"
         f'catalog = "{catalog}"\n'
         "[immich]\n"
         'url = "http://localhost"\n'
@@ -207,7 +207,7 @@ def test_collections_json(tmp_path: Path) -> None:
 
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        "[lightroom]\n"
+        "[[catalogs]]\n"
         f'catalog = "{catalog}"\n'
         "[immich]\n"
         'url = "http://localhost"\n'
@@ -224,7 +224,7 @@ def test_collections_json(tmp_path: Path) -> None:
 def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        "[lightroom]\n"
+        "[[catalogs]]\n"
         f'catalog = "{tmp_path / "test.lrcat"}"\n'
         "[immich]\n"
         'url = "http://localhost"\n'
@@ -233,7 +233,7 @@ def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
     )
     summary = SyncSummary()
     summary.errors.append("some error")
-    with patch("lrimmich.app.run_sync", return_value=summary):
+    with patch("lrimmich.app.run_multi_sync", return_value=summary):
         result = runner.invoke(app, ["status", "--config", str(cfg_path), "-q"])
     assert result.exit_code == 1
 
@@ -241,7 +241,7 @@ def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
 def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.toml"
     cfg_path.write_text(
-        "[lightroom]\n"
+        "[[catalogs]]\n"
         f'catalog = "{tmp_path / "test.lrcat"}"\n'
         "[immich]\n"
         'url = "http://localhost"\n'
@@ -253,14 +253,11 @@ def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
     with (
-        patch("lrimmich.app.run_sync", side_effect=RuntimeError("boom")),
+        patch("lrimmich.app.run_multi_sync", side_effect=RuntimeError("boom")),
         patch("lrimmich.app.ImmichClient", mock_cls),
-        patch("lrimmich.app.StateDB") as mock_state_cls,
     ):
-        mock_state = mock_state_cls.return_value
         runner.invoke(app, ["sync", "--config", str(cfg_path)])
         mock_client.__aexit__.assert_called_once()
-        mock_state.close.assert_called_once()
 
 
 def test_docs_launches_browser() -> None:

@@ -61,7 +61,7 @@ class Step:
         return cfg.sync.captions
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> CaptionsPlan:
-        captions = read_captions(ctx.cfg.lightroom.catalog)
+        captions = read_captions(ctx.catalog.catalog)
         to_set, to_clear = plan_captions_sync(captions, ctx.resolved, ctx.state)
         summary.captions = CaptionsResult(set=len(to_set), cleared=len(to_clear))
         return to_set, to_clear

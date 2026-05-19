@@ -72,7 +72,7 @@ class Step:
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
         prefix = ctx.cfg.sync.color_prefix or ""
-        labels = read_color_labels(ctx.cfg.lightroom.catalog)
+        labels = read_color_labels(ctx.catalog.catalog)
         tag_map = await ensure_tags(
             ctx.client,
             await ctx.get_existing_tags(),
