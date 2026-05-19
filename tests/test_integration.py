@@ -29,7 +29,7 @@ def catalog(tmp_path: Path) -> Path:
 def cfg(catalog: Path) -> Config:
     return Config(
         catalogs=[{"catalog": catalog}],
-        immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": ""},
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_paths": [""]},
         cache={"spot_check_pct": 0},
     )
 

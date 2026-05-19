@@ -9,7 +9,7 @@ catalog = "~/Pictures/ClassicLibrary/ClassicLibrary.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "your-api-key-here"
-library_path = "/external/images/raw/"
+library_paths = ["/external/images/raw/"]
 # share_albums_with = ["user-uuid-here"]
 
 [sync]

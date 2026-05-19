@@ -12,7 +12,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 """
 
 
@@ -28,7 +28,7 @@ def test_load_basic(config_file: Path) -> None:
     assert cfg.catalogs[0].catalog == Path("/tmp/test.lrcat")
     assert cfg.immich.url == "http://localhost:2283"
     assert cfg.immich.api_key == "testkey123456"
-    assert cfg.immich.library_path == "/immich/"
+    assert cfg.immich.library_paths == ["/immich/"]
 
 
 def test_missing_api_key(tmp_path: Path) -> None:
@@ -39,7 +39,7 @@ catalog = "/tmp/test.lrcat"
 
 [immich]
 url = "http://localhost:2283"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 """)
     with pytest.raises(SystemExit, match="api_key"):
         load_config(p)
@@ -53,7 +53,7 @@ catalog = "/tmp/test.lrcat"
 
 [immich]
 url = "http://localhost:2283"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 """)
     monkeypatch.setenv("LRIMMICH_API_KEY", "from-env")
     cfg = load_config(p)
@@ -73,7 +73,7 @@ catalog = "/tmp/test.lrcat"
 
 [immich]
 api_key = "k123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 """)
     with pytest.raises(ValidationError, match="url"):
         load_config(p)
@@ -96,7 +96,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [sync]
 scope = "invalid"
@@ -114,7 +114,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 bogus_field = "should be ignored"
 """)
     cfg = load_config(p)
@@ -138,7 +138,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [sync]
 album_mode = "hybrid"
@@ -156,7 +156,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [sync]
 album_mode = "bogus"
@@ -175,7 +175,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [sync]
 album_filter = "{album_filter}"
@@ -193,7 +193,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [sync]
 album_filter = "bogus"
@@ -212,7 +212,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [sync]
 album_min_rating = {rating}
@@ -230,7 +230,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 
 [[album_rules]]
 match = "Reise/*"

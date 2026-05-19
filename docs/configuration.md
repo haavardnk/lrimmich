@@ -37,7 +37,7 @@ exclude_patterns = ["Exports/*"]
 |-----|------|---------|-------------|
 | `url` | string | *required* | Immich server URL, e.g. `http://localhost:2283`. |
 | `api_key` | string | `""` | Immich API key. Can also be set via the `LRIMMICH_API_KEY` environment variable, which takes precedence. Generate one at Immich → Account Settings → API Keys. |
-| `library_path` | string | *required* | External library path where your photos are stored. The folder structure must mirror your Lightroom catalog's folder layout. |
+| `library_paths` | list[string] | *required* | External library paths where your photos are stored. The folder structure must mirror your Lightroom catalog's folder layout. |
 | `share_albums_with` | list[string] | `[]` | Immich user IDs to share every synced album with. |
 
 ## `[sync]`

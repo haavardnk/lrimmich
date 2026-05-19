@@ -13,7 +13,7 @@ def test_watch_missing_catalog(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
         f'[[catalogs]]\ncatalog = "{tmp_path / "missing.lrcat"}"\n'
-        '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_path = "/img"\n'
+        '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_paths = ["/img"]\n'
     )
     result = runner.invoke(app, ["watch", "--config", str(config_path)])
     assert result.exit_code == 1
@@ -26,7 +26,7 @@ def test_watch_runs_sync_on_change(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
         f'[[catalogs]]\ncatalog = "{catalog}"\n'
-        '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_path = "/img"\n'
+        '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_paths = ["/img"]\n'
     )
     fake_changes = iter([{("modified", str(catalog))}])
     with (

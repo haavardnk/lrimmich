@@ -22,7 +22,7 @@ Run `lrimmich config init` to create one, then `lrimmich config edit` to fill in
 
 ### "No assets resolved"
 
-The `library_path` in your config doesn't match the folder structure Immich sees. Check that:
+The `library_paths` in your config doesn't match the folder structure Immich sees. Check that:
 
 - The path matches exactly what Immich shows in Administration → External Libraries
 - The folder hierarchy under that path mirrors your Lightroom catalog's folder layout

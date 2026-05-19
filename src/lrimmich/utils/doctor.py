@@ -71,10 +71,10 @@ async def check_api_permissions(client: ImmichClient) -> CheckResult:
 
 
 async def check_path_mapping(
-    immich_library_path: str,
+    library_paths: list[str],
     catalog: Path,
     client: ImmichClient,
-    strip: str = "",
+    strip: str | None = None,
 ) -> CheckResult:
     try:
         with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
@@ -88,16 +88,17 @@ async def check_path_mapping(
         if not row:
             return CheckResult("path_mapping", False, "No files in catalog")
         relative_path = row["pathFromRoot"] + row["idx_filename"]
-        expected = map_path(relative_path, immich_library_path, strip)
-        expected_folder = expected.rsplit("/", 1)[0]
-        assets = await client.get_folder_assets(expected_folder)
-        for asset in assets:
-            if asset.get("originalPath", "") == expected:
-                return CheckResult("path_mapping", True, f"Verified: {expected}")
+        for lp in library_paths:
+            expected = map_path(relative_path, lp, strip)
+            expected_folder = expected.rsplit("/", 1)[0]
+            assets = await client.get_folder_assets(expected_folder)
+            for asset in assets:
+                if asset.get("originalPath", "") == expected:
+                    return CheckResult("path_mapping", True, f"Verified: {expected}")
         return CheckResult(
             "path_mapping",
             False,
-            f"No asset matched (expected {expected})",
+            "No asset matched for any library path",
         )
     except Exception as e:
         return CheckResult("path_mapping", False, str(e))
@@ -166,7 +167,7 @@ async def run_doctor(
         report.checks.append(check_wal_lock(catalog.catalog))
         report.checks.append(
             await check_path_mapping(
-                cfg.immich.library_path,
+                cfg.immich.library_paths,
                 catalog.catalog,
                 client,
                 catalog.strip,

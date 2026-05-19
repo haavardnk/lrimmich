@@ -39,7 +39,7 @@ class CatalogConfig(BaseConfig):
 class ImmichConfig(BaseConfig):
     url: str
     api_key: str = ""
-    library_path: str
+    library_paths: list[str]
     share_albums_with: list[str] = []
 
 

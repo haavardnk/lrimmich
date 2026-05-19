@@ -100,7 +100,7 @@ async def test_check_path_mapping_pass(catalog: Path, client: ImmichClient) -> N
             json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
-    result = await check_path_mapping("/ext/", catalog, client)
+    result = await check_path_mapping(["/ext/"], catalog, client)
     assert result.ok
 
 
@@ -112,7 +112,7 @@ async def test_check_path_mapping_no_assets(
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(200, json=[]),
     )
-    result = await check_path_mapping("/ext/", catalog, client)
+    result = await check_path_mapping(["/ext/"], catalog, client)
     assert not result.ok
 
 
@@ -123,7 +123,7 @@ async def test_check_path_mapping_empty(catalog: Path) -> None:
     respx.get(f"{API}/view/folder").mock(
         return_value=httpx.Response(200, json=[]),
     )
-    result = await check_path_mapping("", catalog, client)
+    result = await check_path_mapping([""], catalog, client)
     assert not result.ok
 
 
@@ -150,7 +150,7 @@ async def test_run_doctor_all_pass(
     )
     cfg = Config(
         catalogs=[{"catalog": catalog}],
-        immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_paths": ["/ext/"]},
     )
     report = await run_doctor(cfg, client)
     assert report.all_ok
@@ -166,7 +166,7 @@ async def test_run_doctor_partial_fail(
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(401))
     cfg = Config(
         catalogs=[{"catalog": tmp_path / "missing.lrcat"}],
-        immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": "/ext/"},
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_paths": ["/ext/"]},
     )
     report = await run_doctor(cfg, client)
     assert not report.all_ok
@@ -179,7 +179,7 @@ catalog = "/tmp/test.lrcat"
 [immich]
 url = "http://localhost:2283"
 api_key = "testkey123456"
-library_path = "/immich/"
+library_paths = ["/immich/"]
 """
 
 
@@ -234,5 +234,5 @@ async def test_check_path_mapping_with_strip(
             json=[{"id": "a1", "originalPath": "/ext/photos/img.jpg"}],
         )
     )
-    result = await check_path_mapping("/ext/", catalog, client, strip="Root/")
+    result = await check_path_mapping(["/ext/"], catalog, client, strip="Root/")
     assert result.ok

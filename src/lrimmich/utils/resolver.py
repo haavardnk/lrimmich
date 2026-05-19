@@ -10,21 +10,27 @@ from lrimmich.clients.state import StateDB
 CONCURRENCY = 10
 
 
-def map_path(relative_path: str, immich_library_path: str, strip: str = "") -> str:
+def map_path(
+    relative_path: str, immich_library_path: str, strip: str | None = None
+) -> str:
     if strip and relative_path.startswith(strip):
         relative_path = relative_path[len(strip) :]
     return immich_library_path + relative_path
 
 
 async def _build_immich_index(
-    immich_library_path: str,
+    library_paths: list[str],
     client: ImmichClient,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, str]:
     all_folders = await client.get_folder_paths()
-    if immich_library_path:
-        prefix = immich_library_path.rstrip("/")
-        relevant = [f for f in all_folders if f == prefix or f.startswith(prefix + "/")]
+    prefixes = [p.rstrip("/") for p in library_paths if p]
+    if prefixes:
+        relevant = [
+            f
+            for f in all_folders
+            if any(f == px or f.startswith(px + "/") for px in prefixes)
+        ]
     else:
         relevant = all_folders
     index: dict[str, str] = {}
@@ -56,12 +62,12 @@ async def _build_immich_index(
 
 async def resolve_paths(
     relative_paths: set[str],
-    immich_library_path: str,
+    library_paths: list[str],
     client: ImmichClient,
     max_cache_age: int | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     state: StateDB | None = None,
-    strip: str = "",
+    strip: str | None = None,
 ) -> tuple[dict[str, str], set[str]]:
     cached: dict[str, str] = {}
     cache_hits: set[str] = set()
@@ -78,22 +84,24 @@ async def resolve_paths(
         missing = relative_paths
 
     if missing:
-        index = await _build_immich_index(immich_library_path, client, on_progress)
+        index = await _build_immich_index(library_paths, client, on_progress)
         for rp in missing:
-            expected = map_path(rp, immich_library_path, strip)
-            asset_id = index.get(expected)
-            if asset_id:
-                cached[rp] = asset_id
+            for lp in library_paths:
+                expected = map_path(rp, lp, strip)
+                asset_id = index.get(expected)
+                if asset_id:
+                    cached[rp] = asset_id
+                    break
     return cached, cache_hits
 
 
 async def spot_check_cache(
     resolved: dict[str, str],
-    immich_library_path: str,
+    library_paths: list[str],
     client: ImmichClient,
     state: StateDB,
     pct: int = 5,
-    strip: str = "",
+    strip: str | None = None,
 ) -> int:
     if not resolved:
         return 0
@@ -110,8 +118,9 @@ async def spot_check_cache(
         if not asset or asset.get("isTrashed", False):
             invalid.append(rp)
             continue
-        expected = map_path(rp, immich_library_path, strip)
-        if asset.get("originalPath") != expected:
+        actual_path = asset.get("originalPath", "")
+        matched = any(actual_path == map_path(rp, lp, strip) for lp in library_paths)
+        if not matched:
             invalid.append(rp)
     if invalid:
         state.invalidate_cache_entries(invalid)

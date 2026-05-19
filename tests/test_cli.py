@@ -49,7 +49,7 @@ def test_config_show_redacts_key(tmp_path: Path) -> None:
         "[immich]\n"
         'url = "http://localhost"\n'
         'api_key = "secret-key-123"\n'
-        'library_path = "/ext/"\n'
+        'library_paths = ["/ext/"]\n'
     )
     result = runner.invoke(app, ["config", "show", "--config", str(cfg)])
     assert result.exit_code == 0
@@ -183,7 +183,7 @@ def test_collections_tree(tmp_path: Path) -> None:
         "[immich]\n"
         'url = "http://localhost"\n'
         'api_key = "k"\n'
-        'library_path = "/ext/"\n'
+        'library_paths = ["/ext/"]\n'
     )
     result = runner.invoke(app, ["collections", "--config", str(cfg)])
     assert result.exit_code == 0
@@ -212,7 +212,7 @@ def test_collections_json(tmp_path: Path) -> None:
         "[immich]\n"
         'url = "http://localhost"\n'
         'api_key = "k"\n'
-        'library_path = "/ext/"\n'
+        'library_paths = ["/ext/"]\n'
     )
     result = runner.invoke(app, ["collections", "--json", "--config", str(cfg)])
     assert result.exit_code == 0
@@ -229,7 +229,7 @@ def test_status_exits_nonzero_on_errors(tmp_path: Path) -> None:
         "[immich]\n"
         'url = "http://localhost"\n'
         'api_key = "k"\n'
-        'library_path = "/ext/"\n'
+        'library_paths = ["/ext/"]\n'
     )
     summary = SyncSummary()
     summary.errors.append("some error")
@@ -246,7 +246,7 @@ def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
         "[immich]\n"
         'url = "http://localhost"\n'
         'api_key = "k"\n'
-        'library_path = "/ext/"\n'
+        'library_paths = ["/ext/"]\n'
     )
     mock_client = AsyncMock()
     mock_cls = MagicMock(return_value=mock_client)

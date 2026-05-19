@@ -104,7 +104,7 @@ async def run_sync(
         on_status(f"Resolving {len(all_paths)} paths...")
     resolved, cache_hits = await resolve_paths(
         all_paths,
-        cfg.immich.library_path,
+        cfg.immich.library_paths,
         client,
         max_cache_age=None if refresh_cache else cache_ttl,
         on_progress=on_progress,
@@ -119,7 +119,7 @@ async def run_sync(
         cached_subset = {rp: resolved[rp] for rp in cache_hits if rp in resolved}
         invalidated = await spot_check_cache(
             cached_subset,
-            cfg.immich.library_path,
+            cfg.immich.library_paths,
             client,
             state,
             pct=cfg.cache.spot_check_pct,
