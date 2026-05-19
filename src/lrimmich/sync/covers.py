@@ -22,10 +22,11 @@ def plan_covers_sync(
             continue
         desired[ownership["immich_album_id"]] = resolved[rel_path]
     previous = state.get_synced_covers()
+    owned_ids = {a["immich_album_id"] for a in state.get_all_owned_albums()}
     to_set = {
         aid: asset for aid, asset in desired.items() if previous.get(aid) != asset
     }
-    to_clear = [aid for aid in previous if aid not in desired]
+    to_clear = [aid for aid in previous if aid not in desired and aid in owned_ids]
     return to_set, to_clear
 
 

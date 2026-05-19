@@ -77,6 +77,14 @@ def test_plan_skips_unowned(tmp_path: Path) -> None:
     assert to_clear == []
 
 
+def test_plan_skips_clear_for_deleted_album(tmp_path: Path) -> None:
+    state = _state(tmp_path)
+    state.replace_synced_covers({"imm-deleted": "a1"})
+    to_set, to_clear = plan_covers_sync({}, {}, state)
+    assert to_set == {}
+    assert to_clear == []
+
+
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_sets_cover(tmp_path: Path) -> None:
