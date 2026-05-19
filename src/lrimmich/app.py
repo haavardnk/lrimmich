@@ -51,6 +51,9 @@ def _main(
 config_app = typer.Typer(name="config", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 
+albums_app = typer.Typer(name="albums", no_args_is_help=True)
+app.add_typer(albums_app, name="albums")
+
 ConfigOption = Annotated[
     Path | None,
     typer.Option("--config", "-c", help="Config file path."),
@@ -112,6 +115,7 @@ async def _run_with_progress(
     no_delete: bool = False,
     quiet: bool = False,
     refresh_cache: bool = False,
+    adopt_existing: bool = False,
 ) -> tuple[SyncSummary, Config]:
     cfg = load_config(cfg_path)
     async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
@@ -155,6 +159,7 @@ async def _run_with_progress(
                 dry_run=dry_run,
                 force=force,
                 no_delete=no_delete,
+                adopt_existing=adopt_existing,
                 on_confirm=on_confirm if interactive else None,
                 on_progress=on_progress,
                 on_status=on_status,
@@ -172,6 +177,7 @@ def run_with_progress(
     no_delete: bool = False,
     quiet: bool = False,
     refresh_cache: bool = False,
+    adopt_existing: bool = False,
 ) -> tuple[SyncSummary, Config]:
     return asyncio.run(
         _run_with_progress(
@@ -183,5 +189,6 @@ def run_with_progress(
             no_delete,
             quiet,
             refresh_cache,
+            adopt_existing,
         )
     )

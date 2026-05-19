@@ -42,6 +42,7 @@ async def test_dry_run_no_mutations(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "created"})
 
     summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
@@ -62,6 +63,7 @@ async def test_dry_run_no_mutations(
 async def test_json_shape(cfg: Config, client: ImmichClient, state: StateDB) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=[])
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
 
     summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
     d = summary.to_dict()
@@ -76,6 +78,7 @@ async def test_json_shape(cfg: Config, client: ImmichClient, state: StateDB) -> 
 async def test_status_stable(cfg: Config, client: ImmichClient, state: StateDB) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=[])
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
 
     s1 = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
     s2 = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
@@ -90,6 +93,7 @@ async def test_partial_failure(
 ) -> None:
     respx.get(f"{API}/view/folder/unique-paths").respond(json=[])
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
     cfg.sync.albums = True
     cfg.sync.favorites = True
 
@@ -119,9 +123,11 @@ async def test_skip_sync_when_catalog_unchanged(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.get(f"{API}/albums").respond(json=[])
     respx.put(f"{API}/assets").respond(json=[])
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
@@ -144,9 +150,11 @@ async def test_force_ignores_fingerprint(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.get(f"{API}/albums").respond(json=[])
     respx.put(f"{API}/assets").respond(json=[])
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
@@ -158,6 +166,7 @@ async def test_force_ignores_fingerprint(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
 
     await run_sync(cfg, cfg.catalogs[0], client, state, force=True)
 
@@ -174,6 +183,7 @@ async def test_on_confirm_skips_rejected_steps(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
 
     confirmed: list[str] = []
 

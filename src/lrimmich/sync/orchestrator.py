@@ -21,6 +21,7 @@ from lrimmich.sync import (
 )
 from lrimmich.sync.context import SyncContext, SyncStep
 from lrimmich.sync.summary import SyncSummary
+from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.utils.config import CatalogConfig, Config
 from lrimmich.utils.resolver import resolve_paths, spot_check_cache
 
@@ -68,6 +69,7 @@ async def run_sync(
     dry_run: bool = False,
     force: bool = False,
     no_delete: bool = False,
+    adopt_existing: bool = False,
     on_confirm: Callable[[str, str], bool] | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
@@ -129,6 +131,29 @@ async def run_sync(
             logger.info("cache_spot_check", invalidated=invalidated)
 
     state.evict_stale_cache(cache_ttl * 2)
+
+    if cfg.sync.albums:
+        unowned_cols = [
+            c for c in collections if state.get_album_ownership(c.id) is None
+        ]
+        if unowned_cols:
+            candidates = await find_adopt_candidates(unowned_cols, client, state)
+            unowned = [c for c in candidates if not c.conflict]
+            if unowned:
+                if adopt_existing:
+                    if not dry_run:
+                        apply_adopt(unowned, state)
+                    logger.info("adopted_existing", count=len(unowned))
+                else:
+                    names = ", ".join(sorted({c.collection_name for c in unowned})[:5])
+                    more = f" (+{len(unowned) - 5} more)" if len(unowned) > 5 else ""
+                    summary.errors.append(
+                        f"albums: {len(unowned)} Immich album(s) match "
+                        f"collection names but are not tracked: {names}{more}. "
+                        "Run with --adopt-existing to claim them, "
+                        "or `lrimmich adopt --apply` to review."
+                    )
+                    return summary
 
     ctx = SyncContext(
         cfg=cfg,
@@ -193,6 +218,7 @@ async def run_multi_sync(
     dry_run: bool = False,
     force: bool = False,
     no_delete: bool = False,
+    adopt_existing: bool = False,
     on_confirm: Callable[[str, str], bool] | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
@@ -211,6 +237,7 @@ async def run_multi_sync(
                 dry_run=dry_run,
                 force=force,
                 no_delete=no_delete,
+                adopt_existing=adopt_existing,
                 on_confirm=on_confirm,
                 on_progress=on_progress,
                 on_status=on_status,

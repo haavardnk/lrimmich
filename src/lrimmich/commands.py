@@ -19,6 +19,7 @@ from lrimmich.app import (
     JsonOption,
     NoDeleteOption,
     QuietOption,
+    albums_app,
     app,
     config_app,
     print_summary,
@@ -50,6 +51,13 @@ def sync(
         bool,
         typer.Option("--refresh-cache", help="Ignore cached path resolutions."),
     ] = False,
+    adopt_existing: Annotated[
+        bool,
+        typer.Option(
+            "--adopt-existing",
+            help="Auto-adopt Immich albums matching collection names by path.",
+        ),
+    ] = False,
 ) -> None:
     summary, cfg = run_with_progress(
         config,
@@ -60,6 +68,7 @@ def sync(
         no_delete=no_delete,
         quiet=quiet,
         refresh_cache=refresh_cache,
+        adopt_existing=adopt_existing,
     )
     if json_output:
         typer.echo(json.dumps(summary.to_dict(), indent=2))
@@ -282,3 +291,61 @@ def docs() -> None:
     from lrimmich import DOCS_URL
 
     typer.launch(DOCS_URL)
+
+
+@albums_app.command("purge")
+def albums_purge(
+    config: ConfigOption = None,
+    dry_run: DryRunOption = False,
+    force: ForceOption = False,
+) -> None:
+    async def _run() -> int:
+        cfg = load_config(config)
+        deleted = 0
+        async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
+            for catalog in cfg.catalogs:
+                state = StateDB(state_path_for_catalog(catalog.key))
+                try:
+                    owned = state.get_all_owned_albums()
+                    if not owned:
+                        continue
+                    typer.echo(f"\n{catalog.catalog.name}: {len(owned)} owned album(s)")
+                    for a in owned:
+                        typer.echo(f"  {a['last_name']} ({a['immich_album_id']})")
+                    if dry_run:
+                        continue
+                    if not force:
+                        typer.confirm(
+                            f"Delete {len(owned)} album(s) from Immich"
+                            " and clear state?",
+                            abort=True,
+                        )
+                    for a in owned:
+                        try:
+                            await client.delete_album(a["immich_album_id"])
+                        except Exception as e:
+                            typer.echo(
+                                f"  failed to delete {a['immich_album_id']}: {e}",
+                                err=True,
+                            )
+                            continue
+                        state.clear_synced_album_assets(a["immich_album_id"])
+                        state.remove_album_ownership(a["lr_collection_id"])
+                        state.append_audit_log(
+                            "purge_album",
+                            "album",
+                            a["immich_album_id"],
+                            {"name": a["last_name"]},
+                        )
+                        deleted += 1
+                    state.replace_synced_covers({})
+                    state.set_meta("catalog_fingerprint", "")
+                finally:
+                    state.close()
+        return deleted
+
+    deleted = asyncio.run(_run())
+    if dry_run:
+        typer.echo("[dry-run] No changes applied")
+    else:
+        typer.echo(f"Deleted {deleted} album(s)")
