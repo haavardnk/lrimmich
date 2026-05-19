@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
@@ -20,6 +19,7 @@ from lrimmich.clients.state import StateDB
 from lrimmich.sync.orchestrator import run_sync
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config, SyncConfig, load_config
+from lrimmich.utils.logging import configure_logging
 
 
 def _version_callback(value: bool) -> None:
@@ -46,12 +46,7 @@ def _main(
         typer.Option("--verbose", "-v", help="Enable debug logging."),
     ] = False,
 ) -> None:
-    level = logging.DEBUG if verbose else logging.WARNING
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_logging(verbose=verbose)
 
 
 config_app = typer.Typer(name="config", no_args_is_help=True)

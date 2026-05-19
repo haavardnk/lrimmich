@@ -1,10 +1,9 @@
-import logging
-
 import httpx
+import structlog
 
 from lrimmich.sync.summary import SyncSummary
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def send_notification(
@@ -20,5 +19,5 @@ def send_notification(
         resp.raise_for_status()
         return True
     except httpx.HTTPError as exc:
-        logger.warning("Notification to %s failed: %s", url, exc)
+        logger.warning("notification_failed", url=url, error=str(exc))
         return False

@@ -1,9 +1,9 @@
 import asyncio
-import logging
 import threading
 from datetime import datetime
 from typing import Annotated
 
+import structlog
 import typer
 from watchfiles import watch as watch_files
 
@@ -20,7 +20,7 @@ from lrimmich.clients.state import StateDB
 from lrimmich.sync.orchestrator import run_sync
 from lrimmich.utils.config import load_config
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @app.command()
@@ -86,7 +86,9 @@ def watch(
                 failures = 0
             except Exception:
                 failures += 1
-                logger.exception("Sync error (failure %d/%d)", failures, MAX_FAILURES)
+                logger.exception(
+                    "sync_error", failure=failures, max_failures=MAX_FAILURES
+                )
                 _log(f"Sync failed ({failures}/{MAX_FAILURES})")
                 if failures >= MAX_FAILURES:
                     typer.echo(

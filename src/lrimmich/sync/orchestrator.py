@@ -1,6 +1,7 @@
-import logging
 from collections.abc import Callable
 from typing import Any
+
+import structlog
 
 from lrimmich.clients.catalog import read_catalog_fingerprint, read_collections
 from lrimmich.clients.immich import ImmichClient
@@ -21,7 +22,7 @@ from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import resolve_paths
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 STEPS: list[SyncStep[Any]] = [
     albums.Step(),
@@ -67,7 +68,7 @@ async def run_sync(
         and last_fingerprint
         and fingerprint == last_fingerprint
     ):
-        logger.debug("Catalog unchanged (fingerprint=%s), skipping sync", fingerprint)
+        logger.debug("catalog_unchanged", fingerprint=fingerprint)
         return summary
 
     all_paths: set[str] = set()
@@ -103,7 +104,7 @@ async def run_sync(
     for step in STEPS:
         if not step.enabled(cfg):
             continue
-        logger.debug("Running step: %s", step.name)
+        logger.debug("step_start", step=step.name)
         if on_status:
             on_status(step.status_msg)
         try:
@@ -111,7 +112,7 @@ async def run_sync(
             if not dry_run:
                 await step.apply(plan, ctx)
         except Exception as e:
-            logger.exception("Step %s failed", step.name)
+            logger.exception("step_failed", step=step.name)
             summary.errors.append(f"{step.name}: {e}")
 
     if not dry_run and not summary.errors:
