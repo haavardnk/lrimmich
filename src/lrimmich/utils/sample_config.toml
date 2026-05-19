@@ -10,7 +10,6 @@ catalog = "~/Pictures/ClassicLibrary/ClassicLibrary.lrcat"
 url = "http://localhost:2283"
 api_key = "your-api-key-here"
 library_paths = ["/external/images/raw/"]
-# share_albums_with = ["user-uuid-here"]
 
 [sync]
 albums = true
@@ -20,22 +19,25 @@ tags = true
 captions = true
 rejects = false
 stacks = false
-skip_empty = true
 scope = "collections"
 album_mode = "managed"
 album_collision = "merge"
 album_filter = "all"
 album_min_rating = 0
 # album_name_format = "{path}"
+skip_empty = true
+# share_albums_with = ["user-uuid-here"]
 # keyword_prefix = "lr:keyword:"
 # color_prefix = "lr:color:"
 
 # [[album_rules]]
 # match = "Reise/*"
+# id = 1234567
 # filter = "flagged"
 # min_rating = 3
 # description = "Travel photos from trips"
 # order = "desc"
+# share_with = ["user-uuid-here"]
 
 [cache]
 # ttl_days = 90

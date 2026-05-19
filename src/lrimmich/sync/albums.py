@@ -67,6 +67,7 @@ class AlbumRuleResult:
     min_rating: int
     description: str | None
     order: AssetOrder | None
+    share_with: list[str] | None
 
 
 def resolve_album_rule(
@@ -86,12 +87,14 @@ def resolve_album_rule(
                 else album_min_rating,
                 description=rule.description,
                 order=rule.order,
+                share_with=rule.share_with,
             )
     return AlbumRuleResult(
         filter=album_filter,
         min_rating=album_min_rating,
         description=None,
         order=None,
+        share_with=None,
     )
 
 
@@ -148,6 +151,7 @@ async def _plan_collection(
     rule = resolve_album_rule(
         collection, ctx.album_filter, ctx.album_min_rating, ctx.album_rules
     )
+    effective_share = rule.share_with if rule.share_with is not None else ctx.share_with
     asset_ids = _filtered_asset_ids(
         collection,
         ctx.resolved,
@@ -175,13 +179,13 @@ async def _plan_collection(
                 order=rule.order,
             )
         )
-        if ctx.share_with:
+        if effective_share:
             actions.append(
                 AlbumAction(
                     kind="share",
                     lr_collection_id=collection.id,
                     album_name=album_name,
-                    user_ids=list(ctx.share_with),
+                    user_ids=list(effective_share),
                 )
             )
         return actions, False
@@ -227,9 +231,11 @@ async def _plan_collection(
         await _plan_diff(collection, ctx, immich_album_id, album_name, asset_ids)
     )
 
-    if ctx.share_with:
+    if effective_share:
         actions.extend(
-            _plan_share(ctx, immich_album_id, album_name, collection.id, all_albums)
+            _plan_share(
+                effective_share, immich_album_id, album_name, collection.id, all_albums
+            )
         )
 
     return actions, False
@@ -302,7 +308,7 @@ async def _plan_diff(
 
 
 def _plan_share(
-    ctx: AlbumPlanContext,
+    share_with: list[str],
     immich_album_id: str,
     album_name: str,
     lr_collection_id: int,
@@ -310,7 +316,7 @@ def _plan_share(
 ) -> list[AlbumAction]:
     album_summary = all_albums.get(immich_album_id, {})
     shared_ids = {u["user"]["id"] for u in album_summary.get("albumUsers", [])}
-    unshared = [uid for uid in ctx.share_with if uid not in shared_ids]
+    unshared = [uid for uid in share_with if uid not in shared_ids]
     if not unshared:
         return []
     return [
@@ -381,9 +387,8 @@ async def plan_album_sync(
         rated_paths=rated_paths or {},
     )
 
-    all_albums = (
-        {a["id"]: a for a in await client.get_albums()} if ctx.share_with else {}
-    )
+    needs_share = bool(ctx.share_with) or any(r.share_with for r in ctx.album_rules)
+    all_albums = {a["id"]: a for a in await client.get_albums()} if needs_share else {}
 
     actions: list[AlbumAction] = []
     lr_ids = {c.id for c in collections}
@@ -612,7 +617,7 @@ class Step:
             rated_paths=ctx.get_rated() if needs_rated else None,
             rejected_paths=ctx.get_rejected() if needs_rejected else None,
             safety=ctx.cfg.safety,
-            share_with=ctx.cfg.immich.share_albums_with,
+            share_with=ctx.cfg.sync.share_albums_with,
             skip_empty=ctx.cfg.sync.skip_empty,
         )
         counts = count_album_actions(actions)

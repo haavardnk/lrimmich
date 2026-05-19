@@ -180,8 +180,8 @@ def config_show(
     config: ConfigOption = None,
 ) -> None:
     cfg = load_config(config)
-    data = cfg.model_dump(mode="json")
-    data["immich"]["api_key"] = "***"
+    data = cfg.model_dump(mode="json", exclude_none=True)
+    data.setdefault("immich", {})["api_key"] = "***"
     typer.echo(tomli_w.dumps(data))
 
 

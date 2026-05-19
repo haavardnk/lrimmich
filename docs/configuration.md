@@ -15,7 +15,7 @@ Each `[[catalogs]]` entry defines a Lightroom catalog to sync. Add multiple entr
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `catalog` | string | *required* | Path to your `.lrcat` file. Tilde expansion is supported. |
-| `strip` | string | `""` | Prefix to strip from Lightroom-relative paths before matching against Immich. Useful when your Lightroom folder structure has a prefix that doesn't exist in the external library mount. |
+| `strip` | string \| null | `null` | Prefix to strip from Lightroom-relative paths before matching against Immich. Useful when your Lightroom folder structure has a prefix that doesn't exist in the external library mount. |
 | `exclude_collections` | list[int] | `[]` | Collection or collection set IDs to skip. Find IDs via `lrimmich collections`. |
 | `exclude_patterns` | list[string] | `[]` | Glob patterns matched against the full collection path, e.g. `"Exports/*"` or `"*/WIP"`. |
 
@@ -38,7 +38,6 @@ exclude_patterns = ["Exports/*"]
 | `url` | string | *required* | Immich server URL, e.g. `http://localhost:2283`. |
 | `api_key` | string | `""` | Immich API key. Can also be set via the `LRIMMICH_API_KEY` environment variable, which takes precedence. Generate one at Immich → Account Settings → API Keys. |
 | `library_paths` | list[string] | *required* | External library paths where your photos are stored. The folder structure must mirror your Lightroom catalog's folder layout. |
-| `share_albums_with` | list[string] | `[]` | Immich user IDs to share every synced album with. |
 
 ## `[sync]`
 
@@ -75,8 +74,9 @@ exclude_patterns = ["Exports/*"]
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `keyword_prefix` | string | `"lr:keyword:"` | Prefix for synced keyword tags. |
-| `color_prefix` | string | `"lr:color:"` | Prefix for synced color label tags. |
+| `keyword_prefix` | string \| null | `"lr:keyword:"` | Prefix for synced keyword tags. Set to `null` to sync without a prefix. |
+| `color_prefix` | string \| null | `"lr:color:"` | Prefix for synced color label tags. Set to `null` to sync without a prefix. |
+| `share_albums_with` | list[string] | `[]` | Immich user IDs to share every synced album with. Overridable per album rule. |
 
 ## `[cache]`
 
@@ -91,12 +91,13 @@ Per-collection overrides for album membership. First matching rule wins.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `match` | string | `""` | Glob pattern matched against the collection path, e.g. `"Travel/*"`. |
+| `match` | string \| null | `null` | Glob pattern matched against the collection path, e.g. `"Travel/*"`. |
 | `id` | int \| null | `null` | Match a specific collection by ID instead of path. |
 | `filter` | string \| null | `null` | Override `album_filter` for matched collections. |
 | `min_rating` | int \| null | `null` | Override `album_min_rating` for matched collections. |
 | `description` | string \| null | `null` | Set the Immich album description. |
 | `order` | `"asc"` \| `"desc"` \| null | `null` | Asset sort order within the album. |
+| `share_with` | list[string] \| null | `null` | Override `share_albums_with` for matched collections. |
 
 Example:
 
@@ -125,4 +126,4 @@ filter = "unflagged"
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `url` | string | `""` | Webhook URL to POST sync summaries to. Leave empty to disable. Compatible with ntfy, Apprise, or any service that accepts a JSON POST. |
+| `url` | string \| null | `null` | Webhook URL to POST sync summaries to. Leave empty to disable. Compatible with ntfy, Apprise, or any service that accepts a JSON POST. |

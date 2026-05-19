@@ -22,7 +22,7 @@ class BaseConfig(BaseModel):
 
 class CatalogConfig(BaseConfig):
     catalog: Path
-    strip: str = ""
+    strip: str | None = None
     exclude_collections: list[int] = []
     exclude_patterns: list[str] = []
 
@@ -40,7 +40,6 @@ class ImmichConfig(BaseConfig):
     url: str
     api_key: str = ""
     library_paths: list[str]
-    share_albums_with: list[str] = []
 
 
 class SyncConfig(BaseConfig):
@@ -52,23 +51,25 @@ class SyncConfig(BaseConfig):
     rejects: bool = False
     stacks: bool = False
     scope: SyncScope = "collections"
-    skip_empty: bool = True
     album_mode: AlbumMode = "managed"
     album_collision: AlbumCollision = "merge"
     album_filter: AlbumFilter = "all"
     album_min_rating: int = Field(default=0, ge=0, le=5)
     album_name_format: str = "{path}"
+    skip_empty: bool = True
+    share_albums_with: list[str] = []
     keyword_prefix: str | None = "lr:keyword:"
     color_prefix: str | None = "lr:color:"
 
 
 class AlbumRule(BaseConfig):
-    match: str = ""
+    match: str | None = None
     id: int | None = None
     filter: AlbumFilter | None = None
     min_rating: int | None = Field(default=None, ge=0, le=5)
     description: str | None = None
     order: AssetOrder | None = None
+    share_with: list[str] | None = None
 
 
 class SafetyConfig(BaseConfig):
@@ -83,7 +84,7 @@ class CacheConfig(BaseConfig):
 
 
 class NotificationConfig(BaseConfig):
-    url: str = ""
+    url: str | None = None
 
 
 class Config(BaseConfig):

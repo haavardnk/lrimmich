@@ -247,3 +247,5 @@ min_rating = 3
     assert cfg.album_rules[1].id == 123
     assert cfg.album_rules[1].min_rating == 3
 
+
+
