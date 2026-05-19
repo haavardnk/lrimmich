@@ -168,3 +168,19 @@ class ImmichClient:
 
     async def get_folder_assets(self, path: str) -> list[dict[str, Any]]:
         return await self._request("GET", "/view/folder", params={"path": path}) or []
+
+    async def get_stacks(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "/stacks") or []
+
+    async def create_stack(self, asset_ids: list[str]) -> dict[str, Any]:
+        return await self._request("POST", "/stacks", {"assetIds": asset_ids})
+
+    async def update_stack(
+        self, stack_id: str, primary_asset_id: str
+    ) -> dict[str, Any]:
+        return await self._request(
+            "PUT", f"/stacks/{stack_id}", {"primaryAssetId": primary_asset_id}
+        )
+
+    async def delete_stack(self, stack_id: str) -> None:
+        await self._request("DELETE", f"/stacks/{stack_id}")

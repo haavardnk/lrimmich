@@ -1,6 +1,7 @@
 import sqlite3
 from collections import defaultdict
 from contextlib import closing
+from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -262,3 +263,32 @@ def _read_keywords_inner(conn: sqlite3.Connection) -> dict[str, list[str]]:
         result.setdefault(path, []).append(hierarchy)
 
     return result
+
+
+@dataclass
+class LrStack:
+    stack_id: int
+    paths: list[str]
+
+
+def read_stacks(catalog: Path) -> list[LrStack]:
+    with closing(_connect(catalog)) as conn:
+        rows = conn.execute("""
+            SELECT ai.stack, af.pathFromRoot || lf.idx_filename AS path,
+                   ai.stackPosition
+            FROM Adobe_images ai
+            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
+            JOIN AgLibraryFolder af ON lf.folder = af.id_local
+            WHERE ai.stack IS NOT NULL
+            ORDER BY ai.stack, ai.stackPosition
+        """).fetchall()
+
+    groups: dict[int, list[str]] = {}
+    for r in rows:
+        groups.setdefault(r["stack"], []).append(r["path"])
+
+    return [
+        LrStack(stack_id=sid, paths=paths)
+        for sid, paths in groups.items()
+        if len(paths) >= 2
+    ]

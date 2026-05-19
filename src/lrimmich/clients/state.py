@@ -128,6 +128,13 @@ class StateDB:
     def set_meta(self, key: str, value: str) -> None:
         self._set_meta(key, value)
 
+    def get_meta_prefix(self, prefix: str) -> dict[str, str]:
+        rows = self._conn.execute(
+            "SELECT key, value FROM meta WHERE key LIKE ? || '%'",
+            (prefix,),
+        ).fetchall()
+        return {r["key"]: r["value"] for r in rows if r["value"]}
+
     def get_cached_asset(self, relative_path: str) -> str | None:
         row = self._conn.execute(
             "SELECT asset_id FROM path_cache WHERE relative_path = ?",

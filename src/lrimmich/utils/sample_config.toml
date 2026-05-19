@@ -29,6 +29,8 @@ ratings = true
 tags = true
 captions = true
 rejects = false
+# Sync Lightroom stacks to Immich stacks (first image becomes primary)
+stacks = false
 # Skip creating albums for collections with no resolved assets
 skip_empty = true
 # "collections" = only sync metadata for assets in synced collections

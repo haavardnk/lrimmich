@@ -43,6 +43,13 @@ class CaptionsResult:
 
 
 @dataclass
+class StacksResult:
+    created: int = 0
+    updated: int = 0
+    deleted: int = 0
+
+
+@dataclass
 class SyncSummary:
     albums_created: int = 0
     albums_renamed: int = 0
@@ -56,6 +63,7 @@ class SyncSummary:
     keywords: KeywordsResult = field(default_factory=KeywordsResult)
     captions: CaptionsResult = field(default_factory=CaptionsResult)
     covers: CoversResult = field(default_factory=CoversResult)
+    stacks: StacksResult = field(default_factory=StacksResult)
     errors: list[str] = field(default_factory=list)
 
     @property

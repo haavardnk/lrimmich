@@ -47,6 +47,7 @@ class SyncConfig(BaseConfig):
     tags: bool = True
     captions: bool = True
     rejects: bool = False
+    stacks: bool = False
     skip_empty: bool = True
     scope: SyncScope = "collections"
     album_mode: AlbumMode = "managed"

@@ -98,6 +98,12 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
         typer.echo(f"keywords: +{summary.keywords.tagged} -{summary.keywords.untagged}")
     if sync.captions:
         typer.echo(f"captions: +{summary.captions.set} -{summary.captions.cleared}")
+    if sync.stacks:
+        typer.echo(
+            f"stacks: +{summary.stacks.created} "
+            f"~{summary.stacks.updated} "
+            f"-{summary.stacks.deleted}"
+        )
 
 
 async def _run_with_progress(

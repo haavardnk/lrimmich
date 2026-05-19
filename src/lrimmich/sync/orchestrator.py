@@ -14,6 +14,7 @@ from lrimmich.sync import (
     keywords,
     ratings,
     rejects,
+    stacks,
 )
 from lrimmich.sync.context import SyncContext, SyncStep
 from lrimmich.sync.summary import SyncSummary
@@ -31,6 +32,7 @@ STEPS: list[SyncStep[Any]] = [
     color_labels.Step(),
     keywords.Step(),
     captions.Step(),
+    stacks.Step(),
 ]
 
 
