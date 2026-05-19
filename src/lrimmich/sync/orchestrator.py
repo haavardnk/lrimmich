@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from typing import Any
 
@@ -24,9 +25,12 @@ from lrimmich.utils.resolver import resolve_paths, spot_check_cache
 
 logger = structlog.get_logger(__name__)
 
-STEPS: list[SyncStep[Any]] = [
+SERIAL_STEPS: list[SyncStep[Any]] = [
     albums.Step(),
     covers.Step(),
+]
+
+PARALLEL_STEPS: list[SyncStep[Any]] = [
     favorites.Step(),
     ratings.Step(),
     rejects.Step(),
@@ -37,6 +41,22 @@ STEPS: list[SyncStep[Any]] = [
 ]
 
 DAY_SECONDS: int = 86_400
+
+
+async def _run_step(
+    step: SyncStep[Any],
+    ctx: SyncContext,
+    summary: SyncSummary,
+    dry_run: bool,
+) -> None:
+    logger.debug("step_start", step=step.name)
+    try:
+        plan = await step.plan(ctx, summary)
+        if not dry_run:
+            await step.apply(plan, ctx)
+    except Exception as e:
+        logger.exception("step_failed", step=step.name)
+        summary.errors.append(f"{step.name}: {e}")
 
 
 async def run_sync(
@@ -117,7 +137,7 @@ async def run_sync(
         no_delete=no_delete,
     )
 
-    for step in STEPS:
+    for step in SERIAL_STEPS:
         if not step.enabled(cfg):
             continue
         logger.debug("step_start", step=step.name)
@@ -132,6 +152,30 @@ async def run_sync(
         except Exception as e:
             logger.exception("step_failed", step=step.name)
             summary.errors.append(f"{step.name}: {e}")
+
+    enabled_parallel = [s for s in PARALLEL_STEPS if s.enabled(cfg)]
+    if enabled_parallel:
+        if on_confirm:
+            for step in enabled_parallel:
+                logger.debug("step_start", step=step.name)
+                if on_status:
+                    on_status(step.status_msg)
+                try:
+                    plan = await step.plan(ctx, summary)
+                    if not dry_run:
+                        if not on_confirm(step.name, step.status_msg):
+                            continue
+                        await step.apply(plan, ctx)
+                except Exception as e:
+                    logger.exception("step_failed", step=step.name)
+                    summary.errors.append(f"{step.name}: {e}")
+        else:
+            if on_status:
+                on_status("Syncing metadata...")
+            await asyncio.gather(*(
+                _run_step(step, ctx, summary, dry_run)
+                for step in enabled_parallel
+            ))
 
     if not dry_run and not summary.errors:
         state.set_meta("catalog_fingerprint", fingerprint)

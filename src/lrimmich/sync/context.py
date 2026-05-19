@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
@@ -41,6 +42,7 @@ class SyncContext:
     _rejected: set[str] | None = field(default=None, repr=False)
     _rated: dict[str, int] | None = field(default=None, repr=False)
     _existing_tags: list[dict[str, Any]] | None = field(default=None, repr=False)
+    _tags_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     def get_flagged(self) -> set[str]:
         if self._flagged is None:
@@ -58,6 +60,7 @@ class SyncContext:
         return self._rated
 
     async def get_existing_tags(self) -> list[dict[str, Any]]:
-        if self._existing_tags is None:
-            self._existing_tags = await self.client.get_tags()
-        return self._existing_tags
+        async with self._tags_lock:
+            if self._existing_tags is None:
+                self._existing_tags = await self.client.get_tags()
+            return self._existing_tags
