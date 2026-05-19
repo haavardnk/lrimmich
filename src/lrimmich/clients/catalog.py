@@ -6,6 +6,27 @@ from fnmatch import fnmatch
 from hashlib import sha256
 from pathlib import Path
 
+from lrimmich.clients.queries import (
+    CAPTIONS,
+    CHANGED_PATHS,
+    COLLECTION_COVERS,
+    COLLECTION_FILES,
+    COLLECTION_IMAGE_COUNT,
+    COLLECTION_TREE,
+    COLLECTIONS_ALL,
+    COLLECTIONS_VISIBLE,
+    COLOR_LABELS,
+    FINGERPRINT_COUNTS,
+    FLAGGED_IMAGES,
+    KEYWORD_IMAGES,
+    KEYWORDS_TREE,
+    MAX_TOUCH_TIME,
+    RATED_IMAGES,
+    REJECTED_IMAGES,
+    STACKS,
+    LrSchema,
+    detect_schema,
+)
 from lrimmich.utils.config import BaseConfig, ExcludeConfig
 
 
@@ -30,9 +51,14 @@ def _connect(catalog: Path) -> sqlite3.Connection:
     return conn
 
 
+def _detect(catalog: Path) -> LrSchema:
+    with closing(_connect(catalog)) as conn:
+        return detect_schema(conn)
+
+
 def _walk_ancestors(
     node_id: int,
-    tree: dict[int, tuple[str, int | None]],
+    tree: dict[int, tuple[str | None, int | None]],
 ) -> str:
     parts: list[str] = []
     current: int | None = node_id
@@ -54,13 +80,9 @@ def read_collections(
 
 def read_collection_tree(catalog: Path) -> list[LrCollectionTreeNode]:
     with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT id_local, name, parent, creationId
-            FROM AgLibraryCollection
-            WHERE systemOnly != '1.0'
-        """).fetchall()
+        rows = conn.execute(COLLECTION_TREE).fetchall()
 
-    all_items: dict[int, tuple[str, int | None]] = {
+    all_items: dict[int, tuple[str | None, int | None]] = {
         r["id_local"]: (r["name"], r["parent"]) for r in rows
     }
 
@@ -96,10 +118,8 @@ def _read_collections_inner(
     conn: sqlite3.Connection,
     exclude: ExcludeConfig | None,
 ) -> list[LrCollection]:
-    all_rows = conn.execute(
-        "SELECT id_local, name, parent FROM AgLibraryCollection"
-    ).fetchall()
-    tree: dict[int, tuple[str, int | None]] = {
+    all_rows = conn.execute(COLLECTIONS_ALL).fetchall()
+    tree: dict[int, tuple[str | None, int | None]] = {
         r["id_local"]: (r["name"], r["parent"]) for r in all_rows
     }
 
@@ -114,12 +134,7 @@ def _read_collections_inner(
             current = tree[current][1]
         return False
 
-    rows = conn.execute("""
-        SELECT id_local, name, parent
-        FROM AgLibraryCollection
-        WHERE creationId = 'com.adobe.ag.library.collection'
-          AND systemOnly != '1.0'
-    """).fetchall()
+    rows = conn.execute(COLLECTIONS_VISIBLE).fetchall()
 
     kept_rows: list[tuple[sqlite3.Row, str]] = []
     for row in rows:
@@ -137,14 +152,7 @@ def _read_collections_inner(
     if collection_ids:
         placeholders = ",".join("?" * len(collection_ids))
         file_rows = conn.execute(
-            f"""
-            SELECT ci.collection, af.pathFromRoot, lf.idx_filename
-            FROM AgLibraryCollectionImage ci
-            JOIN Adobe_images ai ON ci.image = ai.id_local
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ci.collection IN ({placeholders})
-            """,
+            COLLECTION_FILES.format(placeholders=placeholders),
             collection_ids,
         ).fetchall()
         for f in file_rows:
@@ -165,16 +173,7 @@ def _read_collections_inner(
 
 def read_collection_covers(catalog: Path) -> dict[int, str]:
     with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT ci.collection,
-                   af.pathFromRoot || lf.idx_filename AS path,
-                   COALESCE(ai.rating, 0) AS rating,
-                   COALESCE(ai.pick, 0) AS pick
-            FROM AgLibraryCollectionImage ci
-            JOIN Adobe_images ai ON ci.image = ai.id_local
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-        """).fetchall()
+        rows = conn.execute(COLLECTION_COVERS).fetchall()
 
         best: dict[int, tuple[str, int, int]] = {}
         for r in rows:
@@ -194,45 +193,33 @@ def read_collection_covers(catalog: Path) -> dict[int, str]:
         return result
 
 
-def _image_query(
-    catalog: Path,
-    extra_cols: str,
-    where: str,
-) -> list[sqlite3.Row]:
+def _query_rows(catalog: Path, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     with closing(_connect(catalog)) as conn:
-        return conn.execute(f"""
-            SELECT af.pathFromRoot, lf.idx_filename{extra_cols}
-            FROM Adobe_images ai
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE {where}
-        """).fetchall()
+        return conn.execute(sql, params).fetchall()
 
 
 def read_flagged_images(catalog: Path) -> set[str]:
-    rows = _image_query(catalog, "", "ai.pick = 1")
+    rows = _query_rows(catalog, FLAGGED_IMAGES)
     return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
 
 
 def read_rejected_images(catalog: Path) -> set[str]:
-    rows = _image_query(catalog, "", "ai.pick = -1")
+    rows = _query_rows(catalog, REJECTED_IMAGES)
     return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
 
 
 def read_rated_images(catalog: Path) -> dict[str, int]:
-    rows = _image_query(catalog, ", ai.rating", "ai.rating > 0")
+    rows = _query_rows(catalog, RATED_IMAGES)
     return {r["pathFromRoot"] + r["idx_filename"]: r["rating"] for r in rows}
 
 
 def read_color_labels(catalog: Path) -> dict[str, str]:
-    rows = _image_query(catalog, ", ai.colorLabels", "ai.colorLabels != ''")
+    rows = _query_rows(catalog, COLOR_LABELS)
     return {r["pathFromRoot"] + r["idx_filename"]: r["colorLabels"] for r in rows}
 
 
 def read_captions(catalog: Path) -> dict[str, str]:
-    rows = _image_query(
-        catalog, ", ai.caption", "ai.caption IS NOT NULL AND ai.caption != ''"
-    )
+    rows = _query_rows(catalog, CAPTIONS)
     return {r["pathFromRoot"] + r["idx_filename"]: r["caption"] for r in rows}
 
 
@@ -242,20 +229,12 @@ def read_keywords(catalog: Path) -> dict[str, list[str]]:
 
 
 def _read_keywords_inner(conn: sqlite3.Connection) -> dict[str, list[str]]:
-    kw_rows = conn.execute(
-        "SELECT id_local, name, parent FROM AgLibraryKeyword"
-    ).fetchall()
-    tree: dict[int, tuple[str, int | None]] = {
+    kw_rows = conn.execute(KEYWORDS_TREE).fetchall()
+    tree: dict[int, tuple[str | None, int | None]] = {
         r["id_local"]: (r["name"], r["parent"]) for r in kw_rows
     }
 
-    rows = conn.execute("""
-        SELECT af.pathFromRoot, lf.idx_filename, ki.tag
-        FROM AgLibraryKeywordImage ki
-        JOIN Adobe_images ai ON ki.image = ai.id_local
-        JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-        JOIN AgLibraryFolder af ON lf.folder = af.id_local
-    """).fetchall()
+    rows = conn.execute(KEYWORD_IMAGES).fetchall()
 
     result: dict[str, list[str]] = {}
     for r in rows:
@@ -274,15 +253,7 @@ class LrStack:
 
 def read_stacks(catalog: Path) -> list[LrStack]:
     with closing(_connect(catalog)) as conn:
-        rows = conn.execute("""
-            SELECT ai.stack, af.pathFromRoot || lf.idx_filename AS path,
-                   ai.stackPosition
-            FROM Adobe_images ai
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ai.stack IS NOT NULL
-            ORDER BY ai.stack, ai.stackPosition
-        """).fetchall()
+        rows = conn.execute(STACKS).fetchall()
 
     groups: dict[int, list[str]] = {}
     for r in rows:
@@ -297,34 +268,17 @@ def read_stacks(catalog: Path) -> list[LrStack]:
 
 def read_catalog_fingerprint(catalog: Path) -> str:
     with closing(_connect(catalog)) as conn:
-        row = conn.execute("""
-            SELECT MAX(touchTime) AS max_touch,
-                   COUNT(*) AS img_count
-            FROM Adobe_images
-        """).fetchone()
-        col_row = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM AgLibraryCollectionImage"
-        ).fetchone()
+        row = conn.execute(FINGERPRINT_COUNTS).fetchone()
+        col_row = conn.execute(COLLECTION_IMAGE_COUNT).fetchone()
     parts = f"{row['max_touch']}:{row['img_count']}:{col_row['cnt']}"
     return sha256(parts.encode()).hexdigest()[:16]
 
 
 def read_changed_paths(catalog: Path, since_touch_time: float) -> set[str]:
-    with closing(_connect(catalog)) as conn:
-        rows = conn.execute(
-            """
-            SELECT af.pathFromRoot || lf.idx_filename AS path
-            FROM Adobe_images ai
-            JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
-            JOIN AgLibraryFolder af ON lf.folder = af.id_local
-            WHERE ai.touchTime > ?
-            """,
-            (since_touch_time,),
-        ).fetchall()
+    rows = _query_rows(catalog, CHANGED_PATHS, (since_touch_time,))
     return {r["path"] for r in rows}
 
 
 def read_max_touch_time(catalog: Path) -> float:
-    with closing(_connect(catalog)) as conn:
-        row = conn.execute("SELECT MAX(touchTime) AS mt FROM Adobe_images").fetchone()
-    return row["mt"] or 0.0
+    rows = _query_rows(catalog, MAX_TOUCH_TIME)
+    return rows[0]["mt"] or 0.0 if rows else 0.0
