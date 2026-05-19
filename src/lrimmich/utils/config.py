@@ -54,8 +54,8 @@ class SyncConfig(BaseConfig):
     album_filter: AlbumFilter = "all"
     album_min_rating: int = Field(default=0, ge=0, le=5)
     album_name_format: str = "{path}"
-    keyword_prefix: str = "lr:keyword:"
-    color_prefix: str = "lr:color:"
+    keyword_prefix: str | None = "lr:keyword:"
+    color_prefix: str | None = "lr:color:"
 
 
 class AlbumRule(BaseConfig):

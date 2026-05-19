@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Any
 
 import structlog
@@ -82,14 +83,16 @@ async def run_sync(
     collections = read_collections(cfg.lightroom.catalog, cfg.exclude)
 
     fingerprint = read_catalog_fingerprint(cfg.lightroom.catalog)
+    config_hash = sha256(cfg.model_dump_json().encode()).hexdigest()[:16]
+    combined_fingerprint = f"{fingerprint}:{config_hash}"
     last_fingerprint = state.get_meta("catalog_fingerprint")
     if (
         not force
         and not refresh_cache
         and last_fingerprint
-        and fingerprint == last_fingerprint
+        and combined_fingerprint == last_fingerprint
     ):
-        logger.debug("catalog_unchanged", fingerprint=fingerprint)
+        logger.debug("catalog_unchanged", fingerprint=combined_fingerprint)
         return summary
 
     all_paths: set[str] = set()
@@ -172,12 +175,11 @@ async def run_sync(
         else:
             if on_status:
                 on_status("Syncing metadata...")
-            await asyncio.gather(*(
-                _run_step(step, ctx, summary, dry_run)
-                for step in enabled_parallel
-            ))
+            await asyncio.gather(
+                *(_run_step(step, ctx, summary, dry_run) for step in enabled_parallel)
+            )
 
     if not dry_run and not summary.errors:
-        state.set_meta("catalog_fingerprint", fingerprint)
+        state.set_meta("catalog_fingerprint", combined_fingerprint)
 
     return summary

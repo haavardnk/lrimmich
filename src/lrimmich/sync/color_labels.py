@@ -71,7 +71,7 @@ class Step:
         return cfg.sync.tags
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
-        prefix = ctx.cfg.sync.color_prefix
+        prefix = ctx.cfg.sync.color_prefix or ""
         labels = read_color_labels(ctx.cfg.lightroom.catalog)
         tag_map = await ensure_tags(
             ctx.client,
