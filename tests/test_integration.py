@@ -30,6 +30,7 @@ def cfg(catalog: Path) -> Config:
     return Config(
         lightroom={"catalog": catalog},
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_path": ""},
+        cache={"spot_check_pct": 0},
     )
 
 

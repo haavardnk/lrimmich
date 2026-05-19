@@ -186,6 +186,23 @@ class StateDB:
     def clear_path_cache(self) -> None:
         self._conn.execute("DELETE FROM path_cache")
 
+    def evict_stale_cache(self, max_age: int) -> int:
+        cutoff = int(time.time()) - max_age
+        cursor = self._conn.execute(
+            "DELETE FROM path_cache WHERE last_verified_at < ?",
+            (cutoff,),
+        )
+        return cursor.rowcount
+
+    def invalidate_cache_entries(self, relative_paths: list[str]) -> None:
+        if not relative_paths:
+            return
+        with self.transaction():
+            self._conn.executemany(
+                "DELETE FROM path_cache WHERE relative_path = ?",
+                [(rp,) for rp in relative_paths],
+            )
+
     def get_album_ownership(self, lr_collection_id: int) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT * FROM album_ownership WHERE lr_collection_id = ?",

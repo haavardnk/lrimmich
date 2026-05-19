@@ -1,5 +1,8 @@
 import asyncio
+import random
 from collections.abc import Callable
+
+import httpx
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
@@ -55,18 +58,20 @@ async def resolve_paths(
     relative_paths: set[str],
     immich_library_path: str,
     client: ImmichClient,
-    state: StateDB | None = None,
-    on_progress: Callable[[int, int], None] | None = None,
-    strip: str = "",
     max_cache_age: int | None = None,
-) -> dict[str, str]:
+    on_progress: Callable[[int, int], None] | None = None,
+    state: StateDB | None = None,
+    strip: str = "",
+) -> tuple[dict[str, str], set[str]]:
     cached: dict[str, str] = {}
+    cache_hits: set[str] = set()
     missing: set[str] = set()
     if state:
         all_cached = state.get_all_cached_paths(max_age=max_cache_age)
         for rp in relative_paths:
             if rp in all_cached:
                 cached[rp] = all_cached[rp]
+                cache_hits.add(rp)
             else:
                 missing.add(rp)
     else:
@@ -79,4 +84,35 @@ async def resolve_paths(
             asset_id = index.get(expected)
             if asset_id:
                 cached[rp] = asset_id
-    return cached
+    return cached, cache_hits
+
+
+async def spot_check_cache(
+    resolved: dict[str, str],
+    immich_library_path: str,
+    client: ImmichClient,
+    state: StateDB,
+    pct: int = 5,
+    strip: str = "",
+) -> int:
+    if not resolved:
+        return 0
+    sample_size = max(1, len(resolved) * pct // 100)
+    sample_keys = random.sample(sorted(resolved), min(sample_size, len(resolved)))
+    invalid: list[str] = []
+    for rp in sample_keys:
+        asset_id = resolved[rp]
+        try:
+            asset = await client.get_asset(asset_id)
+        except httpx.HTTPStatusError:
+            invalid.append(rp)
+            continue
+        if not asset or asset.get("isTrashed", False):
+            invalid.append(rp)
+            continue
+        expected = map_path(rp, immich_library_path, strip)
+        if asset.get("originalPath") != expected:
+            invalid.append(rp)
+    if invalid:
+        state.invalidate_cache_entries(invalid)
+    return len(invalid)

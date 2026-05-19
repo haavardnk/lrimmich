@@ -62,6 +62,12 @@ album_min_rating = 0
 # id = 1284922
 # filter = "unflagged"
 
+[cache]
+# Days before cached path→asset mappings expire (default: 90)
+# ttl_days = 90
+# Percentage of cached entries to spot-check against Immich each sync (0 to disable)
+# spot_check_pct = 5
+
 [safety]
 # Block album deletion when more than this many albums would be removed
 delete_threshold = 100

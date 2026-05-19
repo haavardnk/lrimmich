@@ -48,8 +48,8 @@ class SyncConfig(BaseConfig):
     captions: bool = True
     rejects: bool = False
     stacks: bool = False
-    skip_empty: bool = True
     scope: SyncScope = "collections"
+    skip_empty: bool = True
     album_mode: AlbumMode = "managed"
     album_filter: AlbumFilter = "all"
     album_min_rating: int = Field(default=0, ge=0, le=5)
@@ -73,6 +73,11 @@ class SafetyConfig(BaseConfig):
     disable_deletes: bool = False
 
 
+class CacheConfig(BaseConfig):
+    ttl_days: int = Field(default=90, ge=1)
+    spot_check_pct: int = Field(default=5, ge=0, le=100)
+
+
 class NotificationConfig(BaseConfig):
     url: str = ""
 
@@ -82,6 +87,7 @@ class Config(BaseConfig):
     immich: ImmichConfig
     exclude: ExcludeConfig = ExcludeConfig()
     sync: SyncConfig = SyncConfig()
+    cache: CacheConfig = CacheConfig()
     album_rules: list[AlbumRule] = []
     safety: SafetyConfig = SafetyConfig()
     notification: NotificationConfig = NotificationConfig()

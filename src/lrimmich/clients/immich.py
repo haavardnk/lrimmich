@@ -61,6 +61,9 @@ class ImmichClient:
     async def get_album(self, album_id: str) -> dict[str, Any]:
         return await self._request("GET", f"/albums/{album_id}")
 
+    async def get_asset(self, asset_id: str) -> dict[str, Any] | None:
+        return await self._request("GET", f"/assets/{asset_id}")
+
     async def create_album(
         self,
         name: str,

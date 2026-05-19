@@ -20,7 +20,7 @@ from lrimmich.sync import (
 from lrimmich.sync.context import SyncContext, SyncStep
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config
-from lrimmich.utils.resolver import resolve_paths
+from lrimmich.utils.resolver import resolve_paths, spot_check_cache
 
 logger = structlog.get_logger(__name__)
 
@@ -36,8 +36,7 @@ STEPS: list[SyncStep[Any]] = [
     stacks.Step(),
 ]
 
-
-CACHE_TTL_SECONDS: int = 7_776_000
+DAY_SECONDS: int = 86_400
 
 
 async def run_sync(
@@ -52,6 +51,7 @@ async def run_sync(
     refresh_cache: bool = False,
 ) -> SyncSummary:
     summary = SyncSummary()
+    cache_ttl = cfg.cache.ttl_days * DAY_SECONDS
 
     if refresh_cache:
         state.clear_path_cache()
@@ -77,18 +77,33 @@ async def run_sync(
 
     if on_status:
         on_status(f"Resolving {len(all_paths)} paths...")
-    resolved = await resolve_paths(
+    resolved, cache_hits = await resolve_paths(
         all_paths,
         cfg.immich.library_path,
         client,
         state=state,
         on_progress=on_progress,
         strip=cfg.lightroom.strip,
-        max_cache_age=None if refresh_cache else CACHE_TTL_SECONDS,
+        max_cache_age=None if refresh_cache else cache_ttl,
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
     state.upsert_path_cache_bulk([(rp, aid, rp) for rp, aid in resolved.items()])
+
+    if cache_hits and cfg.cache.spot_check_pct > 0:
+        cached_subset = {rp: resolved[rp] for rp in cache_hits if rp in resolved}
+        invalidated = await spot_check_cache(
+            cached_subset,
+            cfg.immich.library_path,
+            client,
+            state,
+            pct=cfg.cache.spot_check_pct,
+            strip=cfg.lightroom.strip,
+        )
+        if invalidated:
+            logger.info("cache_spot_check", invalidated=invalidated)
+
+    state.evict_stale_cache(cache_ttl * 2)
 
     ctx = SyncContext(
         cfg=cfg,
