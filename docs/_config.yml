@@ -1,0 +1,11 @@
+title: lrimmich
+description: Sync Lightroom Classic to Immich
+remote_theme: just-the-docs/just-the-docs
+
+url: https://haavardnk.github.io/lrimmich
+
+aux_links:
+  GitHub: https://github.com/haavardnk/lrimmich
+  PyPI: https://pypi.org/project/lrimmich/
+
+search_enabled: true

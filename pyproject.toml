@@ -28,6 +28,7 @@ dependencies = [
 ]
 
 [project.urls]
+Documentation = "https://haavardnk.github.io/lrimmich/"
 Homepage = "https://github.com/haavardnk/lrimmich"
 Repository = "https://github.com/haavardnk/lrimmich"
 Issues = "https://github.com/haavardnk/lrimmich/issues"

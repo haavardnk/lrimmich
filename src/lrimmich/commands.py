@@ -256,3 +256,10 @@ def collections(
             _print_tree(node.children, indent + 1)
 
     _print_tree(tree)
+
+
+@app.command()
+def docs() -> None:
+    from lrimmich import DOCS_URL
+
+    typer.launch(DOCS_URL)

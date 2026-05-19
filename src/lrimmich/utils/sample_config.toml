@@ -1,56 +1,36 @@
+# Full reference: https://haavardnk.github.io/lrimmich/configuration/
+
 [lightroom]
-# Path to your Lightroom Classic catalog (.lrcat file)
 catalog = "~/Pictures/ClassicLibrary/ClassicLibrary.lrcat"
-# Optional prefix to strip from Lightroom-relative paths before matching
 # strip = "raw/"
 
 [immich]
-# Immich server URL and API key (generate at Immich → Account Settings → API Keys)
-# The API key can also be set via the LRIMMICH_API_KEY environment variable.
 url = "http://localhost:2283"
 api_key = "your-api-key-here"
-# External library path where your photos are stored.
-# The folder structure must mirror your Lightroom catalog's folder structure.
 library_path = "/external/images/raw/"
-# Immich user IDs to share every synced album with (optional)
 # share_albums_with = ["user-uuid-here"]
 
 [exclude]
-# Collection or collection set IDs to skip (find via `lrimmich collections`)
 collection_ids = []
-# Glob patterns matched against full collection path (e.g. "Exports/*", "*/WIP")
 name_patterns = []
 
 [sync]
-# Toggle each sync domain on or off
 albums = true
 favorites = true
 ratings = true
 tags = true
 captions = true
 rejects = false
-# Sync Lightroom stacks to Immich stacks (first image becomes primary)
 stacks = false
-# Skip creating albums for collections with no resolved assets
 skip_empty = true
-# "collections" = only sync metadata for assets in synced collections
-# "all" = sync metadata for every resolved asset in the catalog
 scope = "collections"
-# "managed" = Lightroom fully controls album contents (non-LR assets removed)
-# "hybrid" = Lightroom syncs its assets but preserves assets added in Immich
 album_mode = "managed"
-# Album membership filter: "all", "flagged", "unflagged" (exclude rejects), or "rejected"
 album_filter = "all"
-# Minimum rating for album membership (0-5, 0 disables rating filter)
 album_min_rating = 0
-# Album naming format. Placeholders: {path} (full hierarchy), {name} (leaf), {parent} (parent set)
 # album_name_format = "{path}"
-# Tag prefix for synced keywords (default: "lr:keyword:")
 # keyword_prefix = "lr:keyword:"
-# Tag prefix for synced color labels (default: "lr:color:")
 # color_prefix = "lr:color:"
 
-# Optional per-collection album membership rules (first match wins)
 # [[album_rules]]
 # match = "Reise/*"
 # filter = "flagged"
@@ -58,24 +38,14 @@ album_min_rating = 0
 # description = "Travel photos from trips"
 # order = "desc"
 
-# [[album_rules]]
-# id = 1284922
-# filter = "unflagged"
-
 [cache]
-# Days before cached path→asset mappings expire (default: 90)
 # ttl_days = 90
-# Percentage of cached entries to spot-check against Immich each sync (0 to disable)
 # spot_check_pct = 5
 
 [safety]
-# Block album deletion when more than this many albums would be removed
 delete_threshold = 100
-# Block asset removal when it exceeds this percentage of an album's assets
 remove_percent_limit = 50
-# Set true to never delete albums, regardless of other settings
 disable_deletes = false
 
-[notification]
-# Webhook URL to POST sync summaries to (leave empty to disable)
+# [notification]
 # url = ""
