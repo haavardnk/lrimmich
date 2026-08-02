@@ -57,9 +57,6 @@ class ImmichClient:
     async def server_about(self) -> dict[str, Any]:
         return await self._request("GET", "/server/about")
 
-    async def server_config(self) -> dict[str, Any]:
-        return await self._request("GET", "/server/config")
-
     async def get_albums(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/albums", params={"isOwned": "true"}) or []
 
@@ -116,34 +113,6 @@ class ImmichClient:
             if e.response.status_code == 400 and "already" in e.response.text.lower():
                 return
             raise
-
-    async def search_metadata(
-        self,
-        filename: str | None = None,
-        size: int = 250,
-        max_results: int | None = None,
-    ) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        page: int | str = 1
-        while True:
-            payload: dict[str, Any] = {"page": page, "size": size}
-            if filename is not None:
-                payload["originalFileName"] = filename
-            resp = await self._request(
-                "POST",
-                "/search/metadata",
-                payload,
-            )
-            assets = resp.get("assets", {})
-            items = assets.get("items", [])
-            results.extend(items)
-            if max_results is not None and len(results) >= max_results:
-                return results[:max_results]
-            next_page = assets.get("nextPage")
-            if next_page is None:
-                break
-            page = next_page
-        return results
 
     async def bulk_update_assets(self, asset_ids: list[str], **fields: Any) -> None:
         if not asset_ids:

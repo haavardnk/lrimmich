@@ -113,7 +113,7 @@ async def test_same_filename_different_folders(client: ImmichClient) -> None:
 @pytest.mark.anyio
 async def test_warm_cache_skips_api(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "cached-id", "a.jpg")])
     result, _ = await resolve_paths({"a.jpg"}, ["/ext/"], client, state=state)
     assert result == {"a.jpg": "cached-id"}
 
@@ -122,7 +122,7 @@ async def test_warm_cache_skips_api(client: ImmichClient, tmp_path: Path) -> Non
 @pytest.mark.anyio
 async def test_cache_miss_falls_through(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "cached-id", "a.jpg")])
     _mock_folders(
         ["/ext"],
         {"/ext": [{"id": "new-id", "originalPath": "/ext/b.jpg"}]},
@@ -137,7 +137,7 @@ async def test_cache_ttl_expires_old_entries(
     client: ImmichClient, tmp_path: Path
 ) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "cached-id", "a.jpg")])
     state._conn.execute(
         "UPDATE path_cache SET last_verified_at = last_verified_at - 999999"
     )
@@ -155,7 +155,7 @@ async def test_cache_ttl_expires_old_entries(
 @pytest.mark.anyio
 async def test_resolve_returns_cache_hits(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "cached-id", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "cached-id", "a.jpg")])
     _mock_folders(["/ext"], {"/ext": [{"id": "b-id", "originalPath": "/ext/b.jpg"}]})
     _, hits = await resolve_paths({"a.jpg", "b.jpg"}, ["/ext/"], client, state=state)
     assert hits == {"a.jpg"}
@@ -199,7 +199,7 @@ async def test_expired_miss_is_retried(client: ImmichClient, tmp_path: Path) -> 
 @pytest.mark.anyio
 async def test_spot_check_valid(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "a1", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "a1", "a.jpg")])
     respx.get(f"{API}/assets/a1").respond(
         json={"id": "a1", "originalPath": "/ext/a.jpg"}
     )
@@ -212,7 +212,7 @@ async def test_spot_check_valid(client: ImmichClient, tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_spot_check_invalid_path(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "a1", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "a1", "a.jpg")])
     respx.get(f"{API}/assets/a1").respond(
         json={"id": "a1", "originalPath": "/ext/moved.jpg"}
     )
@@ -225,7 +225,7 @@ async def test_spot_check_invalid_path(client: ImmichClient, tmp_path: Path) -> 
 @pytest.mark.anyio
 async def test_spot_check_trashed(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "a1", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "a1", "a.jpg")])
     respx.get(f"{API}/assets/a1").respond(
         json={"id": "a1", "originalPath": "/ext/a.jpg", "isTrashed": True}
     )
@@ -237,7 +237,7 @@ async def test_spot_check_trashed(client: ImmichClient, tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_spot_check_404(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("a.jpg", "gone", "a.jpg")
+    state.upsert_path_cache_bulk([("a.jpg", "gone", "a.jpg")])
     respx.get(f"{API}/assets/gone").respond(status_code=404)
     count = await spot_check_cache({"a.jpg": "gone"}, ["/ext/"], client, state, pct=100)
     assert count == 1
@@ -245,11 +245,11 @@ async def test_spot_check_404(client: ImmichClient, tmp_path: Path) -> None:
 
 def test_evict_stale_cache(tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
-    state.upsert_path_cache("old.jpg", "a1", "old.jpg")
+    state.upsert_path_cache_bulk([("old.jpg", "a1", "old.jpg")])
     state._conn.execute(
         "UPDATE path_cache SET last_verified_at = last_verified_at - 999999"
     )
-    state.upsert_path_cache("new.jpg", "a2", "new.jpg")
+    state.upsert_path_cache_bulk([("new.jpg", "a2", "new.jpg")])
     evicted = state.evict_stale_cache(3600)
     assert evicted == 1
     remaining = state.get_all_cached_paths()

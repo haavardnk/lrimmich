@@ -40,24 +40,13 @@ def test_meta_missing(db: StateDB) -> None:
     assert db.get_meta("nonexistent") is None
 
 
-def test_path_cache_upsert_and_get(db: StateDB) -> None:
-    db.upsert_path_cache("2024/a.jpg", "asset-1", "/ext/2024/a.jpg")
-    assert db.get_cached_asset("2024/a.jpg") == "asset-1"
-
-
-def test_path_cache_overwrite(db: StateDB) -> None:
-    db.upsert_path_cache("a.jpg", "old", "/ext/a.jpg")
-    db.upsert_path_cache("a.jpg", "new", "/ext/a.jpg")
-    assert db.get_cached_asset("a.jpg") == "new"
-
-
 def test_path_cache_miss(db: StateDB) -> None:
-    assert db.get_cached_asset("missing.jpg") is None
+    assert db.get_all_cached_paths() == {}
 
 
 def test_get_all_cached_paths(db: StateDB) -> None:
-    db.upsert_path_cache("a.jpg", "x1", "/ext/a.jpg")
-    db.upsert_path_cache("b.jpg", "x2", "/ext/b.jpg")
+    db.upsert_path_cache_bulk([("a.jpg", "x1", "/ext/a.jpg")])
+    db.upsert_path_cache_bulk([("b.jpg", "x2", "/ext/b.jpg")])
     result = db.get_all_cached_paths()
     assert result == {"a.jpg": "x1", "b.jpg": "x2"}
 
@@ -78,9 +67,9 @@ def test_upsert_path_cache_bulk(db: StateDB) -> None:
 
 
 def test_upsert_path_cache_bulk_overwrites(db: StateDB) -> None:
-    db.upsert_path_cache("a.jpg", "old", "/ext/a.jpg")
+    db.upsert_path_cache_bulk([("a.jpg", "old", "/ext/a.jpg")])
     db.upsert_path_cache_bulk([("a.jpg", "new", "/ext/a.jpg")])
-    assert db.get_cached_asset("a.jpg") == "new"
+    assert db.get_all_cached_paths() == {"a.jpg": "new"}
 
 
 def test_upsert_path_cache_bulk_empty(db: StateDB) -> None:

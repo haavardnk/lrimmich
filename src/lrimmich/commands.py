@@ -4,7 +4,7 @@ import os
 import platform
 import sqlite3
 import subprocess
-from datetime import UTC
+from datetime import UTC, datetime
 from importlib import resources
 from typing import Annotated
 
@@ -13,6 +13,7 @@ import tomli_w
 import typer
 
 import lrimmich.utils as lrimmich_utils
+from lrimmich import DOCS_URL
 from lrimmich.app import (
     ConfigOption,
     DryRunOption,
@@ -27,7 +28,11 @@ from lrimmich.app import (
     print_summary,
     run_with_progress,
 )
-from lrimmich.clients.catalog import read_collection_tree, read_collections
+from lrimmich.clients.catalog import (
+    LrCollectionTreeNode,
+    read_collection_tree,
+    read_collections,
+)
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import DEFAULT_STATE_DIR, StateDB, state_path_for_catalog
 from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
@@ -231,7 +236,6 @@ def log(
     if json_output:
         typer.echo(json.dumps(entries, indent=2))
         return
-    from datetime import datetime
 
     for e in reversed(entries):
         ts = datetime.fromtimestamp(e["ts"], tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
@@ -265,7 +269,6 @@ def collections(
     json_output: JsonOption = False,
 ) -> None:
     cfg = load_config(config)
-    from lrimmich.clients.catalog import LrCollectionTreeNode
 
     all_nodes: list[dict] = []
     for catalog in cfg.catalogs:
@@ -290,8 +293,6 @@ def collections(
 
 @app.command()
 def docs() -> None:
-    from lrimmich import DOCS_URL
-
     typer.launch(DOCS_URL)
 
 

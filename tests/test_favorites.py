@@ -19,9 +19,13 @@ API = IMMICH_URL + "/api"
 @pytest.fixture()
 def state(tmp_path: Path) -> StateDB:
     db = StateDB(tmp_path / "state.db")
-    db.upsert_path_cache("a.jpg", "asset-a", "/img/a.jpg")
-    db.upsert_path_cache("b.jpg", "asset-b", "/img/b.jpg")
-    db.upsert_path_cache("c.jpg", "asset-c", "/img/c.jpg")
+    db.upsert_path_cache_bulk(
+        [
+            ("a.jpg", "asset-a", "/img/a.jpg"),
+            ("b.jpg", "asset-b", "/img/b.jpg"),
+            ("c.jpg", "asset-c", "/img/c.jpg"),
+        ]
+    )
     return db
 
 

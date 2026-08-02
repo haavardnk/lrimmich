@@ -150,27 +150,6 @@ class StateDB:
         ).fetchall()
         return {r["key"]: r["value"] for r in rows if r["value"]}
 
-    def get_cached_asset(self, relative_path: str) -> str | None:
-        row = self._conn.execute(
-            "SELECT asset_id FROM path_cache WHERE relative_path = ?",
-            (relative_path,),
-        ).fetchone()
-        return row["asset_id"] if row else None
-
-    def upsert_path_cache(
-        self,
-        relative_path: str,
-        asset_id: str,
-        original_path: str,
-    ) -> None:
-        now = int(time.time())
-        self._conn.execute(
-            "INSERT OR REPLACE INTO path_cache"
-            "(relative_path, asset_id, original_path, last_verified_at) "
-            "VALUES (?, ?, ?, ?)",
-            (relative_path, asset_id, original_path, now),
-        )
-
     def upsert_path_cache_bulk(
         self,
         entries: list[tuple[str, str, str]],

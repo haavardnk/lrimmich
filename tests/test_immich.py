@@ -17,16 +17,6 @@ async def test_server_about(client: ImmichClient, api_url: str) -> None:
 
 @respx.mock
 @pytest.mark.anyio
-async def test_server_config(client: ImmichClient, api_url: str) -> None:
-    respx.get(f"{api_url}/server/config").mock(
-        return_value=httpx.Response(200, json={"isInitialized": True})
-    )
-    result = await client.server_config()
-    assert result["isInitialized"] is True
-
-
-@respx.mock
-@pytest.mark.anyio
 async def test_get_albums(client: ImmichClient, api_url: str) -> None:
     respx.get(f"{api_url}/albums").mock(
         return_value=httpx.Response(200, json=[{"id": "a1", "albumName": "Test"}])
@@ -138,33 +128,6 @@ async def test_add_album_users_400_other_raises(
 @pytest.mark.anyio
 async def test_add_album_users_empty(client: ImmichClient) -> None:
     await client.add_album_users("a1", [])
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_search_metadata(client: ImmichClient, api_url: str) -> None:
-    respx.post(f"{api_url}/search/metadata").mock(
-        return_value=httpx.Response(
-            200, json={"assets": {"items": [{"id": "x1", "originalPath": "/a/b.jpg"}]}}
-        )
-    )
-    results = await client.search_metadata("b.jpg")
-    assert len(results) == 1
-    assert results[0]["id"] == "x1"
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_search_metadata_pagination(client: ImmichClient, api_url: str) -> None:
-    page1 = [{"id": f"x{i}"} for i in range(250)]
-    page2 = [{"id": "x250"}]
-    route = respx.post(f"{api_url}/search/metadata")
-    route.side_effect = [
-        httpx.Response(200, json={"assets": {"items": page1, "nextPage": "2"}}),
-        httpx.Response(200, json={"assets": {"items": page2}}),
-    ]
-    results = await client.search_metadata("file.jpg")
-    assert len(results) == 251
 
 
 @respx.mock

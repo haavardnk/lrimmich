@@ -30,7 +30,6 @@ def _version_callback(value: bool) -> None:
 app = typer.Typer(
     name="lrimmich",
     no_args_is_help=True,
-    callback=lambda version: None,
 )
 
 

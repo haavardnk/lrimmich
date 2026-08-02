@@ -35,7 +35,6 @@ async def plan_stack_sync(
     primary_to_stack: dict[str, dict] = {s["primaryAssetId"]: s for s in existing}
 
     actions: list[StackAction] = []
-    seen_primaries: set[str] = set()
 
     for lr_stack in lr_stacks:
         asset_ids = [resolved[p] for p in lr_stack.paths if p in resolved]
@@ -43,7 +42,6 @@ async def plan_stack_sync(
             continue
 
         primary_id = asset_ids[0]
-        seen_primaries.add(primary_id)
 
         owned_stack_id = state.get_meta(f"stack:{lr_stack.stack_id}")
         immich_stack = primary_to_stack.get(primary_id)
