@@ -52,12 +52,19 @@ async def _run_step(
     ctx: SyncContext,
     summary: SyncSummary,
     dry_run: bool,
+    on_confirm: Callable[[str, str], bool] | None = None,
+    on_status: Callable[[str], None] | None = None,
 ) -> None:
     logger.debug("step_start", step=step.name)
+    if on_status:
+        on_status(step.status_msg)
     try:
         plan = await step.plan(ctx, summary)
-        if not dry_run:
-            await step.apply(plan, ctx)
+        if dry_run:
+            return
+        if on_confirm and not on_confirm(step.name, step.status_msg):
+            return
+        await step.apply(plan, ctx)
     except (httpx.HTTPError, sqlite3.Error) as e:
         logger.exception("step_failed", step=step.name)
         summary.errors.append(f"{step.name}: {e}")
@@ -174,37 +181,14 @@ async def run_sync(
     )
 
     for step in SERIAL_STEPS:
-        if not step.enabled(cfg):
-            continue
-        logger.debug("step_start", step=step.name)
-        if on_status:
-            on_status(step.status_msg)
-        try:
-            plan = await step.plan(ctx, summary)
-            if not dry_run:
-                if on_confirm and not on_confirm(step.name, step.status_msg):
-                    continue
-                await step.apply(plan, ctx)
-        except (httpx.HTTPError, sqlite3.Error) as e:
-            logger.exception("step_failed", step=step.name)
-            summary.errors.append(f"{step.name}: {e}")
+        if step.enabled(cfg):
+            await _run_step(step, ctx, summary, dry_run, on_confirm, on_status)
 
     enabled_parallel = [s for s in PARALLEL_STEPS if s.enabled(cfg)]
     if enabled_parallel:
         if on_confirm:
             for step in enabled_parallel:
-                logger.debug("step_start", step=step.name)
-                if on_status:
-                    on_status(step.status_msg)
-                try:
-                    plan = await step.plan(ctx, summary)
-                    if not dry_run:
-                        if not on_confirm(step.name, step.status_msg):
-                            continue
-                        await step.apply(plan, ctx)
-                except (httpx.HTTPError, sqlite3.Error) as e:
-                    logger.exception("step_failed", step=step.name)
-                    summary.errors.append(f"{step.name}: {e}")
+                await _run_step(step, ctx, summary, dry_run, on_confirm, on_status)
         else:
             if on_status:
                 on_status("Syncing metadata...")

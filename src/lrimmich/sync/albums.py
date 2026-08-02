@@ -103,15 +103,12 @@ def resolve_album_rule(
 
 def _filtered_asset_ids(
     collection: LrCollection,
+    rule: AlbumRuleResult,
     resolved: dict[str, str],
-    album_filter: AlbumFilter,
-    album_min_rating: int,
-    album_rules: list[AlbumRule] | None,
     flagged_paths: set[str],
     rejected_paths: set[str],
     rated_paths: dict[str, int],
 ) -> list[str]:
-    rule = resolve_album_rule(collection, album_filter, album_min_rating, album_rules)
     paths = collection.relative_paths
     if rule.filter == "flagged":
         paths = [p for p in paths if p in flagged_paths]
@@ -166,12 +163,10 @@ def _plan_collection(
     collection: LrCollection,
     ctx: AlbumPlanContext,
     all_albums: dict[str, dict],
+    rule: AlbumRuleResult,
     asset_ids: list[str],
 ) -> tuple[list[AlbumAction], bool]:
     album_name = format_album_name(collection, ctx.album_name_format)
-    rule = resolve_album_rule(
-        collection, ctx.album_filter, ctx.album_min_rating, ctx.album_rules
-    )
     effective_share = rule.share_with if rule.share_with is not None else ctx.share_with
     ownership = ctx.state.get_album_ownership(collection.id)
     actions: list[AlbumAction] = []
@@ -400,13 +395,17 @@ async def plan_album_sync(
     needs_share = bool(ctx.share_with) or any(r.share_with for r in ctx.album_rules)
     all_albums = {a["id"]: a for a in await client.get_albums()} if needs_share else {}
 
+    rules = {
+        c.id: resolve_album_rule(
+            c, ctx.album_filter, ctx.album_min_rating, ctx.album_rules
+        )
+        for c in collections
+    }
     asset_ids_by_collection = {
         c.id: _filtered_asset_ids(
             c,
+            rules[c.id],
             ctx.resolved,
-            ctx.album_filter,
-            ctx.album_min_rating,
-            ctx.album_rules,
             ctx.flagged_paths,
             ctx.rejected_paths,
             ctx.rated_paths,
@@ -428,7 +427,11 @@ async def plan_album_sync(
 
     for collection in collections:
         col_actions, empty = _plan_collection(
-            collection, ctx, all_albums, asset_ids_by_collection[collection.id]
+            collection,
+            ctx,
+            all_albums,
+            rules[collection.id],
+            asset_ids_by_collection[collection.id],
         )
         if empty:
             lr_ids.discard(collection.id)
@@ -549,10 +552,7 @@ async def _apply_set_description(
         action.immich_album_id, description=action.description or ""
     )
     meta_key = f"album_desc:{action.lr_collection_id}"
-    if action.description:
-        state.set_meta(meta_key, action.description)
-    else:
-        state.set_meta(meta_key, "")
+    state.set_meta(meta_key, action.description or "")
 
 
 async def _apply_set_order(
