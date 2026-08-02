@@ -71,6 +71,11 @@ QuietOption = Annotated[bool, typer.Option("--quiet", "-q", help="Suppress outpu
 
 
 def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
+    if summary.skipped_unchanged:
+        typer.echo(
+            "catalog unchanged since last sync, nothing to do (use --force to re-sync)"
+        )
+        return
     typer.echo(
         f"albums: +{summary.albums_created} "
         f"~{summary.albums_renamed} "

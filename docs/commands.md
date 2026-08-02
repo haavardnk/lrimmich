@@ -32,6 +32,9 @@ lrimmich sync --json --quiet
 | `--notify-on-drift` | Send a notification only if something changed |
 | `--refresh-cache` | Ignore cached path resolutions, re-resolve everything |
 
+When nothing in the catalog changed since the last sync, `sync` prints `catalog
+unchanged since last sync, nothing to do` and stops without calling Immich.
+
 ## `status`
 
 Check for drift between Lightroom and Immich. Exits with code 1 if anything is out of sync — useful in scripts and CI.

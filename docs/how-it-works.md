@@ -48,7 +48,8 @@ list itself. Moving a photo between two collections changes the fingerprint even
 though the total number of photos stays the same.
 
 When the fingerprint hasn't changed since the last sync, lrimmich skips all API
-work and exits immediately. Use `--force` to bypass this check.
+work, prints `catalog unchanged since last sync, nothing to do`, and exits. Use
+`--force` to bypass this check.
 
 The fingerprint format changed in the release that added the membership digests,
 so the first sync after upgrading always runs in full.

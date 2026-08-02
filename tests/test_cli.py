@@ -6,8 +6,9 @@ import pytest
 from typer.testing import CliRunner
 
 import lrimmich.utils as lrimmich_utils
-from lrimmich.app import app
+from lrimmich.app import app, print_summary
 from lrimmich.sync.summary import SyncSummary
+from lrimmich.utils.config import SyncConfig
 
 runner = CliRunner()
 
@@ -265,3 +266,16 @@ def test_docs_launches_browser() -> None:
         result = runner.invoke(app, ["docs"])
         assert result.exit_code == 0
         mock_launch.assert_called_once_with("https://haavardnk.github.io/lrimmich/")
+
+
+def test_print_summary_reports_skipped_sync(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    summary = SyncSummary(skipped_unchanged=True)
+
+    print_summary(summary, SyncConfig())
+
+    out = capsys.readouterr().out
+    assert "catalog unchanged since last sync" in out
+    assert "albums:" not in out
+    assert not summary.has_drift

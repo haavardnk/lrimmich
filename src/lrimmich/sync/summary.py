@@ -64,12 +64,15 @@ class SyncSummary:
     captions: CaptionsResult = field(default_factory=CaptionsResult)
     covers: CoversResult = field(default_factory=CoversResult)
     stacks: StacksResult = field(default_factory=StacksResult)
+    skipped_unchanged: bool = False
     errors: list[str] = field(default_factory=list)
 
     @property
     def has_drift(self) -> bool:
         for f in fields(self):
             val = getattr(self, f.name)
+            if isinstance(val, bool):
+                continue
             if isinstance(val, int) and val:
                 return True
             if hasattr(val, "__dataclass_fields__"):

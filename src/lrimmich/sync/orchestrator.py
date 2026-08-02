@@ -98,6 +98,7 @@ async def run_sync(
         and combined_fingerprint == last_fingerprint
     ):
         logger.debug("catalog_unchanged", fingerprint=combined_fingerprint)
+        summary.skipped_unchanged = True
         return summary
 
     all_paths: set[str] = set()
@@ -227,6 +228,7 @@ async def run_multi_sync(
     refresh_cache: bool = False,
 ) -> SyncSummary:
     combined = SyncSummary()
+    skipped = 0
     for catalog in cfg.catalogs:
         state_db = state_path_for_catalog(catalog.key)
         state = StateDB(state_db)
@@ -246,6 +248,9 @@ async def run_multi_sync(
                 refresh_cache=refresh_cache,
             )
             combined.merge(summary)
+            if summary.skipped_unchanged:
+                skipped += 1
         finally:
             state.close()
+    combined.skipped_unchanged = bool(cfg.catalogs) and skipped == len(cfg.catalogs)
     return combined
