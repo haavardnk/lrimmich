@@ -40,6 +40,16 @@ The `library_paths` in your config doesn't match the folder structure Immich see
 - The folder hierarchy under that path mirrors your Lightroom catalog's folder layout
 - If your LR paths have a prefix that doesn't exist in Immich, set `strip` in the `[[catalogs]]` entry to remove it
 
+`lrimmich doctor` prints the exact path it looked for, which usually makes the
+mismatch obvious.
+
+### Sync reports unresolved photos
+
+The summary line `unresolved: N photo(s) in Lightroom were not found in Immich`
+means those files exist in your catalog but Immich has no asset at the mapped
+path. Usually they simply haven't been uploaded or scanned yet. If the number is
+larger than you expect, check `library_paths` and `strip` as above.
+
 ### "API key required"
 
 Either set `immich.api_key` in the config file, or export `LRIMMICH_API_KEY` as an environment variable.

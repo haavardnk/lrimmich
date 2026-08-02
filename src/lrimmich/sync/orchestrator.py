@@ -58,13 +58,12 @@ async def _run_step(
     logger.debug("step_start", step=step.name)
     if on_status:
         on_status(step.status_msg)
+    if on_confirm and not dry_run and not on_confirm(step.name, step.status_msg):
+        return
     try:
         plan = await step.plan(ctx, summary)
-        if dry_run:
-            return
-        if on_confirm and not on_confirm(step.name, step.status_msg):
-            return
-        await step.apply(plan, ctx)
+        if not dry_run:
+            await step.apply(plan, ctx)
     except (httpx.HTTPError, sqlite3.Error) as e:
         logger.exception("step_failed", step=step.name)
         summary.errors.append(f"{step.name}: {e}")
@@ -127,6 +126,7 @@ async def run_sync(
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
+    summary.unresolved = len(all_paths) - len(resolved)
     state.upsert_path_cache_bulk([(rp, aid, rp) for rp, aid in resolved.items()])
 
     if cache_hits and cfg.cache.spot_check_pct > 0:

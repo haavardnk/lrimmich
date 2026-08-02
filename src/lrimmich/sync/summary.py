@@ -65,11 +65,14 @@ class SyncSummary:
     covers: CoversResult = field(default_factory=CoversResult)
     stacks: StacksResult = field(default_factory=StacksResult)
     skipped_unchanged: bool = False
+    unresolved: int = 0
     errors: list[str] = field(default_factory=list)
 
     @property
     def has_drift(self) -> bool:
         for f in fields(self):
+            if f.name == "unresolved":
+                continue
             val = getattr(self, f.name)
             if isinstance(val, bool):
                 continue

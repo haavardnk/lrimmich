@@ -108,6 +108,11 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
             f"~{summary.stacks.updated} "
             f"-{summary.stacks.deleted}"
         )
+    if summary.unresolved:
+        typer.echo(
+            f"unresolved: {summary.unresolved} "
+            "photo(s) in Lightroom were not found in Immich"
+        )
 
 
 async def _run_with_progress(

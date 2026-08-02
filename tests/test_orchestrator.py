@@ -297,7 +297,7 @@ async def test_on_confirm_skips_rejected_steps(
         confirmed.append(name)
         return name != "albums"
 
-    await run_sync(cfg, cfg.catalogs[0], client, state, on_confirm=on_confirm)
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, on_confirm=on_confirm)
 
     assert "albums" in confirmed
     album_creates = [
@@ -306,3 +306,21 @@ async def test_on_confirm_skips_rejected_steps(
         if c.request.method == "POST" and "/albums" in str(c.request.url)
     ]
     assert len(album_creates) == 0
+    assert summary.albums_created == 0
+    assert summary.assets_added == 0
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_unresolved_paths_are_counted(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(json=[])
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+
+    assert summary.unresolved == 1
+    assert not summary.has_drift

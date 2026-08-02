@@ -111,8 +111,10 @@ async def check_path_mapping(
         if not row:
             return CheckResult("path_mapping", False, "No files in catalog")
         relative_path = row["pathFromRoot"] + row["idx_filename"]
+        tried: list[str] = []
         for lp in library_paths:
             expected = map_path(relative_path, lp, strip)
+            tried.append(expected)
             expected_folder = expected.rsplit("/", 1)[0]
             assets = await client.get_folder_assets(expected_folder)
             for asset in assets:
@@ -121,7 +123,7 @@ async def check_path_mapping(
         return CheckResult(
             "path_mapping",
             False,
-            "No asset matched for any library path",
+            f"No asset found at {' or '.join(tried)} (from catalog {relative_path})",
         )
     except (httpx.HTTPError, sqlite3.Error) as e:
         return CheckResult("path_mapping", False, str(e))

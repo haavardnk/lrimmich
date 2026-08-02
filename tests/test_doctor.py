@@ -122,6 +122,7 @@ async def test_check_path_mapping_no_assets(
     )
     result = await check_path_mapping(["/ext/"], catalog, client)
     assert not result.ok
+    assert "/ext/" in result.message
 
 
 @respx.mock
