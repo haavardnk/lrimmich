@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import platform
-import sqlite3
 import subprocess
 from datetime import UTC, datetime
 from importlib import resources
@@ -13,7 +12,6 @@ import tomli_w
 import typer
 
 import lrimmich.utils as lrimmich_utils
-from lrimmich import DOCS_URL
 from lrimmich.app import (
     ConfigOption,
     DryRunOption,
@@ -28,14 +26,9 @@ from lrimmich.app import (
     print_summary,
     run_with_progress,
 )
-from lrimmich.clients.catalog import (
-    LrCollectionTreeNode,
-    read_collection_tree,
-    read_collections,
-)
+from lrimmich.clients.catalog import LrCollectionTreeNode, read_collection_tree
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import DEFAULT_STATE_DIR, StateDB, state_path_for_catalog
-from lrimmich.utils.adopt import apply_adopt, find_adopt_candidates
 from lrimmich.utils.config import DEFAULT_CONFIG_PATH, load_config
 from lrimmich.utils.doctor import DoctorReport, run_doctor
 from lrimmich.utils.notify import send_notification
@@ -136,48 +129,6 @@ def doctor(
         typer.echo(f"[{check_status}] {check.name}: {check.message}")
     if not report.all_ok:
         raise typer.Exit(1)
-
-
-@app.command()
-def adopt(
-    config: ConfigOption = None,
-    apply: Annotated[bool, typer.Option("--apply", help="Commit adoption.")] = False,
-) -> None:
-    async def _run() -> tuple[list, list[StateDB]]:
-        cfg = load_config(config)
-        all_candidates: list = []
-        states: list[StateDB] = []
-        async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-            for catalog in cfg.catalogs:
-                state = StateDB(state_path_for_catalog(catalog.key))
-                states.append(state)
-                try:
-                    collections = read_collections(catalog.catalog, catalog)
-                    candidates = await find_adopt_candidates(collections, client, state)
-                    all_candidates.extend(candidates)
-                except (httpx.HTTPError, sqlite3.Error):
-                    for s in states:
-                        s.close()
-                    raise
-        return all_candidates, states
-
-    candidates, states = asyncio.run(_run())
-    try:
-        for c in candidates:
-            tag = " [CONFLICT]" if c.conflict else ""
-            typer.echo(f"{c.collection_name} -> {c.immich_album_id}{tag}")
-        if not candidates:
-            typer.echo("No albums to adopt")
-        elif apply:
-            total = 0
-            for state in states:
-                total += apply_adopt(candidates, state)
-            typer.echo(f"Adopted {total} albums")
-        else:
-            typer.echo("Run with --apply to commit")
-    finally:
-        for state in states:
-            state.close()
 
 
 @config_app.command("init")
@@ -289,11 +240,6 @@ def collections(
             _print_tree(tree)
     if json_output:
         typer.echo(json.dumps(all_nodes, indent=2))
-
-
-@app.command()
-def docs() -> None:
-    typer.launch(DOCS_URL)
 
 
 @albums_app.command("purge")

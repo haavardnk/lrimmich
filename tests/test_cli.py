@@ -23,12 +23,10 @@ runner = CliRunner()
         ["install-service", "--help"],
         ["uninstall-service", "--help"],
         ["doctor", "--help"],
-        ["adopt", "--help"],
         ["collections", "--help"],
         ["config", "--help"],
         ["config", "init", "--help"],
         ["config", "show", "--help"],
-        ["docs", "--help"],
     ],
 )
 def test_help(args: list[str]) -> None:
@@ -259,13 +257,6 @@ def test_sync_closes_client_on_exception(tmp_path: Path) -> None:
     ):
         runner.invoke(app, ["sync", "--config", str(cfg_path)])
         mock_client.__aexit__.assert_called_once()
-
-
-def test_docs_launches_browser() -> None:
-    with patch("lrimmich.commands.typer.launch") as mock_launch:
-        result = runner.invoke(app, ["docs"])
-        assert result.exit_code == 0
-        mock_launch.assert_called_once_with("https://haavardnk.github.io/lrimmich/")
 
 
 def test_print_summary_reports_skipped_sync(

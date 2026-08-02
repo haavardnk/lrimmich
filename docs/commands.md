@@ -81,13 +81,14 @@ lrimmich watch --debounce 5000
 | `--no-delete` | Skip deletions on each sync |
 | `--quiet`, `-q` | Suppress output |
 
-## `adopt`
+## Adopting existing albums
 
-Find existing Immich albums that match Lightroom collection names and claim them so lrimmich manages them going forward.
+If Immich already has albums with the same names as your Lightroom collections,
+lrimmich stops before syncing rather than creating duplicates. Claim them with:
 
 ```
-lrimmich adopt           # preview matches
-lrimmich adopt --apply   # write the mappings
+lrimmich sync --adopt-existing --dry-run   # preview the matches
+lrimmich sync --adopt-existing             # claim them and sync
 ```
 
 ## `log`
@@ -162,14 +163,6 @@ Open the config file in your default editor (`$EDITOR`).
 
 ```
 lrimmich config edit
-```
-
-## `docs`
-
-Open the documentation in your browser.
-
-```
-lrimmich docs
 ```
 
 ## Global flags

@@ -164,7 +164,7 @@ async def run_sync(
                         f"collection names but are not tracked: {names}{more}. "
                         "Skipped the rest of the sync for this catalog. "
                         "Run with --adopt-existing to claim them, "
-                        "or `lrimmich adopt --apply` to review."
+                        "or --adopt-existing --dry-run to review first."
                     )
                     return summary
 

@@ -66,6 +66,13 @@ Older versions missed this: the fingerprint only counted membership rows, and
 moving a photo from one collection to another leaves the count identical, so the
 sync exited early. Upgrade, or run `lrimmich sync --force` on an old version.
 
+### "Immich album(s) match collection names but are not tracked"
+
+Immich already has albums named like your Lightroom collections, and lrimmich
+won't touch albums it didn't create. Preview the matches with
+`lrimmich sync --adopt-existing --dry-run`, then run
+`lrimmich sync --adopt-existing` to claim them.
+
 ### Albums are deleting too many assets
 
 The safety config blocks runaway deletions. If you intentionally removed a lot of photos from a collection, either:
