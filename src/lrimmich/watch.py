@@ -1,5 +1,4 @@
 import asyncio
-import threading
 from datetime import datetime
 from typing import Annotated
 
@@ -44,8 +43,6 @@ def watch(
                 str(catalog.catalog.with_name(catalog.catalog.name + suffix))
             )
 
-    stop_event = threading.Event()
-
     def _log(msg: str) -> None:
         if not quiet:
             ts = datetime.now().strftime("%H:%M:%S")
@@ -58,7 +55,7 @@ def watch(
     failures = 0
     MAX_FAILURES = 5
 
-    async def _do_sync() -> None:
+    async def _do_sync() -> list[str]:
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
             summary = await run_multi_sync(
                 cfg,
@@ -71,32 +68,33 @@ def watch(
             print_summary(summary, cfg.sync)
             for err in summary.errors:
                 typer.echo(f"ERROR: {err}", err=True)
+        return summary.errors
 
     try:
         with asyncio.Runner() as runner:
             for _ in watch_files(
                 *watched,
                 debounce=debounce,
-                stop_event=stop_event,
                 raise_interrupt=False,
             ):
                 _log("Change detected, syncing...")
                 try:
-                    runner.run(_do_sync())
+                    errors = runner.run(_do_sync())
+                except Exception:
+                    logger.exception("sync_error", failure=failures + 1)
+                    errors = ["sync crashed"]
+                if not errors:
                     _log("Sync complete")
                     failures = 0
-                except Exception:
-                    failures += 1
-                    logger.exception(
-                        "sync_error", failure=failures, max_failures=MAX_FAILURES
+                    continue
+                failures += 1
+                _log(f"Sync failed ({failures}/{MAX_FAILURES})")
+                if failures >= MAX_FAILURES:
+                    typer.echo(
+                        f"Aborting watch after {MAX_FAILURES} consecutive failures",
+                        err=True,
                     )
-                    _log(f"Sync failed ({failures}/{MAX_FAILURES})")
-                    if failures >= MAX_FAILURES:
-                        typer.echo(
-                            f"Aborting watch after {MAX_FAILURES} consecutive failures",
-                            err=True,
-                        )
-                        raise typer.Exit(1) from None
+                    raise typer.Exit(1) from None
     except KeyboardInterrupt:
         pass
 

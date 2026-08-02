@@ -19,6 +19,10 @@ The default debounce is 5 seconds. Increase it if your catalog is large or Light
 
 Watch mode runs in the foreground. Use `Ctrl+C` to stop it.
 
+A sync counts as failed when any step reports an error, whether it crashed or
+Immich rejected the request. After five failures in a row, watch gives up and
+exits with code 1. A clean sync resets the counter.
+
 ## Background service
 
 To run syncs on a fixed schedule (without needing to keep a terminal open), generate a system service:

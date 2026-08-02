@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from lrimmich.app import app
@@ -74,3 +75,36 @@ def test_watch_help_shows_options() -> None:
     assert result.exit_code == 0
     plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
     assert "--debounce" in plain
+
+
+@pytest.mark.parametrize(
+    ("errors", "changes", "exit_code"),
+    [
+        (["albums: boom"], 5, 1),
+        (["albums: boom"], 4, 0),
+    ],
+    ids=["aborts_after_five", "keeps_going_below_limit"],
+)
+def test_watch_counts_step_errors_as_failures(
+    tmp_path: Path, errors: list[str], changes: int, exit_code: int
+) -> None:
+    catalog = tmp_path / "test.lrcat"
+    catalog.write_text("x")
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[[catalogs]]\ncatalog = "{catalog}"\n'
+        '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_paths = ["/img"]\n'
+    )
+
+    async def fake_sync(*args: object, **kwargs: object) -> SyncSummary:
+        return SyncSummary(errors=list(errors))
+
+    fake_changes = iter([{("modified", str(catalog))}] * changes)
+    with (
+        patch("lrimmich.watch.watch_files", return_value=fake_changes),
+        patch("lrimmich.watch.run_multi_sync", side_effect=fake_sync),
+        patch("lrimmich.watch.ImmichClient"),
+    ):
+        result = runner.invoke(app, ["watch", "--config", str(config_path)])
+
+    assert result.exit_code == exit_code
