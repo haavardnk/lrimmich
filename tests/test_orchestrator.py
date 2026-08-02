@@ -128,7 +128,7 @@ async def test_skip_sync_when_catalog_unchanged(
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
-    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
     respx.get(url__regex=rf"{API}/albums/alb").respond(
         json={"assets": [], "albumUsers": []}
@@ -159,7 +159,7 @@ async def test_collection_move_is_detected(
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
-    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
     respx.get(url__regex=rf"{API}/albums/alb").respond(
         json={"assets": [{"id": "a1"}], "albumUsers": []}
@@ -185,7 +185,7 @@ async def test_collection_move_is_detected(
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb2"})
-    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
     respx.get(url__regex=rf"{API}/albums/alb").respond(
         json={"assets": [{"id": "a1"}], "albumUsers": []}
@@ -212,7 +212,7 @@ async def test_force_ignores_fingerprint(
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
-    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
     respx.get(url__regex=rf"{API}/albums/alb").respond(
         json={"assets": [], "albumUsers": []}
@@ -230,7 +230,7 @@ async def test_force_ignores_fingerprint(
     respx.get(f"{API}/albums").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
-    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
     respx.get(url__regex=rf"{API}/albums/alb").respond(
         json={"assets": [{"id": "a1"}], "albumUsers": []}
@@ -259,7 +259,7 @@ async def test_on_confirm_skips_rejected_steps(
     respx.get(f"{API}/albums").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
-    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
 
     confirmed: list[str] = []
 

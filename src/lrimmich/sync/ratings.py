@@ -33,7 +33,7 @@ async def apply_ratings_sync(
     for rating, asset_ids in by_rating.items():
         await client.bulk_update_assets(sorted(asset_ids), rating=rating)
     if to_clear:
-        await client.bulk_update_assets(sorted(to_clear), rating=0)
+        await client.bulk_update_assets(sorted(to_clear), rating=None)
     if to_set or to_clear:
         snapshot = dict(state.get_synced_ratings())
         snapshot.update(to_set)

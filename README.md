@@ -7,6 +7,8 @@ Syncs your Lightroom Classic catalog to Immich. Collections become albums, picks
 
 The same photo files Lightroom reads must be mounted into Immich as an external library. lrimmich doesn't upload anything. It matches files that are already on both sides and writes metadata through the Immich API.
 
+Requires Immich 3.0 or newer. On Immich 2.x, stay on the lrimmich 0.2.x line.
+
 ## Quick start
 
 ```

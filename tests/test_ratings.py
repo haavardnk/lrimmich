@@ -1,3 +1,5 @@
+import json
+
 import pytest
 import respx
 
@@ -55,7 +57,7 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_batches_by_rating(client: ImmichClient, state: StateDB) -> None:
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     result = await apply_ratings_sync({"a1": 3, "a2": 3, "a3": 5}, [], client, state)
     assert result == RatingsResult(set=3, cleared=0)
     calls = [c for c in respx.calls if c.request.url.path == "/api/assets"]
@@ -65,11 +67,12 @@ async def test_apply_batches_by_rating(client: ImmichClient, state: StateDB) -> 
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_clears_removed(client: ImmichClient, state: StateDB) -> None:
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     state.replace_synced_ratings({"a1": 3})
     result = await apply_ratings_sync({}, ["a1"], client, state)
     assert result == RatingsResult(set=0, cleared=1)
     assert state.get_synced_ratings() == {}
+    assert json.loads(respx.calls.last.request.content)["rating"] is None
 
 
 @pytest.mark.anyio
@@ -81,7 +84,7 @@ async def test_apply_empty_noop(client: ImmichClient, state: StateDB) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_updates_state(client: ImmichClient, state: StateDB) -> None:
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     await apply_ratings_sync({"a1": 4}, [], client, state)
     assert state.get_synced_ratings() == {"a1": 4}
 
@@ -89,7 +92,7 @@ async def test_apply_updates_state(client: ImmichClient, state: StateDB) -> None
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_logs_audit(client: ImmichClient, state: StateDB) -> None:
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     await apply_ratings_sync({"a1": 4}, [], client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1

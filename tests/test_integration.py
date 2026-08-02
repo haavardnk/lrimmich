@@ -71,7 +71,7 @@ def _mock_album_crud() -> dict[str, list[dict[str, str]]]:
     respx.get(f"{API}/albums").respond(json=[])
     respx.get(url__regex=rf"{API}/albums/imm-\d+$").mock(side_effect=get_handler)
     respx.patch(url__regex=rf"{API}/albums/imm-\d+$").respond(json={"id": "imm-1"})
-    respx.put(f"{API}/assets").mock(return_value=httpx.Response(200, json=None))
+    respx.patch(f"{API}/assets").mock(return_value=httpx.Response(200, json=None))
     respx.get(f"{API}/tags").respond(json=[])
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "created"})
     return albums

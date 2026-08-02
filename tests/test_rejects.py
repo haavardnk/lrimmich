@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -63,10 +64,12 @@ def test_plan_no_false_unarchive(tmp_path: Path) -> None:
 async def test_apply_archives_and_unarchives(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     result = await apply_rejects_sync(["a1"], ["a2"], client, state)
     assert result == RejectsResult(archived=1, unarchived=1)
     assert state.get_synced_rejects() == {"a1"}
+    payloads = [json.loads(c.request.content) for c in respx.calls]
+    assert [p["visibility"] for p in payloads] == ["archive", "timeline"]
 
 
 @respx.mock
@@ -75,7 +78,7 @@ async def test_apply_updates_state(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
     state.replace_synced_rejects({"a2"})
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     await apply_rejects_sync(["a1"], ["a2"], client, state)
     assert state.get_synced_rejects() == {"a1"}
 
@@ -93,7 +96,7 @@ async def test_apply_empty_noop(tmp_path: Path) -> None:
 async def test_apply_logs_audit(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
-    respx.put(f"{API}/assets").respond(json=None)
+    respx.patch(f"{API}/assets").respond(json=None)
     await apply_rejects_sync(["a1"], [], client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1

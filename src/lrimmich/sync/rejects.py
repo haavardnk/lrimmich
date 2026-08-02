@@ -30,9 +30,9 @@ async def apply_rejects_sync(
     state: StateDB,
 ) -> RejectsResult:
     if to_add:
-        await client.bulk_update_assets(to_add, isArchived=True)
+        await client.bulk_update_assets(to_add, visibility="archive")
     if to_remove:
-        await client.bulk_update_assets(to_remove, isArchived=False)
+        await client.bulk_update_assets(to_remove, visibility="timeline")
     if to_add or to_remove:
         updated = (state.get_synced_rejects() | set(to_add)) - set(to_remove)
         state.replace_synced_rejects(updated)

@@ -114,7 +114,7 @@ def test_dry_run_no_mutations(state: StateDB) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_apply(state: StateDB, client: ImmichClient) -> None:
-    respx.put(f"{API}/assets").mock(
+    respx.patch(f"{API}/assets").mock(
         return_value=__import__("httpx").Response(200, json=None)
     )
 
@@ -132,7 +132,7 @@ async def test_apply(state: StateDB, client: ImmichClient) -> None:
 @pytest.mark.anyio
 async def test_apply_updates_state(state: StateDB, client: ImmichClient) -> None:
     state.replace_synced_favorites({"asset-b"})
-    respx.put(f"{API}/assets").mock(
+    respx.patch(f"{API}/assets").mock(
         return_value=__import__("httpx").Response(200, json=None)
     )
 

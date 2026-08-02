@@ -34,6 +34,7 @@ async def test_get_albums(client: ImmichClient, api_url: str) -> None:
     albums = await client.get_albums()
     assert len(albums) == 1
     assert albums[0]["albumName"] == "Test"
+    assert respx.calls.last.request.url.params["isOwned"] == "true"
 
 
 @respx.mock
@@ -169,7 +170,7 @@ async def test_search_metadata_pagination(client: ImmichClient, api_url: str) ->
 @respx.mock
 @pytest.mark.anyio
 async def test_bulk_update_assets(client: ImmichClient, api_url: str) -> None:
-    route = respx.put(f"{api_url}/assets").mock(return_value=httpx.Response(204))
+    route = respx.patch(f"{api_url}/assets").mock(return_value=httpx.Response(204))
     await client.bulk_update_assets(["x1", "x2"], isFavorite=True)
     assert route.call_count == 1
 
@@ -177,7 +178,7 @@ async def test_bulk_update_assets(client: ImmichClient, api_url: str) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_bulk_update_assets_chunking(client: ImmichClient, api_url: str) -> None:
-    route = respx.put(f"{api_url}/assets").mock(return_value=httpx.Response(204))
+    route = respx.patch(f"{api_url}/assets").mock(return_value=httpx.Response(204))
     ids = [f"x{i}" for i in range(2500)]
     await client.bulk_update_assets(ids, isFavorite=True)
     assert route.call_count == 3
@@ -192,7 +193,7 @@ async def test_bulk_update_assets_empty(client: ImmichClient) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_update_asset(client: ImmichClient, api_url: str) -> None:
-    respx.put(f"{api_url}/assets/x1").mock(
+    respx.patch(f"{api_url}/assets/x1").mock(
         return_value=httpx.Response(200, json={"id": "x1"})
     )
     result = await client.update_asset("x1", isFavorite=True)

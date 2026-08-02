@@ -60,8 +60,8 @@ def test_plan_unresolved_skipped(state: StateDB) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_sets_descriptions(client: ImmichClient, state: StateDB) -> None:
-    respx.put(f"{API}/assets/a1").respond(json={"id": "a1"})
-    respx.put(f"{API}/assets/a2").respond(json={"id": "a2"})
+    respx.patch(f"{API}/assets/a1").respond(json={"id": "a1"})
+    respx.patch(f"{API}/assets/a2").respond(json={"id": "a2"})
     result = await apply_captions_sync({"a1": "Sunset"}, ["a2"], client, state)
     assert result == CaptionsResult(set=1, cleared=1)
     snapshot = json.loads(state.get_meta("captions_snapshot") or "{}")
@@ -71,7 +71,7 @@ async def test_apply_sets_descriptions(client: ImmichClient, state: StateDB) -> 
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_audit_log(client: ImmichClient, state: StateDB) -> None:
-    respx.put(f"{API}/assets/a1").respond(json={"id": "a1"})
+    respx.patch(f"{API}/assets/a1").respond(json={"id": "a1"})
     await apply_captions_sync({"a1": "Hello"}, [], client, state)
     logs = state.get_audit_log()
     assert len(logs) == 1

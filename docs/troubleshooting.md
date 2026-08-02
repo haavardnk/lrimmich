@@ -16,6 +16,12 @@ This runs five checks and tells you exactly what's wrong. Always run it first.
 
 ## Common issues
 
+### Rejects aren't archived, or clearing a rating fails
+
+Your Immich server is older than 3.0. Version 3.0 renamed the archive field and
+stopped accepting a rating of zero, and lrimmich now targets the newer API.
+Upgrade Immich, or stay on the lrimmich 0.2.x line, which speaks the 2.x API.
+
 ### "Config not found"
 
 Run `lrimmich config init` to create one, then `lrimmich config edit` to fill in your values.

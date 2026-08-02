@@ -56,7 +56,7 @@ class ImmichClient:
         return await self._request("GET", "/server/config")
 
     async def get_albums(self) -> list[dict[str, Any]]:
-        return await self._request("GET", "/albums") or []
+        return await self._request("GET", "/albums", params={"isOwned": "true"}) or []
 
     async def get_album(self, album_id: str) -> dict[str, Any]:
         return await self._request("GET", f"/albums/{album_id}")
@@ -145,10 +145,10 @@ class ImmichClient:
             return
         for i in range(0, len(asset_ids), CHUNK_SIZE):
             chunk = asset_ids[i : i + CHUNK_SIZE]
-            await self._request("PUT", "/assets", {"ids": chunk, **fields})
+            await self._request("PATCH", "/assets", {"ids": chunk, **fields})
 
     async def update_asset(self, asset_id: str, **fields: Any) -> dict[str, Any]:
-        return await self._request("PUT", f"/assets/{asset_id}", fields)
+        return await self._request("PATCH", f"/assets/{asset_id}", fields)
 
     async def get_tags(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/tags") or []
@@ -182,7 +182,7 @@ class ImmichClient:
         self, stack_id: str, primary_asset_id: str
     ) -> dict[str, Any]:
         return await self._request(
-            "PUT", f"/stacks/{stack_id}", {"primaryAssetId": primary_asset_id}
+            "PATCH", f"/stacks/{stack_id}", {"primaryAssetId": primary_asset_id}
         )
 
     async def delete_stack(self, stack_id: str) -> None:
