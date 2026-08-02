@@ -1,3 +1,4 @@
+import asyncio
 import re
 from pathlib import Path
 from unittest.mock import patch
@@ -5,6 +6,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from lrimmich.app import app
+from lrimmich.sync.summary import SyncSummary
 
 runner = CliRunner()
 
@@ -38,6 +40,33 @@ def test_watch_runs_sync_on_change(tmp_path: Path) -> None:
         result = runner.invoke(app, ["watch", "--config", str(config_path)])
         assert result.exit_code == 0
         mock_sync.assert_called_once()
+
+
+def test_watch_reuses_event_loop(tmp_path: Path) -> None:
+    catalog = tmp_path / "test.lrcat"
+    catalog.write_text("x")
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[[catalogs]]\ncatalog = "{catalog}"\n'
+        '[immich]\nurl = "http://test"\napi_key = "k"\nlibrary_paths = ["/img"]\n'
+    )
+    loops: list[asyncio.AbstractEventLoop] = []
+
+    async def fake_sync(*args: object, **kwargs: object) -> SyncSummary:
+        loops.append(asyncio.get_running_loop())
+        return SyncSummary()
+
+    fake_changes = iter([{("modified", str(catalog))}, {("modified", str(catalog))}])
+    with (
+        patch("lrimmich.watch.watch_files", return_value=fake_changes),
+        patch("lrimmich.watch.run_multi_sync", side_effect=fake_sync),
+        patch("lrimmich.watch.ImmichClient"),
+    ):
+        result = runner.invoke(app, ["watch", "--config", str(config_path), "-q"])
+
+    assert result.exit_code == 0
+    assert len(loops) == 2
+    assert loops[0] is loops[1]
 
 
 def test_watch_help_shows_options() -> None:

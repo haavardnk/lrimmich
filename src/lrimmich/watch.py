@@ -73,29 +73,30 @@ def watch(
                 typer.echo(f"ERROR: {err}", err=True)
 
     try:
-        for _ in watch_files(
-            *watched,
-            debounce=debounce,
-            stop_event=stop_event,
-            raise_interrupt=False,
-        ):
-            _log("Change detected, syncing...")
-            try:
-                asyncio.run(_do_sync())
-                _log("Sync complete")
-                failures = 0
-            except Exception:
-                failures += 1
-                logger.exception(
-                    "sync_error", failure=failures, max_failures=MAX_FAILURES
-                )
-                _log(f"Sync failed ({failures}/{MAX_FAILURES})")
-                if failures >= MAX_FAILURES:
-                    typer.echo(
-                        f"Aborting watch after {MAX_FAILURES} consecutive failures",
-                        err=True,
+        with asyncio.Runner() as runner:
+            for _ in watch_files(
+                *watched,
+                debounce=debounce,
+                stop_event=stop_event,
+                raise_interrupt=False,
+            ):
+                _log("Change detected, syncing...")
+                try:
+                    runner.run(_do_sync())
+                    _log("Sync complete")
+                    failures = 0
+                except Exception:
+                    failures += 1
+                    logger.exception(
+                        "sync_error", failure=failures, max_failures=MAX_FAILURES
                     )
-                    raise typer.Exit(1) from None
+                    _log(f"Sync failed ({failures}/{MAX_FAILURES})")
+                    if failures >= MAX_FAILURES:
+                        typer.echo(
+                            f"Aborting watch after {MAX_FAILURES} consecutive failures",
+                            err=True,
+                        )
+                        raise typer.Exit(1) from None
     except KeyboardInterrupt:
         pass
 
