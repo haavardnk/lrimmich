@@ -174,9 +174,15 @@ def _read_collections_inner(
     ]
 
 
-def read_collection_covers(catalog: Path) -> dict[int, str]:
+def read_collection_covers(catalog: Path, collection_ids: list[int]) -> dict[int, str]:
+    if not collection_ids:
+        return {}
+    placeholders = ",".join("?" * len(collection_ids))
     with closing(_connect(catalog)) as conn:
-        rows = conn.execute(COLLECTION_COVERS).fetchall()
+        rows = conn.execute(
+            COLLECTION_COVERS.format(placeholders=placeholders),
+            collection_ids,
+        ).fetchall()
 
         best: dict[int, tuple[str, int, int]] = {}
         for r in rows:

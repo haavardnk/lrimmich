@@ -274,7 +274,7 @@ def test_cover_highest_rated(catalog_path: Path) -> None:
         .add_collection_image(1, 3)
         .build()
     )
-    covers = read_collection_covers(catalog_path)
+    covers = read_collection_covers(catalog_path, [1])
     assert covers[1] == "raw/b.jpg"
 
 
@@ -288,7 +288,7 @@ def test_cover_fallback_to_pick(catalog_path: Path) -> None:
         .add_collection_image(1, 2)
         .build()
     )
-    covers = read_collection_covers(catalog_path)
+    covers = read_collection_covers(catalog_path, [1])
     assert covers[1] == "raw/b.jpg"
 
 
@@ -300,8 +300,20 @@ def test_cover_no_candidate(catalog_path: Path) -> None:
         .add_collection_image(1, 1)
         .build()
     )
-    covers = read_collection_covers(catalog_path)
+    covers = read_collection_covers(catalog_path, [1])
     assert 1 not in covers
+
+
+def test_cover_ignores_other_collections(catalog_path: Path) -> None:
+    (
+        CatalogBuilder(catalog_path)
+        .add_collection(1, "Travel")
+        .add_collection(2, "Other")
+        .add_image(1, "a.jpg", "raw/", rating=5)
+        .add_collection_image(2, 1)
+        .build()
+    )
+    assert read_collection_covers(catalog_path, [1]) == {}
 
 
 def test_read_catalog_fingerprint(catalog_path: Path) -> None:

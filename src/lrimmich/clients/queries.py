@@ -73,13 +73,14 @@ COLLECTION_FILES = """
 
 COLLECTION_COVERS = """
     SELECT ci.collection,
-           af.pathFromRoot || lf.idx_filename AS path,
+           COALESCE(af.pathFromRoot, '') || lf.idx_filename AS path,
            COALESCE(ai.rating, 0) AS rating,
            COALESCE(ai.pick, 0) AS pick
     FROM AgLibraryCollectionImage ci
     JOIN Adobe_images ai ON ci.image = ai.id_local
     JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
     JOIN AgLibraryFolder af ON lf.folder = af.id_local
+    WHERE ci.collection IN ({placeholders})
 """
 
 FLAGGED_IMAGES = f"{SELECT_PATH}{IMAGE_PATH_JOIN}    WHERE ai.pick = 1"
@@ -112,7 +113,7 @@ KEYWORD_IMAGES = """
 """
 
 STACKS = """
-    SELECT ai.stack, af.pathFromRoot || lf.idx_filename AS path,
+    SELECT ai.stack, COALESCE(af.pathFromRoot, '') || lf.idx_filename AS path,
            ai.stackPosition
     FROM Adobe_images ai
     JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local

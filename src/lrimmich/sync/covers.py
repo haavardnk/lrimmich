@@ -62,7 +62,9 @@ class Step:
         return cfg.sync.albums
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> CoversPlan:
-        cover_paths = read_collection_covers(ctx.catalog.catalog)
+        cover_paths = read_collection_covers(
+            ctx.catalog.catalog, [c.id for c in ctx.collections]
+        )
         to_set, to_clear = plan_covers_sync(cover_paths, ctx.resolved, ctx.state)
         summary.covers = CoversResult(set=len(to_set), cleared=len(to_clear))
         return to_set, to_clear
