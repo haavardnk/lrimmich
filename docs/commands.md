@@ -56,8 +56,9 @@ Checks:
 1. Catalog file opens and is readable
 2. Lightroom WAL lock (detects if LR is open)
 3. Immich API is reachable
-4. API key has required permissions
-5. At least one file path resolves between the two systems
+4. Immich server version is 3.0 or newer
+5. API key has required permissions
+6. At least one file path resolves between the two systems
 
 ## `watch`
 

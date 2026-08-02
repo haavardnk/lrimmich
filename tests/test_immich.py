@@ -235,6 +235,18 @@ async def test_401_not_retried(client: ImmichClient, api_url: str) -> None:
 
 @respx.mock
 @pytest.mark.anyio
+async def test_error_message_includes_response_body(
+    client: ImmichClient, api_url: str
+) -> None:
+    respx.patch(f"{api_url}/assets").mock(
+        return_value=httpx.Response(400, json={"message": "Rating must be 1-5"})
+    )
+    with pytest.raises(httpx.HTTPStatusError, match="Rating must be 1-5"):
+        await client.bulk_update_assets(["x1"], rating=0)
+
+
+@respx.mock
+@pytest.mark.anyio
 async def test_get_tags(client: ImmichClient, api_url: str) -> None:
     respx.get(f"{api_url}/tags").mock(
         return_value=httpx.Response(200, json=[{"id": "t1", "name": "lr:color:red"}])

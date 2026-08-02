@@ -13,6 +13,8 @@ from lrimmich.clients.state import StateDB, state_path_for_catalog
 from lrimmich.utils.config import Config
 from lrimmich.utils.resolver import map_path
 
+MIN_IMMICH_MAJOR = 3
+
 
 @dataclass
 class CheckResult:
@@ -54,12 +56,27 @@ def check_wal_lock(catalog: Path) -> CheckResult:
         return CheckResult("wal_lock", False, "WAL locked (Lightroom open?)")
 
 
-async def check_immich_reachable(client: ImmichClient) -> CheckResult:
+async def check_immich(client: ImmichClient) -> list[CheckResult]:
     try:
-        await client.server_about()
-        return CheckResult("immich", True, "Reachable")
+        about = await client.server_about()
     except httpx.HTTPError as e:
-        return CheckResult("immich", False, str(e))
+        return [CheckResult("immich", False, str(e))]
+    version = str(about.get("version", "")).lstrip("v")
+    major = version.split(".")[0]
+    if major.isdigit() and int(major) >= MIN_IMMICH_MAJOR:
+        return [
+            CheckResult("immich", True, "Reachable"),
+            CheckResult("immich_version", True, f"Immich {version}"),
+        ]
+    return [
+        CheckResult("immich", True, "Reachable"),
+        CheckResult(
+            "immich_version",
+            False,
+            f"Immich {version or 'unknown'} is older than "
+            f"{MIN_IMMICH_MAJOR}.0; lrimmich targets the Immich v3 API",
+        ),
+    ]
 
 
 async def check_api_permissions(client: ImmichClient) -> CheckResult:
@@ -161,7 +178,7 @@ async def run_doctor(
     report = DoctorReport()
     if config_path:
         report.checks.append(check_config_keys(config_path))
-    report.checks.append(await check_immich_reachable(client))
+    report.checks.extend(await check_immich(client))
     report.checks.append(await check_api_permissions(client))
     for catalog in cfg.catalogs:
         report.checks.append(check_catalog(catalog.catalog))

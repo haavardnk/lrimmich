@@ -12,7 +12,7 @@ nav_order: 8
 lrimmich doctor
 ```
 
-This runs five checks and tells you exactly what's wrong. Always run it first.
+This runs a series of checks and tells you exactly what's wrong. Always run it first.
 
 ## Common issues
 
@@ -21,6 +21,12 @@ This runs five checks and tells you exactly what's wrong. Always run it first.
 Your Immich server is older than 3.0. Version 3.0 renamed the archive field and
 stopped accepting a rating of zero, and lrimmich now targets the newer API.
 Upgrade Immich, or stay on the lrimmich 0.2.x line, which speaks the 2.x API.
+`doctor` reports the version it detected, so check there if you're unsure.
+
+### A sync step failed with an Immich error
+
+Errors from Immich include the server's own response body, so the message names
+the field it rejected. Run `lrimmich --verbose sync` for the full request trace.
 
 ### "Config not found"
 

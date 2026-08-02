@@ -11,7 +11,7 @@ from lrimmich.utils.doctor import (
     check_api_permissions,
     check_catalog,
     check_config_keys,
-    check_immich_reachable,
+    check_immich,
     check_path_mapping,
     check_state_db,
     check_wal_lock,
@@ -58,20 +58,28 @@ def test_check_wal_unlocked(catalog: Path) -> None:
 
 @respx.mock
 @pytest.mark.anyio
-async def test_check_immich_reachable_pass(client: ImmichClient) -> None:
+@pytest.mark.parametrize(
+    ("version", "version_ok"),
+    [("v3.0.0", True), ("2.9.1", False)],
+)
+async def test_check_immich_reports_version(
+    client: ImmichClient, version: str, version_ok: bool
+) -> None:
     respx.get(f"{API}/server/about").mock(
-        return_value=httpx.Response(200, json={"version": "1.0"})
+        return_value=httpx.Response(200, json={"version": version})
     )
-    result = await check_immich_reachable(client)
-    assert result.ok
+    reachable, detected = await check_immich(client)
+    assert reachable.ok
+    assert detected.ok is version_ok
 
 
 @respx.mock
 @pytest.mark.anyio
-async def test_check_immich_reachable_fail(client: ImmichClient) -> None:
+async def test_check_immich_fail(client: ImmichClient) -> None:
     respx.get(f"{API}/server/about").mock(return_value=httpx.Response(500))
-    result = await check_immich_reachable(client)
-    assert not result.ok
+    results = await check_immich(client)
+    assert len(results) == 1
+    assert not results[0].ok
 
 
 @respx.mock
@@ -138,7 +146,7 @@ async def test_run_doctor_all_pass(
     catalog: Path, client: ImmichClient, state: StateDB
 ) -> None:
     respx.get(f"{API}/server/about").mock(
-        return_value=httpx.Response(200, json={"version": "1.0"})
+        return_value=httpx.Response(200, json={"version": "v3.0.0"})
     )
     respx.get(f"{API}/albums").mock(return_value=httpx.Response(200, json=[]))
     respx.get(f"{API}/tags").mock(return_value=httpx.Response(200, json=[]))

@@ -41,7 +41,12 @@ class ImmichClient:
                 request=response.request,
                 response=response,
             )
-        response.raise_for_status()
+        if response.is_error:
+            raise httpx.HTTPStatusError(
+                f"{response.status_code} for {method} {path}: {response.text[:500]}",
+                request=response.request,
+                response=response,
+            )
         if not response.content:
             return None
         return response.json()
