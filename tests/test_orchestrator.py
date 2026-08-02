@@ -145,6 +145,36 @@ async def test_skip_sync_when_catalog_unchanged(
 
 @respx.mock
 @pytest.mark.anyio
+async def test_dry_run_ignores_fingerprint(
+    cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
+) -> None:
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.patch(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    album = respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [{"id": "a1"}], "albumUsers": []}
+    )
+
+    await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
+
+    album.respond(json={"assets": [], "albumUsers": []})
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+
+    assert not summary.skipped_unchanged
+    assert summary.assets_added == 1
+
+
+@respx.mock
+@pytest.mark.anyio
 async def test_collection_move_is_detected(
     cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
 ) -> None:

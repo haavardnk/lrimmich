@@ -33,7 +33,9 @@ lrimmich sync --json --quiet
 | `--refresh-cache` | Ignore cached path resolutions, re-resolve everything |
 
 When nothing in the catalog changed since the last sync, `sync` prints `catalog
-unchanged since last sync, nothing to do` and stops without calling Immich.
+unchanged since last sync, nothing to do` and stops without calling Immich. This
+shortcut only applies to real syncs — `--dry-run` always does the full
+comparison.
 
 ## `status`
 
@@ -43,6 +45,9 @@ Check for drift between Lightroom and Immich. Exits with code 1 if anything is o
 lrimmich status
 lrimmich status --json
 ```
+
+`status` compares both sides every time, so it also catches changes made inside
+Immich, not just Lightroom edits.
 
 ## `doctor`
 

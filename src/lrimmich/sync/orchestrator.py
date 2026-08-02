@@ -93,6 +93,7 @@ async def run_sync(
     last_fingerprint = state.get_meta("catalog_fingerprint")
     if (
         not force
+        and not dry_run
         and not refresh_cache
         and last_fingerprint
         and combined_fingerprint == last_fingerprint

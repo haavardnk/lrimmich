@@ -51,6 +51,10 @@ When the fingerprint hasn't changed since the last sync, lrimmich skips all API
 work, prints `catalog unchanged since last sync, nothing to do`, and exits. Use
 `--force` to bypass this check.
 
+Dry runs ignore the fingerprint entirely. `lrimmich status` and
+`lrimmich sync --dry-run` always compare Lightroom against Immich, so they still
+report albums that were edited on the Immich side.
+
 The fingerprint format changed in the release that added the membership digests,
 so the first sync after upgrading always runs in full.
 
