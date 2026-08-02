@@ -68,6 +68,7 @@ async def resolve_paths(
     on_progress: Callable[[int, int], None] | None = None,
     state: StateDB | None = None,
     strip: str | None = None,
+    miss_max_age: int | None = None,
 ) -> tuple[dict[str, str], set[str]]:
     cached: dict[str, str] = {}
     cache_hits: set[str] = set()
@@ -83,15 +84,24 @@ async def resolve_paths(
     else:
         missing = relative_paths
 
-    if missing:
+    lookup = missing
+    if state and miss_max_age is not None:
+        lookup = missing - state.get_cached_misses(miss_max_age)
+
+    if lookup:
         index = await _build_immich_index(library_paths, client, on_progress)
-        for rp in missing:
+        unresolved: set[str] = set()
+        for rp in lookup:
             for lp in library_paths:
                 expected = map_path(rp, lp, strip)
                 asset_id = index.get(expected)
                 if asset_id:
                     cached[rp] = asset_id
                     break
+            else:
+                unresolved.add(rp)
+        if state:
+            state.record_path_misses(unresolved, lookup - unresolved)
     return cached, cache_hits
 
 

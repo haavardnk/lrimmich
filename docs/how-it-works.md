@@ -62,4 +62,6 @@ so the first sync after upgrading always runs in full.
 
 Resolving file paths against the Immich API is the slowest part of a sync. lrimmich caches the mapping from relative path to asset ID in a local SQLite database. The cache expires after `cache.ttl_days` (default 90). Each sync also spot-checks a random sample of cached entries (`cache.spot_check_pct`, default 5%) to catch files that moved or were deleted in Immich.
 
+Photos that are in Lightroom but not yet uploaded to Immich would otherwise force a full folder crawl on every sync. lrimmich remembers those misses for `cache.miss_ttl_minutes` (default 60) and skips the crawl until they expire. `--refresh-cache` clears both the hits and the misses.
+
 Use `--refresh-cache` to force a full re-resolution.

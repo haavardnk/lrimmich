@@ -16,7 +16,7 @@ def state_path_for_catalog(catalog_key: str) -> Path:
     return DEFAULT_STATE_DIR / f"state_{catalog_key}.db"
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -74,6 +74,13 @@ CREATE TABLE IF NOT EXISTS synced_album_assets (
 );
 """
 
+SCHEMA_V3 = """
+CREATE TABLE IF NOT EXISTS path_cache_misses (
+    relative_path TEXT PRIMARY KEY,
+    checked_at INTEGER NOT NULL
+);
+"""
+
 
 class StateDB:
     def __init__(self, path: Path = DEFAULT_STATE_PATH) -> None:
@@ -108,6 +115,8 @@ class StateDB:
             self._conn.executescript(SCHEMA_V1)
         if current < 2:
             self._conn.executescript(SCHEMA_V2)
+        if current < 3:
+            self._conn.executescript(SCHEMA_V3)
         self._set_meta("schema_version", str(SCHEMA_VERSION))
 
     def _get_schema_version(self) -> int:
@@ -191,6 +200,30 @@ class StateDB:
 
     def clear_path_cache(self) -> None:
         self._conn.execute("DELETE FROM path_cache")
+        self._conn.execute("DELETE FROM path_cache_misses")
+
+    def get_cached_misses(self, max_age: int) -> set[str]:
+        cutoff = int(time.time()) - max_age
+        rows = self._conn.execute(
+            "SELECT relative_path FROM path_cache_misses WHERE checked_at >= ?",
+            (cutoff,),
+        ).fetchall()
+        return {r["relative_path"] for r in rows}
+
+    def record_path_misses(self, missed: set[str], resolved: set[str]) -> None:
+        now = int(time.time())
+        with self.transaction():
+            if resolved:
+                self._conn.executemany(
+                    "DELETE FROM path_cache_misses WHERE relative_path = ?",
+                    [(rp,) for rp in resolved],
+                )
+            if missed:
+                self._conn.executemany(
+                    "INSERT OR REPLACE INTO path_cache_misses"
+                    "(relative_path, checked_at) VALUES (?, ?)",
+                    [(rp, now) for rp in missed],
+                )
 
     def evict_stale_cache(self, max_age: int) -> int:
         cutoff = int(time.time()) - max_age

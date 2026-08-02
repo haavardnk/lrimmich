@@ -163,6 +163,40 @@ async def test_resolve_returns_cache_hits(client: ImmichClient, tmp_path: Path) 
 
 @respx.mock
 @pytest.mark.anyio
+async def test_known_miss_skips_folder_crawl(
+    client: ImmichClient, tmp_path: Path
+) -> None:
+    state = StateDB(tmp_path / "state.db")
+    folders = respx.get(f"{API}/view/folder/unique-paths").respond(json=["/ext"])
+    respx.get(f"{API}/view/folder").respond(json=[])
+
+    await resolve_paths({"gone.jpg"}, ["/ext/"], client, state=state, miss_max_age=3600)
+    result, _ = await resolve_paths(
+        {"gone.jpg"}, ["/ext/"], client, state=state, miss_max_age=3600
+    )
+
+    assert result == {}
+    assert folders.call_count == 1
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_expired_miss_is_retried(client: ImmichClient, tmp_path: Path) -> None:
+    state = StateDB(tmp_path / "state.db")
+    state.record_path_misses({"a.jpg"}, set())
+    state._conn.execute("UPDATE path_cache_misses SET checked_at = checked_at - 99999")
+    _mock_folders(["/ext"], {"/ext": [{"id": "a-id", "originalPath": "/ext/a.jpg"}]})
+
+    result, _ = await resolve_paths(
+        {"a.jpg"}, ["/ext/"], client, state=state, miss_max_age=3600
+    )
+
+    assert result == {"a.jpg": "a-id"}
+    assert state.get_cached_misses(3600) == set()
+
+
+@respx.mock
+@pytest.mark.anyio
 async def test_spot_check_valid(client: ImmichClient, tmp_path: Path) -> None:
     state = StateDB(tmp_path / "state.db")
     state.upsert_path_cache("a.jpg", "a1", "a.jpg")

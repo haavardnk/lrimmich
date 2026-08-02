@@ -116,6 +116,7 @@ async def run_sync(
         on_progress=on_progress,
         state=state,
         strip=catalog.strip,
+        miss_max_age=cfg.cache.miss_ttl_minutes * 60 or None,
     )
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")

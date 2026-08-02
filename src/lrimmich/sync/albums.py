@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 
@@ -14,6 +15,8 @@ from lrimmich.utils.config import (
     Config,
     SafetyConfig,
 )
+
+ALBUM_CONCURRENCY = 10
 
 
 def format_album_name(collection: LrCollection, fmt: str = "{path}") -> str:
@@ -140,28 +143,36 @@ class AlbumPlanContext:
     flagged_paths: set[str]
     rejected_paths: set[str]
     rated_paths: dict[str, int]
+    album_details: dict[str, dict]
 
 
-async def _plan_collection(
+async def _fetch_album_details(
+    album_ids: list[str], client: ImmichClient
+) -> dict[str, dict]:
+    if not album_ids:
+        return {}
+    sem = asyncio.Semaphore(ALBUM_CONCURRENCY)
+
+    async def _fetch(album_id: str) -> tuple[str, dict]:
+        async with sem:
+            return album_id, await client.get_album(album_id)
+
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(_fetch(aid)) for aid in album_ids]
+    return dict(t.result() for t in tasks)
+
+
+def _plan_collection(
     collection: LrCollection,
     ctx: AlbumPlanContext,
     all_albums: dict[str, dict],
+    asset_ids: list[str],
 ) -> tuple[list[AlbumAction], bool]:
     album_name = format_album_name(collection, ctx.album_name_format)
     rule = resolve_album_rule(
         collection, ctx.album_filter, ctx.album_min_rating, ctx.album_rules
     )
     effective_share = rule.share_with if rule.share_with is not None else ctx.share_with
-    asset_ids = _filtered_asset_ids(
-        collection,
-        ctx.resolved,
-        ctx.album_filter,
-        ctx.album_min_rating,
-        ctx.album_rules,
-        ctx.flagged_paths,
-        ctx.rejected_paths,
-        ctx.rated_paths,
-    )
     ownership = ctx.state.get_album_ownership(collection.id)
     actions: list[AlbumAction] = []
 
@@ -227,9 +238,7 @@ async def _plan_collection(
             )
         )
 
-    actions.extend(
-        await _plan_diff(collection, ctx, immich_album_id, album_name, asset_ids)
-    )
+    actions.extend(_plan_diff(collection, ctx, immich_album_id, album_name, asset_ids))
 
     if effective_share:
         actions.extend(
@@ -241,7 +250,7 @@ async def _plan_collection(
     return actions, False
 
 
-async def _plan_diff(
+def _plan_diff(
     collection: LrCollection,
     ctx: AlbumPlanContext,
     immich_album_id: str,
@@ -249,7 +258,7 @@ async def _plan_diff(
     asset_ids: list[str],
 ) -> list[AlbumAction]:
     actions: list[AlbumAction] = []
-    album_data = await ctx.client.get_album(immich_album_id)
+    album_data = ctx.album_details.get(immich_album_id, {})
     current_ids = {a["id"] for a in album_data.get("assets", [])}
     desired_ids = set(asset_ids)
 
@@ -385,16 +394,42 @@ async def plan_album_sync(
         flagged_paths=flagged_paths or set(),
         rejected_paths=rejected_paths or set(),
         rated_paths=rated_paths or {},
+        album_details={},
     )
 
     needs_share = bool(ctx.share_with) or any(r.share_with for r in ctx.album_rules)
     all_albums = {a["id"]: a for a in await client.get_albums()} if needs_share else {}
 
+    asset_ids_by_collection = {
+        c.id: _filtered_asset_ids(
+            c,
+            ctx.resolved,
+            ctx.album_filter,
+            ctx.album_min_rating,
+            ctx.album_rules,
+            ctx.flagged_paths,
+            ctx.rejected_paths,
+            ctx.rated_paths,
+        )
+        for c in collections
+    }
+    ctx.album_details = await _fetch_album_details(
+        [
+            ownership["immich_album_id"]
+            for c in collections
+            if (asset_ids_by_collection[c.id] or not ctx.skip_empty)
+            and (ownership := state.get_album_ownership(c.id)) is not None
+        ],
+        client,
+    )
+
     actions: list[AlbumAction] = []
     lr_ids = {c.id for c in collections}
 
     for collection in collections:
-        col_actions, empty = await _plan_collection(collection, ctx, all_albums)
+        col_actions, empty = _plan_collection(
+            collection, ctx, all_albums, asset_ids_by_collection[collection.id]
+        )
         if empty:
             lr_ids.discard(collection.id)
         actions.extend(col_actions)

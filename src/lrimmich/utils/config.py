@@ -81,6 +81,7 @@ class SafetyConfig(BaseConfig):
 class CacheConfig(BaseConfig):
     ttl_days: int = Field(default=90, ge=1)
     spot_check_pct: int = Field(default=5, ge=0, le=100)
+    miss_ttl_minutes: int = Field(default=60, ge=0)
 
 
 class NotificationConfig(BaseConfig):

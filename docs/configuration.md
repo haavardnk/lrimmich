@@ -84,6 +84,7 @@ exclude_patterns = ["Exports/*"]
 |-----|------|---------|-------------|
 | `ttl_days` | int (≥1) | `90` | Days before cached path-to-asset mappings expire. |
 | `spot_check_pct` | int (0–100) | `5` | Percentage of cached entries to verify against Immich each sync. Set to 0 to disable. |
+| `miss_ttl_minutes` | int (≥0) | `60` | Minutes to remember that a photo isn't in Immich yet, so repeat syncs skip the folder crawl. Set to 0 to look every time. |
 
 ## `[[album_rules]]`
 

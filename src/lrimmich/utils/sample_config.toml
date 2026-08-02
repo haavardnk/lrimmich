@@ -42,6 +42,7 @@ skip_empty = true
 [cache]
 # ttl_days = 90
 # spot_check_pct = 5
+# miss_ttl_minutes = 60
 
 [safety]
 delete_threshold = 100

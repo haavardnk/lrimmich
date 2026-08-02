@@ -1,9 +1,12 @@
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 
-from lrimmich.clients.state import StateDB
+from lrimmich.clients.state import SCHEMA_V1, SCHEMA_VERSION, StateDB
+
+CURRENT_VERSION = str(SCHEMA_VERSION)
 
 
 @pytest.fixture()
@@ -12,7 +15,7 @@ def db(tmp_path: Path) -> StateDB:
 
 
 def test_schema_creation(db: StateDB) -> None:
-    assert db.get_meta("schema_version") == "2"
+    assert db.get_meta("schema_version") == CURRENT_VERSION
 
 
 def test_migration_idempotent(tmp_path: Path) -> None:
@@ -21,7 +24,7 @@ def test_migration_idempotent(tmp_path: Path) -> None:
     db1.set_meta("custom", "value")
     db1.close()
     db2 = StateDB(path)
-    assert db2.get_meta("schema_version") == "2"
+    assert db2.get_meta("schema_version") == CURRENT_VERSION
     assert db2.get_meta("custom") == "value"
     db2.close()
 
@@ -152,21 +155,13 @@ def test_audit_log_ordering(db: StateDB) -> None:
 def test_creates_parent_dir(tmp_path: Path) -> None:
     path = tmp_path / "deep" / "nested" / "state.db"
     db = StateDB(path)
-    assert db.get_meta("schema_version") == "2"
+    assert db.get_meta("schema_version") == CURRENT_VERSION
     db.close()
 
 
-def test_schema_v2_fresh(db: StateDB) -> None:
-    assert db.get_meta("schema_version") == "2"
-
-
-def test_schema_v1_migrates_to_v2(tmp_path: Path) -> None:
-    import sqlite3
-
+def test_schema_v1_migrates_to_latest(tmp_path: Path) -> None:
     path = tmp_path / "v1.db"
     conn = sqlite3.connect(str(path))
-    from lrimmich.clients.state import SCHEMA_V1
-
     conn.executescript(SCHEMA_V1)
     conn.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', '1')"
@@ -174,8 +169,9 @@ def test_schema_v1_migrates_to_v2(tmp_path: Path) -> None:
     conn.commit()
     conn.close()
     db = StateDB(path)
-    assert db.get_meta("schema_version") == "2"
+    assert db.get_meta("schema_version") == CURRENT_VERSION
     db.get_synced_album_assets("anything")
+    assert db.get_cached_misses(60) == set()
     db.close()
 
 
