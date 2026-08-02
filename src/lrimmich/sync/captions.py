@@ -35,10 +35,13 @@ async def apply_captions_sync(
     client: ImmichClient,
     state: StateDB,
 ) -> CaptionsResult:
-    for asset_id, caption in sorted(to_set.items()):
-        await client.update_asset(asset_id, description=caption)
-    for asset_id in sorted(to_clear):
-        await client.update_asset(asset_id, description="")
+    by_caption: dict[str, list[str]] = {}
+    for asset_id, caption in to_set.items():
+        by_caption.setdefault(caption, []).append(asset_id)
+    for caption, asset_ids in by_caption.items():
+        await client.bulk_update_assets(sorted(asset_ids), description=caption)
+    if to_clear:
+        await client.bulk_update_assets(sorted(to_clear), description="")
     if to_set or to_clear:
         snapshot = dict(json.loads(state.get_meta("captions_snapshot") or "{}"))
         snapshot.update(to_set)

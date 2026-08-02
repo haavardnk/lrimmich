@@ -192,16 +192,6 @@ async def test_bulk_update_assets_empty(client: ImmichClient) -> None:
 
 @respx.mock
 @pytest.mark.anyio
-async def test_update_asset(client: ImmichClient, api_url: str) -> None:
-    respx.patch(f"{api_url}/assets/x1").mock(
-        return_value=httpx.Response(200, json={"id": "x1"})
-    )
-    result = await client.update_asset("x1", isFavorite=True)
-    assert result["id"] == "x1"
-
-
-@respx.mock
-@pytest.mark.anyio
 @pytest.mark.parametrize("status", [429, 500, 502, 503])
 async def test_retry_on_transient_error(
     status: int, client: ImmichClient, api_url: str

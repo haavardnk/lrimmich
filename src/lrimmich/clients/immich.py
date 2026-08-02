@@ -152,9 +152,6 @@ class ImmichClient:
             chunk = asset_ids[i : i + CHUNK_SIZE]
             await self._request("PATCH", "/assets", {"ids": chunk, **fields})
 
-    async def update_asset(self, asset_id: str, **fields: Any) -> dict[str, Any]:
-        return await self._request("PATCH", f"/assets/{asset_id}", fields)
-
     async def get_tags(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/tags") or []
 
