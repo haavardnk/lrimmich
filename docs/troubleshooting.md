@@ -36,6 +36,12 @@ Either set `immich.api_key` in the config file, or export `LRIMMICH_API_KEY` as 
 
 Lightroom Classic has the catalog open. lrimmich reads the database in read-only mode, so this is usually fine — the warning is informational. If you get actual read errors, close Lightroom and try again.
 
+### Moving photos between collections didn't sync
+
+Older versions missed this: the fingerprint only counted membership rows, and
+moving a photo from one collection to another leaves the count identical, so the
+sync exited early. Upgrade, or run `lrimmich sync --force` on an old version.
+
 ### Albums are deleting too many assets
 
 The safety config blocks runaway deletions. If you intentionally removed a lot of photos from a collection, either:

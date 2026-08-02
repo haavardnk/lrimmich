@@ -127,12 +127,22 @@ FINGERPRINT_COUNTS = """
     FROM Adobe_images
 """
 
-COLLECTION_IMAGE_COUNT = "SELECT COUNT(*) AS cnt FROM AgLibraryCollectionImage"
-
-CHANGED_PATHS = f"""
-    SELECT af.pathFromRoot || lf.idx_filename AS path
-    {IMAGE_PATH_JOIN}
-    WHERE ai.touchTime > ?
+COLLECTION_MEMBERSHIP_DIGEST = """
+    SELECT COUNT(*) AS cnt,
+           COALESCE(SUM(collection * 31 + image), 0) AS digest,
+           COALESCE(MAX(id_local), 0) AS max_id
+    FROM AgLibraryCollectionImage
 """
 
-MAX_TOUCH_TIME = "SELECT MAX(touchTime) AS mt FROM Adobe_images"
+KEYWORD_MEMBERSHIP_DIGEST = """
+    SELECT COUNT(*) AS cnt,
+           COALESCE(SUM(tag * 31 + image), 0) AS digest,
+           COALESCE(MAX(id_local), 0) AS max_id
+    FROM AgLibraryKeywordImage
+"""
+
+COLLECTION_DIGEST = """
+    SELECT COUNT(*) AS cnt,
+           COALESCE(MAX(id_local), 0) AS max_id
+    FROM AgLibraryCollection
+"""

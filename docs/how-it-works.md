@@ -42,7 +42,16 @@ Per-collection overrides use `[[album_rules]]` entries. First matching rule wins
 
 ## Fingerprint and incremental syncs
 
-The catalog fingerprint is a hash of the collection structure and image metadata. When the fingerprint hasn't changed since the last sync, lrimmich skips all API work and exits immediately. Use `--force` to bypass this check.
+The catalog fingerprint is a hash of the image count and newest edit timestamp,
+plus digests of collection membership, keyword assignments, and the collection
+list itself. Moving a photo between two collections changes the fingerprint even
+though the total number of photos stays the same.
+
+When the fingerprint hasn't changed since the last sync, lrimmich skips all API
+work and exits immediately. Use `--force` to bypass this check.
+
+The fingerprint format changed in the release that added the membership digests,
+so the first sync after upgrading always runs in full.
 
 ## Path cache
 

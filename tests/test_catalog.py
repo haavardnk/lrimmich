@@ -1,16 +1,16 @@
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
 
 from lrimmich.clients.catalog import (
     read_catalog_fingerprint,
-    read_changed_paths,
     read_collection_covers,
     read_collections,
     read_color_labels,
     read_flagged_images,
     read_keywords,
-    read_max_touch_time,
     read_rated_images,
     read_rejected_images,
     read_stacks,
@@ -313,30 +313,53 @@ def test_read_catalog_fingerprint(catalog_path: Path) -> None:
         .build()
     )
     fp1 = read_catalog_fingerprint(catalog_path)
-    assert len(fp1) == 16
+    assert fp1.startswith("v2:")
     fp2 = read_catalog_fingerprint(catalog_path)
     assert fp1 == fp2
 
 
-def test_read_max_touch_time(catalog_path: Path) -> None:
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(
+            "UPDATE AgLibraryCollectionImage SET collection = 2 WHERE image = 1",
+            id="collection_move",
+        ),
+        pytest.param(
+            "DELETE FROM AgLibraryCollectionImage WHERE image = 1",
+            id="collection_remove",
+        ),
+        pytest.param(
+            "UPDATE AgLibraryKeywordImage SET tag = 20 WHERE image = 1",
+            id="keyword_move",
+        ),
+        pytest.param(
+            "DELETE FROM AgLibraryCollection WHERE id_local = 2",
+            id="collection_deleted",
+        ),
+    ],
+)
+def test_fingerprint_changes_on_membership_change(
+    catalog_path: Path, mutate: str
+) -> None:
     (
         CatalogBuilder(catalog_path)
+        .add_collection(1, "Travel")
+        .add_collection(2, "Portraits")
+        .add_keyword(10, "sunset")
+        .add_keyword(20, "portrait")
         .add_image(1, "a.jpg", "raw/", touch_time=100.0)
-        .add_image(2, "b.jpg", "raw/", touch_time=200.0)
+        .add_collection_image(1, 1)
+        .add_keyword_image(10, 1)
         .build()
     )
-    assert read_max_touch_time(catalog_path) == 200.0
+    before = read_catalog_fingerprint(catalog_path)
 
+    with closing(sqlite3.connect(str(catalog_path))) as conn:
+        conn.execute(mutate)
+        conn.commit()
 
-def test_read_changed_paths(catalog_path: Path) -> None:
-    (
-        CatalogBuilder(catalog_path)
-        .add_image(1, "a.jpg", "raw/", touch_time=100.0)
-        .add_image(2, "b.jpg", "raw/", touch_time=200.0)
-        .build()
-    )
-    changed = read_changed_paths(catalog_path, 150.0)
-    assert changed == {"raw/b.jpg"}
+    assert read_catalog_fingerprint(catalog_path) != before
 
 
 def test_read_stacks(catalog_path: Path) -> None:

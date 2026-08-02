@@ -8,10 +8,10 @@ from pathlib import Path
 
 from lrimmich.clients.queries import (
     CAPTIONS,
-    CHANGED_PATHS,
     COLLECTION_COVERS,
+    COLLECTION_DIGEST,
     COLLECTION_FILES,
-    COLLECTION_IMAGE_COUNT,
+    COLLECTION_MEMBERSHIP_DIGEST,
     COLLECTION_TREE,
     COLLECTIONS_ALL,
     COLLECTIONS_VISIBLE,
@@ -19,8 +19,8 @@ from lrimmich.clients.queries import (
     FINGERPRINT_COUNTS,
     FLAGGED_IMAGES,
     KEYWORD_IMAGES,
+    KEYWORD_MEMBERSHIP_DIGEST,
     KEYWORDS_TREE,
-    MAX_TOUCH_TIME,
     RATED_IMAGES,
     REJECTED_IMAGES,
     STACKS,
@@ -28,6 +28,8 @@ from lrimmich.clients.queries import (
     detect_schema,
 )
 from lrimmich.utils.config import BaseConfig, CatalogConfig
+
+FINGERPRINT_VERSION = "v2"
 
 
 class LrCollection(BaseConfig):
@@ -269,17 +271,21 @@ def read_stacks(catalog: Path) -> list[LrStack]:
 
 def read_catalog_fingerprint(catalog: Path) -> str:
     with closing(_connect(catalog)) as conn:
-        row = conn.execute(FINGERPRINT_COUNTS).fetchone()
-        col_row = conn.execute(COLLECTION_IMAGE_COUNT).fetchone()
-    parts = f"{row['max_touch']}:{row['img_count']}:{col_row['cnt']}"
-    return sha256(parts.encode()).hexdigest()[:16]
-
-
-def read_changed_paths(catalog: Path, since_touch_time: float) -> set[str]:
-    rows = _query_rows(catalog, CHANGED_PATHS, (since_touch_time,))
-    return {r["path"] for r in rows}
-
-
-def read_max_touch_time(catalog: Path) -> float:
-    rows = _query_rows(catalog, MAX_TOUCH_TIME)
-    return rows[0]["mt"] or 0.0 if rows else 0.0
+        images = conn.execute(FINGERPRINT_COUNTS).fetchone()
+        members = conn.execute(COLLECTION_MEMBERSHIP_DIGEST).fetchone()
+        keywords = conn.execute(KEYWORD_MEMBERSHIP_DIGEST).fetchone()
+        collections = conn.execute(COLLECTION_DIGEST).fetchone()
+    values: tuple[object, ...] = (
+        images["max_touch"],
+        images["img_count"],
+        members["cnt"],
+        members["digest"],
+        members["max_id"],
+        keywords["cnt"],
+        keywords["digest"],
+        keywords["max_id"],
+        collections["cnt"],
+        collections["max_id"],
+    )
+    parts = ":".join(str(v) for v in values)
+    return f"{FINGERPRINT_VERSION}:{sha256(parts.encode()).hexdigest()[:16]}"

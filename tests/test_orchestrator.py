@@ -1,3 +1,5 @@
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -139,6 +141,61 @@ async def test_skip_sync_when_catalog_unchanged(
     summary = await run_sync(cfg, cfg.catalogs[0], client, state)
 
     assert not summary.has_drift
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_collection_move_is_detected(
+    cfg: Config, client: ImmichClient, state: StateDB, catalog: Path
+) -> None:
+    cfg.safety.remove_percent_limit = 100
+    cfg.sync.skip_empty = False
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [{"id": "a1"}], "albumUsers": []}
+    )
+
+    await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
+
+    with closing(sqlite3.connect(str(catalog))) as conn:
+        conn.execute(
+            "INSERT INTO AgLibraryCollection(id_local, name, parent, creationId) "
+            "VALUES (2, 'Portraits', NULL, 'com.adobe.ag.library.collection')"
+        )
+        conn.execute("UPDATE AgLibraryCollectionImage SET collection = 2")
+        conn.commit()
+
+    respx.reset()
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.post(f"{API}/albums").respond(json={"id": "alb2"})
+    respx.put(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+    respx.get(url__regex=rf"{API}/albums/alb").respond(
+        json={"assets": [{"id": "a1"}], "albumUsers": []}
+    )
+    removed = respx.delete(f"{API}/albums/alb1/assets").respond(json=[])
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
+
+    assert summary.albums_created == 1
+    assert removed.called
 
 
 @respx.mock
