@@ -280,20 +280,22 @@ class StateDB:
         return {r["asset_id"] for r in rows}
 
     def replace_synced_favorites(self, asset_ids: set[str]) -> None:
-        self._replace_asset_set("synced_favorites", asset_ids)
+        with self.transaction():
+            self._conn.execute("DELETE FROM synced_favorites")
+            self._conn.executemany(
+                "INSERT INTO synced_favorites(asset_id) VALUES (?)",
+                [(aid,) for aid in asset_ids],
+            )
 
     def get_synced_rejects(self) -> set[str]:
         rows = self._conn.execute("SELECT asset_id FROM synced_rejects").fetchall()
         return {r["asset_id"] for r in rows}
 
     def replace_synced_rejects(self, asset_ids: set[str]) -> None:
-        self._replace_asset_set("synced_rejects", asset_ids)
-
-    def _replace_asset_set(self, table: str, asset_ids: set[str]) -> None:
         with self.transaction():
-            self._conn.execute(f"DELETE FROM {table}")
+            self._conn.execute("DELETE FROM synced_rejects")
             self._conn.executemany(
-                f"INSERT INTO {table}(asset_id) VALUES (?)",
+                "INSERT INTO synced_rejects(asset_id) VALUES (?)",
                 [(aid,) for aid in asset_ids],
             )
 

@@ -153,6 +153,7 @@ async def run_sync(
                     summary.errors.append(
                         f"albums: {len(unowned)} Immich album(s) match "
                         f"collection names but are not tracked: {names}{more}. "
+                        "Skipped the rest of the sync for this catalog. "
                         "Run with --adopt-existing to claim them, "
                         "or `lrimmich adopt --apply` to review."
                     )

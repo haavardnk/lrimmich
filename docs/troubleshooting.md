@@ -46,7 +46,9 @@ Either set `immich.api_key` in the config file, or export `LRIMMICH_API_KEY` as 
 
 ### "Catalog is locked" / WAL warning
 
-Lightroom Classic has the catalog open. lrimmich reads the database in read-only mode, so this is usually fine — the warning is informational. If you get actual read errors, close Lightroom and try again.
+Lightroom Classic has the catalog open and is holding a write lock, so edits made
+in this session may not be visible yet. Close Lightroom and sync again to pick
+them up.
 
 ### Moving photos between collections didn't sync
 

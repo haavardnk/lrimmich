@@ -53,7 +53,12 @@ def check_wal_lock(catalog: Path) -> CheckResult:
             conn.rollback()
         return CheckResult("wal_lock", True, "WAL not locked")
     except sqlite3.OperationalError:
-        return CheckResult("wal_lock", False, "WAL locked (Lightroom open?)")
+        return CheckResult(
+            "wal_lock",
+            False,
+            "Catalog is locked, so recent edits are not readable. "
+            "Close Lightroom Classic before syncing.",
+        )
 
 
 async def check_immich(client: ImmichClient) -> list[CheckResult]:
