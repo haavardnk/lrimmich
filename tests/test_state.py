@@ -186,6 +186,20 @@ def test_schema_v4_drops_unprefixed_tag_snapshots(tmp_path: Path) -> None:
     db.close()
 
 
+def test_schema_v5_collects_stack_rows(tmp_path: Path) -> None:
+    path = tmp_path / "v4.db"
+    db = StateDB(path)
+    db.set_meta("schema_version", "4")
+    db.set_meta("stack:1", "s1")
+    db.set_meta("stack:2", "")
+    db.set_meta("stack:12", "s12")
+    db.close()
+    db = StateDB(path)
+    assert json.loads(db.get_meta("stacks_snapshot") or "") == {"1": "s1", "12": "s12"}
+    assert db.get_meta("stack:1") is None
+    db.close()
+
+
 def test_synced_album_assets_empty(db: StateDB) -> None:
     assert db.get_synced_album_assets("album-1") == set()
 
