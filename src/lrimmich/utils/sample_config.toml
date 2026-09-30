@@ -29,6 +29,9 @@ skip_empty = true
 # keyword_prefix = "lr:keyword:"
 # color_prefix = "lr:color:"
 
+# [sync.color_tags]
+# red = "portfolio"
+
 # [[album_rules]]
 # match = "Reise/*"
 # id = 1234567

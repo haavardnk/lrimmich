@@ -151,8 +151,22 @@ async def test_multi_domain_orchestration(
 
 @respx.mock
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("sync", "expected"),
+    [
+        ({}, ["lr:color:red", "lr:keyword:Sea"]),
+        (
+            {"color_tags": {"Red": "Portfolio"}, "color_prefix": None},
+            ["Portfolio", "lr:keyword:Sea"],
+        ),
+    ],
+)
 async def test_creates_tags_only_for_synced_assets(
-    tmp_path: Path, client: ImmichClient, state: StateDB
+    tmp_path: Path,
+    client: ImmichClient,
+    state: StateDB,
+    sync: dict[str, object],
+    expected: list[str],
 ) -> None:
     builder = CatalogBuilder(tmp_path / "tags.lrcat")
     builder.add_collection(1, "Vacation")
@@ -165,6 +179,7 @@ async def test_creates_tags_only_for_synced_assets(
         catalogs=[{"catalog": builder.build()}],
         immich={"url": IMMICH_URL, "api_key": "test-key", "library_paths": [""]},
         cache={"spot_check_pct": 0},
+        sync=sync,
     )
     _mock_folders({"beach.jpg": "a1", "city.jpg": "a2"})
     _mock_album_crud()
@@ -179,4 +194,4 @@ async def test_creates_tags_only_for_synced_assets(
 
     assert not summary.errors
     names = sorted(json.loads(c.request.content)["name"] for c in created.calls)
-    assert names == ["lr:color:red", "lr:keyword:Sea"]
+    assert names == expected
