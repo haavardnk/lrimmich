@@ -91,8 +91,10 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
     if sync.ratings:
         typer.echo(f"ratings: +{summary.ratings.set} -{summary.ratings.cleared}")
     if sync.rejects:
+        rejects = summary.rejects
         typer.echo(
-            f"rejects: +{summary.rejects.archived} -{summary.rejects.unarchived}"
+            f"rejects: +{rejects.archived + rejects.tagged} "
+            f"-{rejects.unarchived + rejects.untagged}"
         )
     if sync.tags:
         typer.echo(

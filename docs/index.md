@@ -27,7 +27,7 @@ See [Installation](installation) and [Getting Started](getting-started) for the 
 |-----------|--------|
 | Collections | Albums |
 | Picks | Favorites |
-| Rejects | Archived |
+| Rejects | Archived, or a tag |
 | Star ratings | Ratings |
 | Color labels | Color tags |
 | Keywords | Keyword tags |

@@ -28,6 +28,8 @@ skip_empty = true
 # share_albums_with = ["user-uuid-here"]
 # keyword_prefix = "lr:keyword:"
 # color_prefix = "lr:color:"
+# reject_mode = "archive"
+# reject_tag = "lr:reject"
 
 # [sync.color_tags]
 # red = "portfolio"
