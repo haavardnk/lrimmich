@@ -60,6 +60,11 @@ Lightroom Classic has the catalog open and is holding a write lock, so edits mad
 in this session may not be visible yet. Close Lightroom and sync again to pick
 them up.
 
+### "Catalog unchanged" right after an import
+
+If `lrimmich watch` or the background service is running, it has probably
+synced the changes already. `lrimmich log` shows what it did.
+
 ### Moving photos between collections didn't sync
 
 Older versions missed this: the fingerprint only counted membership rows, and
