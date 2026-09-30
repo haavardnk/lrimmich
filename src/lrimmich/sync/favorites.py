@@ -52,9 +52,7 @@ class Step:
         return cfg.sync.favorites
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> FavoritesPlan:
-        to_fav, to_unfav = plan_favorites_sync(
-            ctx.get_flagged(), ctx.resolved, ctx.state
-        )
+        to_fav, to_unfav = plan_favorites_sync(ctx.flagged, ctx.resolved, ctx.state)
         summary.favorites = FavoritesResult(
             favorited=len(to_fav), unfavorited=len(to_unfav)
         )

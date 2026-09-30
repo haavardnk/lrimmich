@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Coroutine
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, Protocol, TypeVar
 
 from lrimmich.clients.catalog import (
@@ -39,26 +40,20 @@ class SyncContext:
     dry_run: bool
     force: bool
     no_delete: bool
-    _flagged: set[str] | None = field(default=None, repr=False)
-    _rejected: set[str] | None = field(default=None, repr=False)
-    _rated: dict[str, int] | None = field(default=None, repr=False)
     _tag_ids: dict[str, str] | None = field(default=None, repr=False)
     _tags_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
-    def get_flagged(self) -> set[str]:
-        if self._flagged is None:
-            self._flagged = read_flagged_images(self.catalog.catalog)
-        return self._flagged
+    @cached_property
+    def flagged(self) -> set[str]:
+        return read_flagged_images(self.catalog.catalog)
 
-    def get_rejected(self) -> set[str]:
-        if self._rejected is None:
-            self._rejected = read_rejected_images(self.catalog.catalog)
-        return self._rejected
+    @cached_property
+    def rejected(self) -> set[str]:
+        return read_rejected_images(self.catalog.catalog)
 
-    def get_rated(self) -> dict[str, int]:
-        if self._rated is None:
-            self._rated = read_rated_images(self.catalog.catalog)
-        return self._rated
+    @cached_property
+    def rated(self) -> dict[str, int]:
+        return read_rated_images(self.catalog.catalog)
 
     async def get_tag_ids(self) -> dict[str, str]:
         async with self._tags_lock:
