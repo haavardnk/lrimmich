@@ -114,6 +114,19 @@ async def run_sync(
     for col in collections:
         all_paths.update(col.relative_paths)
 
+    if cfg.cache.spot_check_pct > 0 and not refresh_cache:
+        cached = state.get_all_cached_paths(max_age=cache_ttl)
+        invalidated = await spot_check_cache(
+            {rp: aid for rp, aid in cached.items() if rp in all_paths},
+            cfg.immich.library_paths,
+            client,
+            state,
+            pct=cfg.cache.spot_check_pct,
+            strip=catalog.strip,
+        )
+        if invalidated:
+            logger.info("cache_spot_check", invalidated=invalidated)
+
     if on_status:
         on_status(f"Resolving {len(all_paths)} paths...")
     resolved, cache_hits = await resolve_paths(
@@ -129,20 +142,9 @@ async def run_sync(
     if on_status:
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
     summary.unresolved = len(all_paths) - len(resolved)
-    state.upsert_path_cache_bulk([(rp, aid, rp) for rp, aid in resolved.items()])
-
-    if cache_hits and cfg.cache.spot_check_pct > 0:
-        cached_subset = {rp: resolved[rp] for rp in cache_hits if rp in resolved}
-        invalidated = await spot_check_cache(
-            cached_subset,
-            cfg.immich.library_paths,
-            client,
-            state,
-            pct=cfg.cache.spot_check_pct,
-            strip=catalog.strip,
-        )
-        if invalidated:
-            logger.info("cache_spot_check", invalidated=invalidated)
+    state.upsert_path_cache_bulk(
+        [(rp, aid, rp) for rp, aid in resolved.items() if rp not in cache_hits]
+    )
 
     state.evict_stale_cache(cache_ttl * 2)
 
