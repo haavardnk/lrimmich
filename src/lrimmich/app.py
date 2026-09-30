@@ -115,69 +115,6 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
         )
 
 
-async def _run_with_progress(
-    cfg_path: Path | None,
-    dry_run: bool = False,
-    force: bool = False,
-    interactive: bool = False,
-    json_output: bool = False,
-    no_delete: bool = False,
-    quiet: bool = False,
-    refresh_cache: bool = False,
-    adopt_existing: bool = False,
-) -> tuple[SyncSummary, Config]:
-    cfg = load_config(cfg_path)
-    async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-        show_progress = not quiet and not json_output
-        status_progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=True,
-            disable=not show_progress,
-        )
-        resolve_progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeRemainingColumn(),
-            transient=True,
-            disable=not show_progress,
-        )
-        with status_progress, resolve_progress:
-            status_task = status_progress.add_task("Starting...", total=None)
-            resolve_task: TaskID | None = None
-
-            def on_status(msg: str) -> None:
-                status_progress.update(status_task, description=msg)
-
-            def on_progress(current: int, total: int) -> None:
-                nonlocal resolve_task
-                if resolve_task is None:
-                    resolve_task = resolve_progress.add_task(
-                        "Resolving paths...", total=total
-                    )
-                resolve_progress.update(resolve_task, completed=current, total=total)
-
-            def on_confirm(step_name: str, planned: SyncSummary) -> bool:
-                changes = ", ".join(f"{k} {v}" for k, v in planned.changes().items())
-                return typer.confirm(f"Apply {step_name} ({changes})?", default=True)
-
-            summary = await run_multi_sync(
-                cfg,
-                client,
-                dry_run=dry_run,
-                force=force,
-                no_delete=no_delete,
-                adopt_existing=adopt_existing,
-                on_confirm=on_confirm if interactive else None,
-                on_progress=on_progress,
-                on_status=on_status,
-                refresh_cache=refresh_cache,
-            )
-    return summary, cfg
-
-
 def run_with_progress(
     cfg_path: Path | None,
     dry_run: bool = False,
@@ -189,16 +126,54 @@ def run_with_progress(
     refresh_cache: bool = False,
     adopt_existing: bool = False,
 ) -> tuple[SyncSummary, Config]:
-    return asyncio.run(
-        _run_with_progress(
-            cfg_path,
-            dry_run,
-            force,
-            interactive,
-            json_output,
-            no_delete,
-            quiet,
-            refresh_cache,
-            adopt_existing,
-        )
+    cfg = load_config(cfg_path)
+    show_progress = not quiet and not json_output
+    status_progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+        disable=not show_progress,
     )
+    resolve_progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeRemainingColumn(),
+        transient=True,
+        disable=not show_progress,
+    )
+    status_task = status_progress.add_task("Starting...", total=None)
+    resolve_task: TaskID | None = None
+
+    def on_status(msg: str) -> None:
+        status_progress.update(status_task, description=msg)
+
+    def on_progress(current: int, total: int) -> None:
+        nonlocal resolve_task
+        if resolve_task is None:
+            resolve_task = resolve_progress.add_task("Resolving paths...", total=total)
+        resolve_progress.update(resolve_task, completed=current, total=total)
+
+    def on_confirm(step_name: str, planned: SyncSummary) -> bool:
+        changes = ", ".join(f"{k} {v}" for k, v in planned.changes().items())
+        return typer.confirm(f"Apply {step_name} ({changes})?", default=True)
+
+    async def _run() -> SyncSummary:
+        async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
+            return await run_multi_sync(
+                cfg,
+                client,
+                dry_run=dry_run,
+                force=force,
+                no_delete=no_delete,
+                adopt_existing=adopt_existing,
+                on_confirm=on_confirm if interactive else None,
+                on_progress=on_progress,
+                on_status=on_status,
+                refresh_cache=refresh_cache,
+            )
+
+    with status_progress, resolve_progress:
+        summary = asyncio.run(_run())
+    return summary, cfg
