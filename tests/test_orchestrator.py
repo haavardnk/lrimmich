@@ -386,16 +386,37 @@ async def test_step_failure_is_reported(
     assert state.get_meta("catalog_fingerprint") is None
 
 
+@pytest.mark.parametrize(
+    ("failing", "error", "reason"),
+    [
+        ("/view/folder/unique-paths", httpx.ConnectError("refused"), "refused"),
+        ("/tags", httpx.ReadTimeout(""), "ReadTimeout"),
+    ],
+)
 @respx.mock
 @pytest.mark.anyio
-async def test_catalog_failure_is_reported(cfg: Config, client: ImmichClient) -> None:
-    respx.get(f"{API}/view/folder/unique-paths").mock(
-        side_effect=httpx.ConnectError("refused")
-    )
+async def test_unreachable_server_stops_sync(
+    cfg: Config,
+    client: ImmichClient,
+    failing: str,
+    error: httpx.TransportError,
+    reason: str,
+) -> None:
+    responses = {
+        "/view/folder/unique-paths": ["photos"],
+        "/view/folder": [{"id": "a1", "originalPath": "photos/sunset.jpg"}],
+        "/albums": [],
+        "/tags": [],
+    }
+    for route, body in responses.items():
+        respx.get(f"{API}{route}").mock(
+            side_effect=error if route == failing else None,
+            return_value=httpx.Response(200, json=body),
+        )
 
-    summary = await run_multi_sync(cfg, client)
+    summary = await run_multi_sync(cfg, client, dry_run=True)
 
-    assert summary.errors == ["test.lrcat: refused"]
+    assert summary.errors == [f"Immich server unreachable at {IMMICH_URL} ({reason})"]
 
 
 @respx.mock

@@ -12,7 +12,7 @@ from lrimmich.clients.catalog import (
     read_collections,
     read_image_paths,
 )
-from lrimmich.clients.immich import ImmichClient
+from lrimmich.clients.immich import ImmichClient, ImmichUnreachableError
 from lrimmich.clients.state import StateDB, state_path_for_catalog
 from lrimmich.sync import (
     albums,
@@ -70,6 +70,8 @@ async def _run_step(
             return
         if not ctx.dry_run:
             await step.apply(plan, ctx)
+    except* ImmichUnreachableError:
+        raise
     except* (httpx.HTTPError, sqlite3.Error, albums.AlbumSyncError) as eg:
         logger.exception("step_failed", step=step.name)
         summary.errors.extend(f"{step.name}: {e}" for e in eg.exceptions)
@@ -235,6 +237,7 @@ async def run_multi_sync(
     for catalog in cfg.catalogs:
         state_db = state_path_for_catalog(catalog.key)
         state = StateDB(state_db)
+        unreachable = False
         try:
             summary = await run_sync(
                 cfg,
@@ -250,6 +253,10 @@ async def run_multi_sync(
                 on_status=on_status,
                 refresh_cache=refresh_cache,
             )
+        except* ImmichUnreachableError as eg:
+            logger.error("immich_unreachable", error=str(eg.exceptions[0]))
+            summary = SyncSummary(errors=[str(eg.exceptions[0])])
+            unreachable = True
         except* (httpx.HTTPError, sqlite3.Error) as eg:
             logger.exception("catalog_failed", catalog=catalog.catalog.name)
             summary = SyncSummary(
@@ -258,6 +265,8 @@ async def run_multi_sync(
         finally:
             state.close()
         combined.merge(summary)
+        if unreachable:
+            break
         if summary.skipped_unchanged:
             skipped += 1
     combined.skipped_unchanged = bool(cfg.catalogs) and skipped == len(cfg.catalogs)

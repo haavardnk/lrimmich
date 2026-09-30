@@ -14,10 +14,15 @@ class _RetryableStatusError(httpx.HTTPStatusError):
     pass
 
 
+class ImmichUnreachableError(httpx.TransportError):
+    pass
+
+
 class ImmichClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 30.0) -> None:
+        self.url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/") + "/api",
+            base_url=self.url + "/api",
             headers={"x-api-key": api_key},
             timeout=timeout,
         )
@@ -36,7 +41,15 @@ class ImmichClient:
         json: dict[str, Any] | None = None,
         params: dict[str, str] | None = None,
     ) -> Any:
-        response = await self._client.request(method, path, json=json, params=params)
+        try:
+            response = await self._client.request(
+                method, path, json=json, params=params
+            )
+        except httpx.TransportError as e:
+            raise ImmichUnreachableError(
+                f"Immich server unreachable at {self.url} "
+                f"({str(e) or type(e).__name__})"
+            ) from e
         if response.status_code in RETRYABLE_STATUSES:
             raise _RetryableStatusError(
                 message=f"{response.status_code}",
