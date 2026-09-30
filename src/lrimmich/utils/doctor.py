@@ -8,6 +8,7 @@ from typing import Any, get_args, get_origin
 import httpx
 from pydantic import BaseModel
 
+from lrimmich.clients.catalog import connect
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB, state_path_for_catalog
 from lrimmich.utils.config import Config
@@ -36,7 +37,7 @@ def check_catalog(catalog: Path) -> CheckResult:
     if not catalog.exists():
         return CheckResult("catalog", False, f"Not found: {catalog}")
     try:
-        with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
+        with closing(connect(catalog)) as conn:
             conn.execute("SELECT id_local FROM AgLibraryCollection LIMIT 1")
     except sqlite3.OperationalError as e:
         return CheckResult("catalog", False, str(e))
@@ -48,7 +49,7 @@ def check_wal_lock(catalog: Path) -> CheckResult:
     if not wal.exists():
         return CheckResult("wal_lock", True, "No WAL file")
     try:
-        with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
+        with closing(connect(catalog)) as conn:
             conn.execute("BEGIN IMMEDIATE")
             conn.rollback()
         return CheckResult("wal_lock", True, "WAL not locked")
@@ -100,8 +101,7 @@ async def check_path_mapping(
     strip: str | None = None,
 ) -> CheckResult:
     try:
-        with closing(sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)) as conn:
-            conn.row_factory = sqlite3.Row
+        with closing(connect(catalog)) as conn:
             row = conn.execute(
                 "SELECT af.pathFromRoot, lf.idx_filename "
                 "FROM AgLibraryFile lf "
