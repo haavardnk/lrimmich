@@ -8,6 +8,7 @@ import respx
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.orchestrator import run_sync
+from lrimmich.sync.summary import RejectsResult
 from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
 from tests.fixtures.immich_api import mock_albums
@@ -290,3 +291,53 @@ async def test_prefix_change_moves_tags(
         "kw:Sea": {"a1"},
         "red": {"a1"},
     }
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_reject_tag_replaces_archive(
+    tmp_path: Path, client: ImmichClient, state: StateDB
+) -> None:
+    builder = CatalogBuilder(tmp_path / "rejects.lrcat")
+    builder.add_collection(1, "Vacation")
+    builder.add_image(1, "beach.jpg", "photos/", pick=-1)
+    builder.add_image(2, "city.jpg", "photos/")
+    builder.add_collection_image(1, 1).add_collection_image(1, 2)
+    catalog = builder.build()
+    _mock_folders({"beach.jpg": "a1", "city.jpg": "a2"})
+    _mock_album_crud()
+    assigned = _mock_tag_server()
+
+    def visibility() -> list[tuple[list[str], str]]:
+        bodies = [
+            json.loads(c.request.content)
+            for c in respx.calls
+            if c.request.method == "PATCH" and c.request.url.path == "/api/assets"
+        ]
+        return [(b["ids"], b["visibility"]) for b in bodies if "visibility" in b]
+
+    archive = _tag_config(catalog, {"rejects": True, "tags": False})
+    tag = _tag_config(
+        catalog,
+        {
+            "rejects": True,
+            "tags": False,
+            "reject_mode": "tag",
+            "reject_tag": "immich-edit/reject",
+        },
+    )
+
+    await run_sync(archive, archive.catalogs[0], client, state)
+    moved = await run_sync(tag, tag.catalogs[0], client, state)
+    tagged = {name: set(ids) for name, ids in assigned.items()}
+    back = await run_sync(archive, archive.catalogs[0], client, state)
+
+    assert moved.rejects == RejectsResult(unarchived=1, tagged=1)
+    assert tagged == {"immich-edit/reject": {"a1"}}
+    assert back.rejects == RejectsResult(archived=1, untagged=1)
+    assert visibility() == [
+        (["a1"], "archive"),
+        (["a1"], "timeline"),
+        (["a1"], "archive"),
+    ]
+    assert assigned == {"immich-edit/reject": set()}

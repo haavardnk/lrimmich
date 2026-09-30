@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 AlbumMode = Literal["managed", "hybrid"]
 AlbumFilter = Literal["all", "flagged", "unflagged", "rejected"]
 AssetOrder = Literal["asc", "desc"]
+RejectMode = Literal["archive", "tag"]
 SyncScope = Literal["collections", "all"]
 
 DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
@@ -59,6 +60,8 @@ class SyncConfig(BaseConfig):
     keyword_prefix: str | None = "lr:keyword:"
     color_prefix: str | None = "lr:color:"
     color_tags: dict[str, Annotated[str, Field(min_length=1)]] = {}
+    reject_mode: RejectMode = "archive"
+    reject_tag: Annotated[str, Field(min_length=1)] = "lr:reject"
 
 
 class AlbumRule(BaseConfig):

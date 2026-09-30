@@ -18,6 +18,8 @@ class RatingsResult:
 class RejectsResult:
     archived: int = 0
     unarchived: int = 0
+    tagged: int = 0
+    untagged: int = 0
 
 
 @dataclass
