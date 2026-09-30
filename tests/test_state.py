@@ -4,18 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from lrimmich.clients.state import (
-    SCHEMA_V1,
-    SCHEMA_V2,
-    SCHEMA_V3,
-    SCHEMA_V4,
-    SCHEMA_V5,
-    SCHEMA_VERSION,
-    StateDB,
-)
+from lrimmich.clients.state import MIGRATIONS, SCHEMA_VERSION, StateDB
 
 CURRENT_VERSION = str(SCHEMA_VERSION)
-LEGACY_SCHEMAS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5]
 
 
 @pytest.fixture()
@@ -153,7 +144,7 @@ def test_creates_parent_dir(tmp_path: Path) -> None:
 
 def _legacy_db(path: Path, version: int, *statements: str) -> None:
     conn = sqlite3.connect(str(path))
-    for script in LEGACY_SCHEMAS[:version]:
+    for script in MIGRATIONS[:version]:
         conn.executescript(script)
     conn.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)",
@@ -235,6 +226,25 @@ def test_schema_v6_moves_snapshot_tables(tmp_path: Path) -> None:
     ] == [{"a1": 4}, {"album-1": "a1"}, ["a2"], []]
     assert db.get_all_cached_paths() == {"x.jpg": "a1"}
     db.close()
+
+
+def test_failed_migration_rolls_back(tmp_path: Path) -> None:
+    path = tmp_path / "v4.db"
+    _legacy_db(
+        path,
+        4,
+        "INSERT INTO meta VALUES ('stack:1', 's1')",
+        "INSERT INTO synced_ratings VALUES ('a1', 4)",
+        "ALTER TABLE path_cache DROP COLUMN original_path",
+    )
+    with pytest.raises(sqlite3.OperationalError, match="original_path"):
+        StateDB(path)
+    conn = sqlite3.connect(str(path))
+    meta = dict(conn.execute("SELECT key, value FROM meta").fetchall())
+    ratings = conn.execute("SELECT * FROM synced_ratings").fetchall()
+    conn.close()
+    assert meta == {"schema_version": "4", "stack:1": "s1"}
+    assert ratings == [("a1", 4)]
 
 
 def test_synced_album_assets_empty(db: StateDB) -> None:
