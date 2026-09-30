@@ -25,12 +25,15 @@ async def test_plan_create_stack(state: StateDB, client: ImmichClient) -> None:
     assert actions[0].asset_ids == ["asset-a", "asset-b"]
 
 
+@pytest.mark.parametrize("paths", [["a.jpg", "b.jpg"], ["a.jpg", "a.jpg"]])
 @respx.mock
 @pytest.mark.anyio
-async def test_plan_skip_single_resolved(state: StateDB, client: ImmichClient) -> None:
+async def test_plan_skip_single_resolved(
+    state: StateDB, client: ImmichClient, paths: list[str]
+) -> None:
     respx.get(f"{API}/stacks").mock(return_value=httpx.Response(200, json=[]))
 
-    lr_stacks = [LrStack(stack_id=1, paths=["a.jpg", "b.jpg"])]
+    lr_stacks = [LrStack(stack_id=1, paths=paths)]
     resolved = {"a.jpg": "asset-a"}
 
     actions = await plan_stack_sync(lr_stacks, resolved, state, client)

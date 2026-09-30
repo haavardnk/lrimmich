@@ -270,7 +270,7 @@ def test_read_catalog_fingerprint(catalog_path: Path) -> None:
         .build()
     )
     fp1 = read_catalog_fingerprint(catalog_path)
-    assert fp1.startswith("v2:")
+    assert fp1.startswith("v3:")
     fp2 = read_catalog_fingerprint(catalog_path)
     assert fp1 == fp2
 
@@ -294,6 +294,14 @@ def test_read_catalog_fingerprint(catalog_path: Path) -> None:
             "DELETE FROM AgLibraryCollection WHERE id_local = 2",
             id="collection_deleted",
         ),
+        pytest.param(
+            "UPDATE AgLibraryFolderStackImage SET position = 3 - position",
+            id="stack_top_changed",
+        ),
+        pytest.param(
+            "DELETE FROM AgLibraryFolderStackImage WHERE image = 2",
+            id="unstacked",
+        ),
     ],
 )
 def test_fingerprint_changes_on_membership_change(
@@ -305,7 +313,8 @@ def test_fingerprint_changes_on_membership_change(
         .add_collection(2, "Portraits")
         .add_keyword(10, "sunset")
         .add_keyword(20, "portrait")
-        .add_image(1, "a.jpg", "raw/", touch_time=100.0)
+        .add_image(1, "a.jpg", "raw/", touch_time=100.0, stack=1, stack_position=1)
+        .add_image(2, "b.jpg", "raw/", touch_time=100.0, stack=1, stack_position=2)
         .add_collection_image(1, 1)
         .add_keyword_image(10, 1)
         .build()
@@ -322,12 +331,12 @@ def test_fingerprint_changes_on_membership_change(
 def test_read_stacks(catalog_path: Path) -> None:
     (
         CatalogBuilder(catalog_path)
-        .add_image(1, "a.jpg", "raw/", stack=1, stack_position=1)
-        .add_image(2, "b.jpg", "raw/", stack=1, stack_position=2)
+        .add_image(1, "a.jpg", "raw/", stack=1, stack_position=2)
+        .add_image(2, "b.jpg", "raw/", stack=1, stack_position=1)
         .add_image(3, "c.jpg", "raw/")
         .build()
     )
     stacks = read_stacks(catalog_path)
     assert len(stacks) == 1
     assert stacks[0].stack_id == 1
-    assert stacks[0].paths == ["raw/a.jpg", "raw/b.jpg"]
+    assert stacks[0].paths == ["raw/b.jpg", "raw/a.jpg"]

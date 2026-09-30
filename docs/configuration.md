@@ -51,7 +51,7 @@ exclude_patterns = ["Exports/*"]
 | `tags` | bool | `true` | Sync color labels and keywords as tags. |
 | `captions` | bool | `true` | Sync captions as asset descriptions. |
 | `rejects` | bool | `false` | Sync rejects as archived. |
-| `stacks` | bool | `false` | Sync Lightroom stacks to Immich stacks (first image becomes primary). |
+| `stacks` | bool | `false` | Sync Lightroom stacks to Immich stacks (top image becomes primary). |
 
 ### General
 

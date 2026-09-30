@@ -37,7 +37,9 @@ async def plan_stack_sync(
     actions: list[StackAction] = []
 
     for lr_stack in lr_stacks:
-        asset_ids = [resolved[p] for p in lr_stack.paths if p in resolved]
+        asset_ids = list(
+            dict.fromkeys(resolved[p] for p in lr_stack.paths if p in resolved)
+        )
         if len(asset_ids) < 2:
             continue
 

@@ -22,13 +22,14 @@ from lrimmich.clients.queries import (
     KEYWORDS_TREE,
     RATED_IMAGES,
     REJECTED_IMAGES,
+    STACK_DIGEST,
     STACKS,
     LrSchema,
     detect_schema,
 )
 from lrimmich.utils.config import BaseConfig, CatalogConfig
 
-FINGERPRINT_VERSION = "v2"
+FINGERPRINT_VERSION = "v3"
 
 
 class LrCollection(BaseConfig):
@@ -252,6 +253,7 @@ def read_catalog_fingerprint(catalog: Path) -> str:
         members = conn.execute(COLLECTION_MEMBERSHIP_DIGEST).fetchone()
         keywords = conn.execute(KEYWORD_MEMBERSHIP_DIGEST).fetchone()
         collections = conn.execute(COLLECTION_DIGEST).fetchone()
+        stacks = conn.execute(STACK_DIGEST).fetchone()
     values: tuple[object, ...] = (
         images["max_touch"],
         images["img_count"],
@@ -263,6 +265,9 @@ def read_catalog_fingerprint(catalog: Path) -> str:
         keywords["max_id"],
         collections["cnt"],
         collections["max_id"],
+        stacks["cnt"],
+        stacks["digest"],
+        stacks["positions"],
     )
     parts = ":".join(str(v) for v in values)
     return f"{FINGERPRINT_VERSION}:{sha256(parts.encode()).hexdigest()[:16]}"
