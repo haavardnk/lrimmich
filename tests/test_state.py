@@ -164,6 +164,28 @@ def test_schema_v1_migrates_to_latest(tmp_path: Path) -> None:
     db.close()
 
 
+def test_schema_v4_drops_unprefixed_tag_snapshots(tmp_path: Path) -> None:
+    path = tmp_path / "v3.db"
+    db = StateDB(path)
+    db.set_meta("schema_version", "3")
+    db.set_meta("keywords_snapshot", '{"a1": ["Sea"]}')
+    db.set_meta("color_labels_snapshot", '{"a1": "red"}')
+    db.set_meta("catalog_fingerprint", "fp")
+    db.set_meta("custom", "kept")
+    db.close()
+    db = StateDB(path)
+    assert [
+        db.get_meta(k)
+        for k in (
+            "keywords_snapshot",
+            "color_labels_snapshot",
+            "catalog_fingerprint",
+            "custom",
+        )
+    ] == [None, None, None, "kept"]
+    db.close()
+
+
 def test_synced_album_assets_empty(db: StateDB) -> None:
     assert db.get_synced_album_assets("album-1") == set()
 
