@@ -28,6 +28,12 @@ Upgrade Immich, or stay on the lrimmich 0.2.x line, which speaks the 2.x API.
 Errors from Immich include the server's own response body, so the message names
 the field it rejected. Run `lrimmich --verbose sync` for the full request trace.
 
+### "Immich server unreachable"
+
+lrimmich couldn't connect to `immich.url`, or the server didn't answer within
+30 seconds. Check that Immich is running and that the URL is right. The sync
+stops there, and the next successful run finishes the rest.
+
 ### "Config not found"
 
 Run `lrimmich config init` to create one, then `lrimmich config edit` to fill in your values.
