@@ -25,8 +25,6 @@ from lrimmich.clients.queries import (
     REJECTED_IMAGES,
     STACK_DIGEST,
     STACKS,
-    LrSchema,
-    detect_schema,
 )
 from lrimmich.utils.config import BaseConfig, CatalogConfig
 
@@ -52,11 +50,6 @@ def _connect(catalog: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def _detect(catalog: Path) -> LrSchema:
-    with closing(_connect(catalog)) as conn:
-        return detect_schema(conn)
 
 
 def _walk_ancestors(

@@ -7,8 +7,7 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.albums import (
     AlbumAction,
-    DeleteThresholdExceeded,
-    RemoveLimitExceeded,
+    AlbumSyncError,
     apply_album_sync,
     format_album_name,
     plan_album_sync,
@@ -547,10 +546,10 @@ async def test_threshold_blocks_delete(state: StateDB, client: ImmichClient) -> 
         state.upsert_album_ownership(100 + i, f"imm-{i}", f"Gone{i}")
     mock_albums({f"imm-{i}": [] for i in range(3)})
 
-    with pytest.raises(DeleteThresholdExceeded) as exc_info:
+    with pytest.raises(
+        AlbumSyncError, match="Deleting 3 albums exceeds threshold of 1"
+    ):
         await plan_album_sync([], {}, state, client, safety=safety)
-    assert exc_info.value.count == 3
-    assert exc_info.value.threshold == 1
 
 
 @respx.mock
@@ -631,10 +630,10 @@ async def test_remove_percent_limit_blocks(
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a0"}
 
-    with pytest.raises(RemoveLimitExceeded) as exc_info:
+    with pytest.raises(
+        AlbumSyncError, match=r"Removing 9 assets \(90%\) from 'Album' exceeds 50%"
+    ):
         await plan_album_sync([col], resolved, state, client, safety=safety)
-    assert exc_info.value.album_name == "Album"
-    assert exc_info.value.percent > 50
 
 
 @respx.mock
