@@ -15,8 +15,6 @@ def state_path_for_catalog(catalog_key: str) -> Path:
     return DEFAULT_STATE_DIR / f"state_{catalog_key}.db"
 
 
-SCHEMA_VERSION = 6
-
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -109,6 +107,10 @@ DROP TABLE synced_rejects;
 ALTER TABLE path_cache DROP COLUMN original_path;
 """
 
+MIGRATIONS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6]
+
+SCHEMA_VERSION = len(MIGRATIONS)
+
 
 class StateDB:
     def __init__(self, path: Path) -> None:
@@ -139,19 +141,13 @@ class StateDB:
         current = self._get_schema_version()
         if current >= SCHEMA_VERSION:
             return
-        if current < 1:
-            self._conn.executescript(SCHEMA_V1)
-        if current < 2:
-            self._conn.executescript(SCHEMA_V2)
-        if current < 3:
-            self._conn.executescript(SCHEMA_V3)
-        if current < 4:
-            self._conn.executescript(SCHEMA_V4)
-        if current < 5:
-            self._conn.executescript(SCHEMA_V5)
-        if current < 6:
-            self._conn.executescript(SCHEMA_V6)
-        self.set_meta("schema_version", str(SCHEMA_VERSION))
+        self._conn.executescript(
+            "BEGIN;"
+            + "".join(MIGRATIONS[current:])
+            + "INSERT OR REPLACE INTO meta(key, value)"
+            f" VALUES ('schema_version', '{SCHEMA_VERSION}');"
+            "COMMIT;"
+        )
 
     def _get_schema_version(self) -> int:
         try:
