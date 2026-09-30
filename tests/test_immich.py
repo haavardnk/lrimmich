@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 import respx
@@ -29,12 +31,26 @@ async def test_get_albums(client: ImmichClient, api_url: str) -> None:
 
 @respx.mock
 @pytest.mark.anyio
-async def test_get_album(client: ImmichClient, api_url: str) -> None:
-    respx.get(f"{api_url}/albums/a1").mock(
-        return_value=httpx.Response(200, json={"id": "a1", "assets": []})
+async def test_get_album_asset_ids_pages(client: ImmichClient, api_url: str) -> None:
+    route = respx.post(f"{api_url}/search/metadata").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "assets": {"items": [{"id": "x1"}, {"id": "x2"}], "nextPage": "2"}
+                },
+            ),
+            httpx.Response(
+                200, json={"assets": {"items": [{"id": "x3"}], "nextPage": None}}
+            ),
+        ]
     )
-    album = await client.get_album("a1")
-    assert album["id"] == "a1"
+    asset_ids = await client.get_album_asset_ids("a1")
+    assert asset_ids == {"x1", "x2", "x3"}
+    bodies = [json.loads(c.request.content) for c in route.calls]
+    assert [b["page"] for b in bodies] == [1, 2]
+    assert all(b["albumIds"] == ["a1"] and b["withDeleted"] for b in bodies)
+    assert all("filter" not in b for b in bodies)
 
 
 @respx.mock

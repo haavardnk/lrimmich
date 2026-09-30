@@ -15,6 +15,7 @@ from lrimmich.sync.albums import (
     resolve_album_rule,
 )
 from lrimmich.utils.config import AlbumFilter, AlbumRule, SafetyConfig
+from tests.fixtures.immich_api import mock_albums
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -53,6 +54,7 @@ def test_format_album_name(full_name: str, fmt: str, expected: str) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_create_new_album(state: StateDB, client: ImmichClient) -> None:
+    mock_albums({})
     col = _col(id=10, full_name="Travel/Japan", relative_paths=["a.jpg", "b.jpg"])
     resolved = {"a.jpg": "asset-1", "b.jpg": "asset-2"}
 
@@ -67,6 +69,7 @@ async def test_create_new_album(state: StateDB, client: ImmichClient) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_skip_empty_collection(state: StateDB, client: ImmichClient) -> None:
+    mock_albums({})
     col = _col(id=10, full_name="Empty")
     resolved: dict[str, str] = {}
 
@@ -84,6 +87,7 @@ async def test_skip_empty_deletes_owned_album(
     state: StateDB, client: ImmichClient
 ) -> None:
     state.upsert_album_ownership(10, "album-1", "NowEmpty")
+    mock_albums({"album-1": []})
     col = _col(id=10, full_name="NowEmpty")
     resolved: dict[str, str] = {}
 
@@ -91,6 +95,46 @@ async def test_skip_empty_deletes_owned_album(
     assert len(actions) == 1
     assert actions[0].kind == "delete"
     assert actions[0].immich_album_id == "album-1"
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_recreates_album_deleted_in_immich(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(10, "imm-gone", "Album")
+    state.replace_synced_album_assets("imm-gone", {"a1"})
+    mock_albums({})
+    respx.post(f"{API}/albums").respond(json={"id": "imm-new"})
+    col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
+
+    actions = await plan_album_sync([col], {"x.jpg": "a1"}, state, client)
+    assert [a.kind for a in actions] == ["create"]
+    await apply_album_sync(actions, client, state)
+
+    ownership = state.get_album_ownership(10)
+    assert ownership is not None
+    assert ownership["immich_album_id"] == "imm-new"
+    assert state.get_synced_album_assets("imm-gone") == set()
+    assert state.get_synced_album_assets("imm-new") == {"a1"}
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_forgets_orphan_album_deleted_in_immich(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.upsert_album_ownership(100, "imm-gone", "Gone")
+    mock_albums({})
+
+    actions = await plan_album_sync(
+        [], {}, state, client, safety=SafetyConfig(delete_threshold=0)
+    )
+    assert [a.kind for a in actions] == ["forget"]
+    await apply_album_sync(actions, client, state)
+
+    assert state.get_album_ownership(100) is None
+    assert all(c.request.method == "GET" for c in respx.calls)
 
 
 @pytest.mark.parametrize(
@@ -110,6 +154,7 @@ async def test_album_filter_global(
     album_filter: AlbumFilter,
     expected: list[str],
 ) -> None:
+    mock_albums({})
     col = _col(
         id=10,
         full_name="Album",
@@ -139,6 +184,7 @@ async def test_album_filter_global(
 @respx.mock
 @pytest.mark.anyio
 async def test_album_filter_min_rating(state: StateDB, client: ImmichClient) -> None:
+    mock_albums({})
     col = _col(id=10, relative_paths=["a.jpg", "b.jpg", "c.jpg"])
     resolved = {"a.jpg": "a1", "b.jpg": "a2", "c.jpg": "a3"}
 
@@ -158,6 +204,7 @@ async def test_album_filter_min_rating(state: StateDB, client: ImmichClient) -> 
 @respx.mock
 @pytest.mark.anyio
 async def test_album_filter_combined(state: StateDB, client: ImmichClient) -> None:
+    mock_albums({})
     col = _col(id=10, relative_paths=["a.jpg", "b.jpg", "c.jpg"])
     resolved = {"a.jpg": "a1", "b.jpg": "a2", "c.jpg": "a3"}
 
@@ -213,6 +260,7 @@ def test_resolve_album_rule_order() -> None:
 async def test_album_filter_skip_empty_after_filter(
     state: StateDB, client: ImmichClient
 ) -> None:
+    mock_albums({})
     col = _col(id=10, relative_paths=["neutral.jpg"])
     resolved = {"neutral.jpg": "a1"}
 
@@ -351,12 +399,7 @@ async def test_plan_set_description_on_existing(
     state: StateDB, client: ImmichClient
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={"assets": [], "albumUsers": []},
-        )
-    )
+    mock_albums({"imm-1": []})
 
     col = _col(id=10, full_name="Album")
     rules = [AlbumRule(match="Album", description="New desc")]
@@ -395,12 +438,7 @@ async def test_apply_set_order(state: StateDB, client: ImmichClient) -> None:
 @pytest.mark.anyio
 async def test_plan_set_order_on_existing(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={"assets": [], "albumUsers": []},
-        )
-    )
+    mock_albums({"imm-1": []})
 
     col = _col(id=10, full_name="Album")
     rules = [AlbumRule(match="Album", order="desc")]
@@ -441,15 +479,7 @@ async def test_create_with_order(state: StateDB, client: ImmichClient) -> None:
 @pytest.mark.anyio
 async def test_update_assets(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": "a1"}, {"id": "a2"}],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1", "a2"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg", "y.jpg"])
     resolved = {"x.jpg": "a2", "y.jpg": "a3"}
@@ -470,9 +500,7 @@ async def test_update_assets(state: StateDB, client: ImmichClient) -> None:
 @pytest.mark.anyio
 async def test_rename_detection(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "OldName")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(200, json={"assets": [], "albumUsers": []})
-    )
+    mock_albums({"imm-1": []})
 
     col = _col(id=10, full_name="NewName")
     actions = await plan_album_sync([col], {}, state, client, skip_empty=False)
@@ -486,9 +514,7 @@ async def test_format_change_triggers_rename(
     state: StateDB, client: ImmichClient
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Travel/Japan")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(200, json={"assets": [], "albumUsers": []})
-    )
+    mock_albums({"imm-1": []})
 
     col = _col(id=10, full_name="Travel/Japan")
     actions = await plan_album_sync(
@@ -505,23 +531,7 @@ async def test_format_change_triggers_rename(
 @pytest.mark.anyio
 async def test_share_idempotent(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums").respond(
-        json=[
-            {
-                "id": "imm-1",
-                "albumUsers": [{"user": {"id": "u1"}, "role": "editor"}],
-            }
-        ]
-    )
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [],
-                "albumUsers": [{"user": {"id": "u1"}, "role": "editor"}],
-            },
-        )
-    )
+    mock_albums({"imm-1": []}, users={"imm-1": ["u1"]})
 
     col = _col(id=10, full_name="Album")
     actions = await plan_album_sync([col], {}, state, client, share_with=["u1"])
@@ -535,6 +545,7 @@ async def test_threshold_blocks_delete(state: StateDB, client: ImmichClient) -> 
     safety = SafetyConfig(delete_threshold=1)
     for i in range(3):
         state.upsert_album_ownership(100 + i, f"imm-{i}", f"Gone{i}")
+    mock_albums({f"imm-{i}": [] for i in range(3)})
 
     with pytest.raises(DeleteThresholdExceeded) as exc_info:
         await plan_album_sync([], {}, state, client, safety=safety)
@@ -548,6 +559,7 @@ async def test_force_allows_delete(state: StateDB, client: ImmichClient) -> None
     safety = SafetyConfig(delete_threshold=1)
     for i in range(3):
         state.upsert_album_ownership(100 + i, f"imm-{i}", f"Gone{i}")
+    mock_albums({f"imm-{i}": [] for i in range(3)})
 
     actions = await plan_album_sync([], {}, state, client, force=True, safety=safety)
 
@@ -559,6 +571,7 @@ async def test_force_allows_delete(state: StateDB, client: ImmichClient) -> None
 @pytest.mark.anyio
 async def test_no_delete_skips_deletes(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(100, "imm-x", "Gone")
+    mock_albums({"imm-x": []})
 
     actions = await plan_album_sync([], {}, state, client, no_delete=True)
 
@@ -570,6 +583,7 @@ async def test_no_delete_skips_deletes(state: StateDB, client: ImmichClient) -> 
 async def test_disable_deletes_in_safety(state: StateDB, client: ImmichClient) -> None:
     safety = SafetyConfig(disable_deletes=True)
     state.upsert_album_ownership(100, "imm-x", "Gone")
+    mock_albums({"imm-x": []})
 
     actions = await plan_album_sync([], {}, state, client, safety=safety)
 
@@ -579,6 +593,7 @@ async def test_disable_deletes_in_safety(state: StateDB, client: ImmichClient) -
 @respx.mock
 @pytest.mark.anyio
 async def test_dry_run_no_mutations(state: StateDB, client: ImmichClient) -> None:
+    mock_albums({})
     col = _col(id=10, full_name="New", relative_paths=["a.jpg"])
     resolved = {"a.jpg": "asset-1"}
 
@@ -587,22 +602,14 @@ async def test_dry_run_no_mutations(state: StateDB, client: ImmichClient) -> Non
     assert len(actions) == 1
     assert actions[0].kind == "create"
     assert state.get_album_ownership(10) is None
-    assert respx.calls.call_count == 0
+    assert all(c.request.method == "GET" for c in respx.calls)
 
 
 @respx.mock
 @pytest.mark.anyio
 async def test_idempotency(state: StateDB, client: ImmichClient) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": "a1"}],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a1"}
@@ -619,15 +626,7 @@ async def test_remove_percent_limit_blocks(
 ) -> None:
     safety = SafetyConfig(remove_percent_limit=50)
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": f"a{i}"} for i in range(10)],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": [f"a{i}" for i in range(10)]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a0"}
@@ -643,15 +642,7 @@ async def test_remove_percent_limit_blocks(
 async def test_remove_percent_limit_force(state: StateDB, client: ImmichClient) -> None:
     safety = SafetyConfig(remove_percent_limit=50)
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": f"a{i}"} for i in range(10)],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": [f"a{i}" for i in range(10)]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a0"}
@@ -732,15 +723,7 @@ async def test_hybrid_preserves_manual_assets(
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
     state.replace_synced_album_assets("imm-1", {"a1", "a2"})
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": "a1"}, {"id": "a2"}, {"id": "manual-1"}],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1", "a2", "manual-1"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg", "y.jpg"])
     resolved = {"x.jpg": "a1", "y.jpg": "a2"}
@@ -758,20 +741,7 @@ async def test_hybrid_removes_tracked_stale_assets(
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
     state.replace_synced_album_assets("imm-1", {"a1", "a2", "a3"})
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [
-                    {"id": "a1"},
-                    {"id": "a2"},
-                    {"id": "a3"},
-                    {"id": "manual-1"},
-                ],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1", "a2", "a3", "manual-1"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a1"}
@@ -790,15 +760,7 @@ async def test_hybrid_first_run_baselines_without_removal(
     state: StateDB, client: ImmichClient
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": "a1"}, {"id": "manual-1"}],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1", "manual-1"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a1"}
@@ -817,15 +779,7 @@ async def test_hybrid_tracks_filtered_assets(
     state: StateDB, client: ImmichClient
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": "a1"}, {"id": "a2"}],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1", "a2"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["picked.jpg", "other.jpg"])
     resolved = {"picked.jpg": "a1", "other.jpg": "a2"}
@@ -851,15 +805,7 @@ async def test_managed_mode_still_removes_non_lr_assets(
     state: StateDB, client: ImmichClient
 ) -> None:
     state.upsert_album_ownership(10, "imm-1", "Album")
-    respx.get(f"{API}/albums/imm-1").mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "assets": [{"id": "a1"}, {"id": "manual-1"}],
-                "albumUsers": [],
-            },
-        )
-    )
+    mock_albums({"imm-1": ["a1", "manual-1"]})
 
     col = _col(id=10, full_name="Album", relative_paths=["x.jpg"])
     resolved = {"x.jpg": "a1"}

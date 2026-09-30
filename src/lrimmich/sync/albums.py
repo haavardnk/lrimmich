@@ -140,19 +140,19 @@ class AlbumPlanContext:
     flagged_paths: set[str]
     rejected_paths: set[str]
     rated_paths: dict[str, int]
-    album_details: dict[str, dict]
+    album_assets: dict[str, set[str]]
 
 
-async def _fetch_album_details(
+async def _fetch_album_assets(
     album_ids: list[str], client: ImmichClient
-) -> dict[str, dict]:
+) -> dict[str, set[str]]:
     if not album_ids:
         return {}
     sem = asyncio.Semaphore(ALBUM_CONCURRENCY)
 
-    async def _fetch(album_id: str) -> tuple[str, dict]:
+    async def _fetch(album_id: str) -> tuple[str, set[str]]:
         async with sem:
-            return album_id, await client.get_album(album_id)
+            return album_id, await client.get_album_asset_ids(album_id)
 
     async with asyncio.TaskGroup() as tg:
         tasks = [tg.create_task(_fetch(aid)) for aid in album_ids]
@@ -174,12 +174,13 @@ def _plan_collection(
     if ctx.skip_empty and not asset_ids:
         return actions, True
 
-    if ownership is None:
+    if ownership is None or ownership["immich_album_id"] not in all_albums:
         actions.append(
             AlbumAction(
                 kind="create",
                 lr_collection_id=collection.id,
                 album_name=album_name,
+                immich_album_id=ownership["immich_album_id"] if ownership else None,
                 asset_ids=asset_ids,
                 description=rule.description,
                 order=rule.order,
@@ -253,8 +254,7 @@ def _plan_diff(
     asset_ids: list[str],
 ) -> list[AlbumAction]:
     actions: list[AlbumAction] = []
-    album_data = ctx.album_details.get(immich_album_id, {})
-    current_ids = {a["id"] for a in album_data.get("assets", [])}
+    current_ids = ctx.album_assets.get(immich_album_id, set())
     desired_ids = set(asset_ids)
 
     to_add = sorted(desired_ids - current_ids)
@@ -334,14 +334,30 @@ def _plan_share(
     ]
 
 
-def _plan_delete_orphans(ctx: AlbumPlanContext, lr_ids: set[int]) -> list[AlbumAction]:
-    owned = ctx.state.get_all_owned_albums()
-    to_delete = [o for o in owned if o["lr_collection_id"] not in lr_ids]
+def _plan_delete_orphans(
+    ctx: AlbumPlanContext, lr_ids: set[int], all_albums: dict[str, dict]
+) -> list[AlbumAction]:
+    orphans = [
+        o
+        for o in ctx.state.get_all_owned_albums()
+        if o["lr_collection_id"] not in lr_ids
+    ]
+    actions = [
+        AlbumAction(
+            kind="forget",
+            lr_collection_id=o["lr_collection_id"],
+            immich_album_id=o["immich_album_id"],
+            album_name=o["last_name"],
+        )
+        for o in orphans
+        if o["immich_album_id"] not in all_albums
+    ]
+    to_delete = [o for o in orphans if o["immich_album_id"] in all_albums]
     if not to_delete or ctx.no_delete or ctx.safety.disable_deletes:
-        return []
+        return actions
     if len(to_delete) > ctx.safety.delete_threshold and not ctx.force:
         raise DeleteThresholdExceeded(len(to_delete), ctx.safety.delete_threshold)
-    return [
+    return actions + [
         AlbumAction(
             kind="delete",
             lr_collection_id=o["lr_collection_id"],
@@ -389,11 +405,10 @@ async def plan_album_sync(
         flagged_paths=flagged_paths or set(),
         rejected_paths=rejected_paths or set(),
         rated_paths=rated_paths or {},
-        album_details={},
+        album_assets={},
     )
 
-    needs_share = bool(ctx.share_with) or any(r.share_with for r in ctx.album_rules)
-    all_albums = {a["id"]: a for a in await client.get_albums()} if needs_share else {}
+    all_albums = {a["id"]: a for a in await client.get_albums()}
 
     rules = {
         c.id: resolve_album_rule(
@@ -412,12 +427,13 @@ async def plan_album_sync(
         )
         for c in collections
     }
-    ctx.album_details = await _fetch_album_details(
+    ctx.album_assets = await _fetch_album_assets(
         [
             ownership["immich_album_id"]
             for c in collections
             if (asset_ids_by_collection[c.id] or not ctx.skip_empty)
             and (ownership := state.get_album_ownership(c.id)) is not None
+            and all_albums.get(ownership["immich_album_id"], {}).get("assetCount")
         ],
         client,
     )
@@ -437,7 +453,7 @@ async def plan_album_sync(
             lr_ids.discard(collection.id)
         actions.extend(col_actions)
 
-    actions.extend(_plan_delete_orphans(ctx, lr_ids))
+    actions.extend(_plan_delete_orphans(ctx, lr_ids, all_albums))
     return actions
 
 
@@ -448,6 +464,8 @@ async def _apply_create(
         action.album_name, action.asset_ids, description=action.description or ""
     )
     album_id: str = result["id"]
+    if action.immich_album_id:
+        state.clear_synced_album_assets(action.immich_album_id)
     if action.order:
         await client.update_album(album_id, order=action.order)
         state.set_meta(f"album_order:{action.lr_collection_id}", action.order)
@@ -537,6 +555,16 @@ async def _apply_delete(
     )
 
 
+def _apply_forget(action: AlbumAction, state: StateDB) -> None:
+    if not action.immich_album_id:
+        return
+    state.remove_album_ownership(action.lr_collection_id)
+    state.clear_synced_album_assets(action.immich_album_id)
+    state.append_audit_log(
+        "forget_album", "album", action.immich_album_id, {"name": action.album_name}
+    )
+
+
 def _apply_track_assets(action: AlbumAction, state: StateDB) -> None:
     if not action.immich_album_id:
         return
@@ -587,6 +615,8 @@ async def apply_album_sync(
                 await _apply_share(action, client, state, created)
             case "delete":
                 await _apply_delete(action, client, state)
+            case "forget":
+                _apply_forget(action, state)
             case "track_assets":
                 _apply_track_assets(action, state)
             case "set_description":
