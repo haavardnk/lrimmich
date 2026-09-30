@@ -47,7 +47,7 @@ exclude_patterns = ["Exports/*"]
 |-----|------|---------|-------------|
 | `albums` | bool | `true` | Sync collections as albums. |
 | `favorites` | bool | `true` | Sync picks as favorites. |
-| `ratings` | bool | `true` | Sync star ratings as tags. |
+| `ratings` | bool | `true` | Sync star ratings to Immich ratings. |
 | `tags` | bool | `true` | Sync color labels and keywords as tags. |
 | `captions` | bool | `true` | Sync captions as asset descriptions. |
 | `rejects` | bool | `false` | Sync rejects as archived. |
