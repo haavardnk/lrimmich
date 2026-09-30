@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from lrimmich.utils.config import load_config
 
@@ -75,7 +74,7 @@ catalog = "/tmp/test.lrcat"
 api_key = "k123456"
 library_paths = ["/immich/"]
 """)
-    with pytest.raises(ValidationError, match="url"):
+    with pytest.raises(SystemExit, match="url"):
         load_config(p)
 
 
@@ -101,13 +100,22 @@ library_paths = ["/immich/"]
 [sync]
 scope = "invalid"
 """)
-    with pytest.raises(ValidationError):
+    with pytest.raises(SystemExit):
         load_config(p)
 
 
-def test_extra_field_ignored(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("extra", "location"),
+    [
+        ("\n[bogus]\nfoo = 1\n", "bogus"),
+        ("\n[sync]\nfake_option = true\n", "sync.fake_option"),
+        ('\n[[album_rules]]\nmatch = "Reise/*"\nfake = true\n', "album_rules.0.fake"),
+    ],
+)
+def test_unknown_key_rejected(tmp_path: Path, extra: str, location: str) -> None:
     p = tmp_path / "config.toml"
-    p.write_text("""\
+    p.write_text(
+        """\
 [[catalogs]]
 catalog = "/tmp/test.lrcat"
 
@@ -115,11 +123,11 @@ catalog = "/tmp/test.lrcat"
 url = "http://localhost:2283"
 api_key = "testkey123456"
 library_paths = ["/immich/"]
-bogus_field = "should be ignored"
-""")
-    cfg = load_config(p)
-    assert cfg.immich.url == "http://localhost:2283"
-    assert not hasattr(cfg.immich, "bogus_field")
+"""
+        + extra
+    )
+    with pytest.raises(SystemExit, match=location):
+        load_config(p)
 
 
 def test_album_mode_default(config_file: Path) -> None:
@@ -161,7 +169,7 @@ library_paths = ["/immich/"]
 [sync]
 album_mode = "bogus"
 """)
-    with pytest.raises(ValidationError):
+    with pytest.raises(SystemExit):
         load_config(p)
 
 
@@ -198,7 +206,7 @@ library_paths = ["/immich/"]
 [sync]
 album_filter = "bogus"
 """)
-    with pytest.raises(ValidationError):
+    with pytest.raises(SystemExit):
         load_config(p)
 
 
@@ -217,7 +225,7 @@ library_paths = ["/immich/"]
 [sync]
 album_min_rating = {rating}
 """)
-    with pytest.raises(ValidationError):
+    with pytest.raises(SystemExit):
         load_config(p)
 
 

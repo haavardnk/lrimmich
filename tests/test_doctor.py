@@ -10,7 +10,6 @@ from lrimmich.utils.config import Config
 from lrimmich.utils.doctor import (
     check_api_permissions,
     check_catalog,
-    check_config_keys,
     check_immich,
     check_path_mapping,
     check_state_db,
@@ -179,54 +178,6 @@ async def test_run_doctor_partial_fail(
     )
     report = await run_doctor(cfg, client)
     assert not report.all_ok
-
-
-VALID_TOML = """\
-[[catalogs]]
-catalog = "/tmp/test.lrcat"
-
-[immich]
-url = "http://localhost:2283"
-api_key = "testkey123456"
-library_paths = ["/immich/"]
-"""
-
-
-def test_check_config_keys_valid(tmp_path: Path) -> None:
-    p = tmp_path / "config.toml"
-    p.write_text(VALID_TOML)
-    result = check_config_keys(p)
-    assert result.ok
-
-
-def test_check_config_keys_unknown_top_level(tmp_path: Path) -> None:
-    p = tmp_path / "config.toml"
-    p.write_text(VALID_TOML + "\n[bogus]\nfoo = 1\n")
-    result = check_config_keys(p)
-    assert not result.ok
-    assert "bogus" in result.message
-
-
-def test_check_config_keys_unknown_nested(tmp_path: Path) -> None:
-    p = tmp_path / "config.toml"
-    p.write_text(VALID_TOML + "\n[sync]\nfake_option = true\n")
-    result = check_config_keys(p)
-    assert not result.ok
-    assert "sync.fake_option" in result.message
-
-
-def test_check_config_keys_unknown_album_rule_key(tmp_path: Path) -> None:
-    p = tmp_path / "config.toml"
-    p.write_text(VALID_TOML + '\n[[album_rules]]\nmatch = "Reise/*"\nfake = true\n')
-    result = check_config_keys(p)
-    assert not result.ok
-    assert "album_rules[0].fake" in result.message
-
-
-def test_check_config_keys_missing_file(tmp_path: Path) -> None:
-    result = check_config_keys(tmp_path / "missing.toml")
-    assert not result.ok
-    assert "Failed to read" in result.message
 
 
 @respx.mock
