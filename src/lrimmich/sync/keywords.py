@@ -1,70 +1,20 @@
-import json
-
 from lrimmich.clients.catalog import read_keywords
-from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
 from lrimmich.sync.context import SyncContext
-from lrimmich.sync.summary import KeywordsResult, SyncSummary
-from lrimmich.sync.tags import (
-    TagAction,
-    TagMap,
-    apply_tag_actions,
-    build_tag_actions,
-    ensure_tags,
-)
+from lrimmich.sync.summary import SyncSummary
+from lrimmich.sync.tags import TagAssignments, TagPlan, apply_tags, plan_tags
 from lrimmich.utils.config import Config
 
-KeywordsPlan = tuple[list[TagAction], dict[str, list[str]]]
+SNAPSHOT_KEY = "keywords_snapshot"
 
 
-def plan_keywords_sync(
-    keywords: dict[str, list[str]],
-    resolved: dict[str, str],
-    tag_map: TagMap,
-    state: StateDB,
-    prefix: str = "lr:keyword:",
-) -> list[TagAction]:
-    previous = state.get_meta("keywords_snapshot")
-    prev_assignments: dict[str, list[str]] = json.loads(previous) if previous else {}
-
-    desired: dict[str, list[str]] = {}
-    for rp, kws in keywords.items():
-        if rp in resolved:
-            asset_id = resolved[rp]
-            valid = sorted(k for k in kws if k in tag_map)
-            if valid:
-                desired[asset_id] = valid
-
-    by_tag_add: dict[str, list[str]] = {}
-    by_tag_remove: dict[str, list[str]] = {}
-
-    for asset_id, kws in desired.items():
-        old_kws = set(prev_assignments.get(asset_id, []))
-        new_kws = set(kws)
-        for kw in new_kws - old_kws:
-            by_tag_add.setdefault(kw, []).append(asset_id)
-        for kw in old_kws - new_kws:
-            if kw in tag_map:
-                by_tag_remove.setdefault(kw, []).append(asset_id)
-
-    for asset_id, old_kws in prev_assignments.items():
-        if asset_id not in desired:
-            for kw in old_kws:
-                if kw in tag_map:
-                    by_tag_remove.setdefault(kw, []).append(asset_id)
-
-    return build_tag_actions(by_tag_add, by_tag_remove, tag_map, prefix)
-
-
-async def apply_keywords_sync(
-    actions: list[TagAction],
-    desired: dict[str, list[str]],
-    client: ImmichClient,
-    state: StateDB,
-) -> KeywordsResult:
-    return await apply_tag_actions(
-        actions, desired, client, state, "keywords_snapshot", "sync_keywords"
-    )
+def desired_keyword_tags(
+    keywords: dict[str, list[str]], resolved: dict[str, str], prefix: str
+) -> TagAssignments:
+    return {
+        resolved[rp]: sorted({prefix + k for k in kws})
+        for rp, kws in keywords.items()
+        if rp in resolved and kws
+    }
 
 
 class Step:
@@ -74,39 +24,15 @@ class Step:
     def enabled(self, cfg: Config) -> bool:
         return cfg.sync.tags
 
-    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> KeywordsPlan:
-        prefix = ctx.cfg.sync.keyword_prefix or ""
-        kw_data = read_keywords(ctx.catalog.catalog)
-        needed_kws: set[str] = set()
-        for rp, kws in kw_data.items():
-            if rp in ctx.resolved:
-                needed_kws.update(kws)
-        prev_raw = ctx.state.get_meta("keywords_snapshot")
-        if prev_raw:
-            prev: dict[str, list[str]] = json.loads(prev_raw)
-            for kws in prev.values():
-                needed_kws.update(kws)
-        kw_tag_map = await ensure_tags(
-            ctx.client,
-            await ctx.get_existing_tags(),
-            needed_kws,
-            prefix,
-            create=not ctx.dry_run,
+    async def plan(self, ctx: SyncContext, summary: SyncSummary) -> TagPlan:
+        desired = desired_keyword_tags(
+            read_keywords(ctx.catalog.catalog),
+            ctx.resolved,
+            ctx.cfg.sync.keyword_prefix or "",
         )
-        kw_actions = plan_keywords_sync(
-            kw_data, ctx.resolved, kw_tag_map, ctx.state, prefix
-        )
-        kw_desired: dict[str, list[str]] = {}
-        for rp, kws in kw_data.items():
-            if rp in ctx.resolved:
-                valid = sorted(k for k in kws if k in kw_tag_map)
-                if valid:
-                    kw_desired[ctx.resolved[rp]] = valid
-        summary.keywords = KeywordsResult(
-            tagged=sum(len(a.asset_ids) for a in kw_actions if a.kind == "tag"),
-            untagged=sum(len(a.asset_ids) for a in kw_actions if a.kind == "untag"),
-        )
-        return kw_actions, kw_desired
+        plan = await plan_tags(ctx, desired, SNAPSHOT_KEY)
+        summary.keywords = plan.result
+        return plan
 
-    async def apply(self, plan: KeywordsPlan, ctx: SyncContext) -> None:
-        await apply_keywords_sync(plan[0], plan[1], ctx.client, ctx.state)
+    async def apply(self, plan: TagPlan, ctx: SyncContext) -> None:
+        await apply_tags(ctx, plan, SNAPSHOT_KEY, "sync_keywords")
