@@ -32,25 +32,6 @@ class AlbumSyncError(Exception):
     pass
 
 
-class RemoveLimitExceeded(AlbumSyncError):
-    def __init__(self, album_name: str, count: int, percent: int, limit: int) -> None:
-        self.album_name = album_name
-        self.count = count
-        self.percent = percent
-        self.limit = limit
-        super().__init__(
-            f"Removing {count} assets ({percent}%) from "
-            f"'{album_name}' exceeds {limit}% limit"
-        )
-
-
-class DeleteThresholdExceeded(AlbumSyncError):
-    def __init__(self, count: int, threshold: int) -> None:
-        self.count = count
-        self.threshold = threshold
-        super().__init__(f"Deleting {count} albums exceeds threshold of {threshold}")
-
-
 @dataclass
 class AlbumAction:
     kind: str
@@ -290,12 +271,11 @@ def _plan_diff(
     if to_remove:
         total = len(current_ids)
         pct = len(to_remove) * 100 // total if total > 0 else 0
-        if pct > ctx.safety.remove_percent_limit and not ctx.force:
-            raise RemoveLimitExceeded(
-                album_name,
-                len(to_remove),
-                pct,
-                ctx.safety.remove_percent_limit,
+        limit = ctx.safety.remove_percent_limit
+        if pct > limit and not ctx.force:
+            raise AlbumSyncError(
+                f"Removing {len(to_remove)} assets ({pct}%) from "
+                f"'{album_name}' exceeds {limit}% limit"
             )
         actions.append(
             AlbumAction(
@@ -355,7 +335,10 @@ def _plan_delete_orphans(
     if not to_delete or ctx.no_delete or ctx.safety.disable_deletes:
         return actions
     if len(to_delete) > ctx.safety.delete_threshold and not ctx.force:
-        raise DeleteThresholdExceeded(len(to_delete), ctx.safety.delete_threshold)
+        raise AlbumSyncError(
+            f"Deleting {len(to_delete)} albums exceeds threshold of "
+            f"{ctx.safety.delete_threshold}"
+        )
     return actions + [
         AlbumAction(
             kind="delete",
