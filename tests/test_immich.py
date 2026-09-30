@@ -226,12 +226,17 @@ async def test_get_tags(client: ImmichClient, api_url: str) -> None:
 
 @respx.mock
 @pytest.mark.anyio
-async def test_create_tag(client: ImmichClient, api_url: str) -> None:
-    respx.post(f"{api_url}/tags").mock(
-        return_value=httpx.Response(201, json={"id": "t1", "name": "lr:color:red"})
+async def test_upsert_tags(client: ImmichClient, api_url: str) -> None:
+    route = respx.put(f"{api_url}/tags").mock(
+        return_value=httpx.Response(
+            200, json=[{"id": "t1", "value": "immich-edit/label/red"}]
+        )
     )
-    tag = await client.create_tag("lr:color:red")
-    assert tag["id"] == "t1"
+    tags = await client.upsert_tags(["immich-edit/label/red"])
+    assert tags[0]["id"] == "t1"
+    assert json.loads(route.calls[0].request.content) == {
+        "tags": ["immich-edit/label/red"]
+    }
 
 
 @respx.mock
