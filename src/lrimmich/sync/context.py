@@ -1,8 +1,6 @@
-import asyncio
-from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Any, Protocol, TypeVar
+from typing import Protocol, TypeVar
 
 from lrimmich.clients.catalog import (
     LrCollection,
@@ -23,10 +21,8 @@ class SyncStep(Protocol[PlanT]):
     status_msg: str
 
     def enabled(self, cfg: Config) -> bool: ...
-    def plan(
-        self, ctx: "SyncContext", summary: SyncSummary
-    ) -> Coroutine[Any, Any, PlanT]: ...
-    def apply(self, plan: PlanT, ctx: "SyncContext") -> Coroutine[Any, Any, None]: ...
+    async def plan(self, ctx: "SyncContext", summary: SyncSummary) -> PlanT: ...
+    async def apply(self, plan: PlanT, ctx: "SyncContext") -> None: ...
 
 
 @dataclass
@@ -41,7 +37,6 @@ class SyncContext:
     force: bool
     no_delete: bool
     _tag_ids: dict[str, str] | None = field(default=None, repr=False)
-    _tags_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     @cached_property
     def flagged(self) -> set[str]:
@@ -56,15 +51,13 @@ class SyncContext:
         return read_rated_images(self.catalog.catalog)
 
     async def get_tag_ids(self) -> dict[str, str]:
-        async with self._tags_lock:
-            if self._tag_ids is None:
-                tags = await self.client.get_tags()
-                self._tag_ids = {t["value"]: t["id"] for t in tags}
-            return self._tag_ids
+        if self._tag_ids is None:
+            tags = await self.client.get_tags()
+            self._tag_ids = {t["value"]: t["id"] for t in tags}
+        return self._tag_ids
 
     async def ensure_tags(self, names: set[str]) -> dict[str, str]:
         tag_ids = await self.get_tag_ids()
-        async with self._tags_lock:
-            for name in sorted(names - tag_ids.keys()):
-                tag_ids[name] = (await self.client.create_tag(name))["id"]
+        for name in sorted(names - tag_ids.keys()):
+            tag_ids[name] = (await self.client.create_tag(name))["id"]
         return tag_ids

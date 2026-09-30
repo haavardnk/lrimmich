@@ -65,19 +65,18 @@ class SyncSummary:
 
     @property
     def has_drift(self) -> bool:
-        for f in fields(self):
-            if f.name == "unresolved":
-                continue
-            val = getattr(self, f.name)
-            if isinstance(val, bool):
-                continue
-            if isinstance(val, int) and val:
-                return True
-            if hasattr(val, "__dataclass_fields__"):
-                for sub_f in fields(val):
-                    if getattr(val, sub_f.name):
-                        return True
-        return False
+        return bool(self.changes())
+
+    def changes(self) -> dict[str, int]:
+        data = asdict(self)
+        top = {k: v for k, v in data.items() if type(v) is int and k != "unresolved"}
+        nested = {
+            f"{k}.{sub}": count
+            for k, v in data.items()
+            if isinstance(v, dict)
+            for sub, count in v.items()
+        }
+        return {k: v for k, v in (top | nested).items() if v}
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

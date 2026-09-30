@@ -25,7 +25,7 @@ lrimmich sync --json --quiet
 | `--config`, `-c` | Config file path (default: platform config dir) |
 | `--dry-run` | Preview changes without applying them |
 | `--force` | Skip safety guards and fingerprint cache |
-| `--interactive`, `-i` | Prompt before each sync step. Declined steps are skipped entirely and don't show up in the summary. Ignored with `--dry-run` |
+| `--interactive`, `-i` | Plan each step, show its changes and ask before applying them. Steps with nothing to change run without a prompt. Declined steps are skipped and left out of the summary. Ignored with `--dry-run` |
 | `--json` | Output the sync summary as JSON |
 | `--quiet`, `-q` | Suppress output |
 | `--no-delete` | Skip all album and asset deletions |
