@@ -8,7 +8,11 @@ from typing import Any
 import httpx
 import structlog
 
-from lrimmich.clients.catalog import read_catalog_fingerprint, read_collections
+from lrimmich.clients.catalog import (
+    read_catalog_fingerprint,
+    read_collections,
+    read_image_paths,
+)
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB, state_path_for_catalog
 from lrimmich.sync import (
@@ -113,6 +117,8 @@ async def run_sync(
     all_paths: set[str] = set()
     for col in collections:
         all_paths.update(col.relative_paths)
+    if cfg.sync.scope == "all":
+        all_paths.update(read_image_paths(catalog.catalog))
 
     if cfg.cache.spot_check_pct > 0 and not refresh_cache:
         cached = state.get_all_cached_paths(max_age=cache_ttl)

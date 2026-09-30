@@ -7,6 +7,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from lrimmich.clients.queries import (
+    ALL_IMAGES,
     CAPTIONS,
     COLLECTION_DIGEST,
     COLLECTION_FILES,
@@ -177,6 +178,11 @@ def _read_collections_inner(
 def _query_rows(catalog: Path, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
     with closing(_connect(catalog)) as conn:
         return conn.execute(sql, params).fetchall()
+
+
+def read_image_paths(catalog: Path) -> set[str]:
+    rows = _query_rows(catalog, ALL_IMAGES)
+    return {r["pathFromRoot"] + r["idx_filename"] for r in rows}
 
 
 def read_flagged_images(catalog: Path) -> set[str]:
