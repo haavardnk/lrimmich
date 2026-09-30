@@ -169,7 +169,9 @@ async def run_sync(
             c for c in collections if state.get_album_ownership(c.id) is None
         ]
         if unowned_cols:
-            candidates = await find_adopt_candidates(unowned_cols, client, state)
+            candidates = await find_adopt_candidates(
+                unowned_cols, client, state, cfg.sync.album_name_format
+            )
             unowned = [c for c in candidates if not c.conflict]
             if unowned:
                 if adopt_existing:
