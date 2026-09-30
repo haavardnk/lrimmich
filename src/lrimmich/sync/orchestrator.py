@@ -64,9 +64,9 @@ async def _run_step(
         plan = await step.plan(ctx, summary)
         if not dry_run:
             await step.apply(plan, ctx)
-    except (httpx.HTTPError, sqlite3.Error) as e:
+    except* (httpx.HTTPError, sqlite3.Error, albums.AlbumSyncError) as eg:
         logger.exception("step_failed", step=step.name)
-        summary.errors.append(f"{step.name}: {e}")
+        summary.errors.extend(f"{step.name}: {e}" for e in eg.exceptions)
 
 
 async def run_sync(
@@ -234,10 +234,15 @@ async def run_multi_sync(
                 on_status=on_status,
                 refresh_cache=refresh_cache,
             )
-            combined.merge(summary)
-            if summary.skipped_unchanged:
-                skipped += 1
+        except* (httpx.HTTPError, sqlite3.Error) as eg:
+            logger.exception("catalog_failed", catalog=catalog.catalog.name)
+            summary = SyncSummary(
+                errors=[f"{catalog.catalog.name}: {e}" for e in eg.exceptions]
+            )
         finally:
             state.close()
+        combined.merge(summary)
+        if summary.skipped_unchanged:
+            skipped += 1
     combined.skipped_unchanged = bool(cfg.catalogs) and skipped == len(cfg.catalogs)
     return combined
