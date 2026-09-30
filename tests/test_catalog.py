@@ -6,7 +6,6 @@ import pytest
 
 from lrimmich.clients.catalog import (
     read_catalog_fingerprint,
-    read_collection_covers,
     read_collections,
     read_color_labels,
     read_flagged_images,
@@ -260,60 +259,6 @@ def test_keywords_multiple_images(catalog_path: Path) -> None:
 def test_no_keywords(catalog_path: Path) -> None:
     CatalogBuilder(catalog_path).add_image(1, "a.jpg", "raw/").build()
     assert read_keywords(catalog_path) == {}
-
-
-def test_cover_highest_rated(catalog_path: Path) -> None:
-    (
-        CatalogBuilder(catalog_path)
-        .add_collection(1, "Travel")
-        .add_image(1, "a.jpg", "raw/", rating=3)
-        .add_image(2, "b.jpg", "raw/", rating=5)
-        .add_image(3, "c.jpg", "raw/", pick=1)
-        .add_collection_image(1, 1)
-        .add_collection_image(1, 2)
-        .add_collection_image(1, 3)
-        .build()
-    )
-    covers = read_collection_covers(catalog_path, [1])
-    assert covers[1] == "raw/b.jpg"
-
-
-def test_cover_fallback_to_pick(catalog_path: Path) -> None:
-    (
-        CatalogBuilder(catalog_path)
-        .add_collection(1, "Travel")
-        .add_image(1, "a.jpg", "raw/")
-        .add_image(2, "b.jpg", "raw/", pick=1)
-        .add_collection_image(1, 1)
-        .add_collection_image(1, 2)
-        .build()
-    )
-    covers = read_collection_covers(catalog_path, [1])
-    assert covers[1] == "raw/b.jpg"
-
-
-def test_cover_no_candidate(catalog_path: Path) -> None:
-    (
-        CatalogBuilder(catalog_path)
-        .add_collection(1, "Travel")
-        .add_image(1, "a.jpg", "raw/")
-        .add_collection_image(1, 1)
-        .build()
-    )
-    covers = read_collection_covers(catalog_path, [1])
-    assert 1 not in covers
-
-
-def test_cover_ignores_other_collections(catalog_path: Path) -> None:
-    (
-        CatalogBuilder(catalog_path)
-        .add_collection(1, "Travel")
-        .add_collection(2, "Other")
-        .add_image(1, "a.jpg", "raw/", rating=5)
-        .add_collection_image(2, 1)
-        .build()
-    )
-    assert read_collection_covers(catalog_path, [1]) == {}
 
 
 def test_read_catalog_fingerprint(catalog_path: Path) -> None:

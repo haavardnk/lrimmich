@@ -23,7 +23,6 @@ class RejectsResult:
 @dataclass
 class CoversResult:
     set: int = 0
-    cleared: int = 0
 
 
 @dataclass

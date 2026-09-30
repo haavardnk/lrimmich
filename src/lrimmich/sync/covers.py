@@ -1,6 +1,7 @@
-from lrimmich.clients.catalog import read_collection_covers
+from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
+from lrimmich.sync.albums import album_paths, resolve_album_rule
 from lrimmich.sync.context import SyncContext
 from lrimmich.sync.summary import CoversResult, SyncSummary
 from lrimmich.utils.config import Config
@@ -8,50 +9,75 @@ from lrimmich.utils.config import Config
 CoversPlan = tuple[dict[str, str], list[str]]
 
 
+def pick_cover_candidates(
+    collections: list[LrCollection],
+    cfg: Config,
+    resolved: dict[str, str],
+    flagged: set[str],
+    rejected: set[str],
+    rated: dict[str, int],
+) -> dict[int, list[str]]:
+    candidates: dict[int, list[str]] = {}
+    for collection in collections:
+        rule = resolve_album_rule(
+            collection,
+            cfg.sync.album_filter,
+            cfg.sync.album_min_rating,
+            cfg.album_rules,
+        )
+        scored = {
+            p: (rated.get(p, 0), 1 if p in flagged else -1 if p in rejected else 0)
+            for p in album_paths(collection, rule, flagged, rejected, rated)
+            if p in resolved
+        }
+        best = max(scored.values(), default=(0, 0))
+        if best[0] > 0 or best[1] > 0:
+            candidates[collection.id] = [p for p, s in scored.items() if s == best]
+    return candidates
+
+
 def plan_covers_sync(
-    cover_paths: dict[int, str],
+    cover_candidates: dict[int, list[str]],
     resolved: dict[str, str],
     state: StateDB,
 ) -> tuple[dict[str, str], list[str]]:
-    desired: dict[str, str] = {}
-    for lr_id, rel_path in cover_paths.items():
-        if rel_path not in resolved:
-            continue
-        ownership = state.get_album_ownership(lr_id)
-        if ownership is None:
-            continue
-        desired[ownership["immich_album_id"]] = resolved[rel_path]
     previous = state.get_synced_covers()
-    owned_ids = {a["immich_album_id"] for a in state.get_all_owned_albums()}
+    desired: dict[str, str] = {}
+    for lr_id, paths in cover_candidates.items():
+        asset_ids = [resolved[p] for p in paths if p in resolved]
+        ownership = state.get_album_ownership(lr_id)
+        if not asset_ids or ownership is None:
+            continue
+        album_id = ownership["immich_album_id"]
+        current = previous.get(album_id, "")
+        desired[album_id] = current if current in asset_ids else asset_ids[0]
     to_set = {
         aid: asset for aid, asset in desired.items() if previous.get(aid) != asset
     }
-    to_clear = [aid for aid in previous if aid not in desired and aid in owned_ids]
-    return to_set, to_clear
+    stale = [aid for aid in previous if aid not in desired]
+    return to_set, stale
 
 
 async def apply_covers_sync(
     to_set: dict[str, str],
-    to_clear: list[str],
+    stale: list[str],
     client: ImmichClient,
     state: StateDB,
 ) -> CoversResult:
     for album_id, asset_id in sorted(to_set.items()):
         await client.update_album(album_id, albumThumbnailAssetId=asset_id)
-    for album_id in sorted(to_clear):
-        await client.update_album(album_id, albumThumbnailAssetId=None)
-    if to_set or to_clear:
+    if to_set or stale:
         snapshot = dict(state.get_synced_covers())
         snapshot.update(to_set)
-        for aid in to_clear:
+        for aid in stale:
             snapshot.pop(aid, None)
         state.replace_synced_covers(snapshot)
         state.append_audit_log(
             "sync_covers",
             "albums",
-            payload={"set": len(to_set), "cleared": len(to_clear)},
+            payload={"set": len(to_set), "forgotten": len(stale)},
         )
-    return CoversResult(set=len(to_set), cleared=len(to_clear))
+    return CoversResult(set=len(to_set))
 
 
 class Step:
@@ -62,12 +88,17 @@ class Step:
         return cfg.sync.albums
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> CoversPlan:
-        cover_paths = read_collection_covers(
-            ctx.catalog.catalog, [c.id for c in ctx.collections]
+        candidates = pick_cover_candidates(
+            ctx.collections,
+            ctx.cfg,
+            ctx.resolved,
+            ctx.get_flagged(),
+            ctx.get_rejected(),
+            ctx.get_rated(),
         )
-        to_set, to_clear = plan_covers_sync(cover_paths, ctx.resolved, ctx.state)
-        summary.covers = CoversResult(set=len(to_set), cleared=len(to_clear))
-        return to_set, to_clear
+        to_set, stale = plan_covers_sync(candidates, ctx.resolved, ctx.state)
+        summary.covers = CoversResult(set=len(to_set))
+        return to_set, stale
 
     async def apply(self, plan: CoversPlan, ctx: SyncContext) -> None:
         await apply_covers_sync(plan[0], plan[1], ctx.client, ctx.state)

@@ -82,7 +82,7 @@ def print_summary(summary: SyncSummary, sync: SyncConfig) -> None:
     )
     typer.echo(f"assets: +{summary.assets_added} -{summary.assets_removed}")
     if sync.albums:
-        typer.echo(f"covers: +{summary.covers.set} -{summary.covers.cleared}")
+        typer.echo(f"covers: +{summary.covers.set}")
     if sync.favorites:
         typer.echo(
             f"favorites: +{summary.favorites.favorited} "
