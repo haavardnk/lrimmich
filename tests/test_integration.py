@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import httpx
@@ -9,6 +10,7 @@ from lrimmich.clients.state import StateDB
 from lrimmich.sync.orchestrator import run_sync
 from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
+from tests.fixtures.immich_api import mock_albums
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -44,32 +46,17 @@ def _mock_folders(asset_map: dict[str, str]) -> None:
     respx.get(f"{API}/albums").respond(json=[])
 
 
-def _mock_album_crud() -> dict[str, list[dict[str, str]]]:
-    albums: dict[str, list[dict[str, str]]] = {}
+def _mock_album_crud() -> dict[str, list[str]]:
+    albums: dict[str, list[str]] = {}
 
     def create_handler(request: httpx.Request) -> httpx.Response:
-        import json
-
         data = json.loads(request.content.decode())
         album_id = f"imm-{len(albums) + 1}"
-        asset_ids = data.get("assetIds", [])
-        albums[album_id] = [{"id": aid} for aid in asset_ids]
+        albums[album_id] = data.get("assetIds", [])
         return httpx.Response(200, json={"id": album_id})
 
-    def get_handler(request: httpx.Request, route: respx.Route) -> httpx.Response:
-        album_id = str(request.url).split("/albums/")[-1]
-        assets = albums.get(album_id, [])
-        return httpx.Response(
-            200,
-            json={
-                "assets": assets,
-                "albumUsers": [],
-            },
-        )
-
     respx.post(f"{API}/albums").mock(side_effect=create_handler)
-    respx.get(f"{API}/albums").respond(json=[])
-    respx.get(url__regex=rf"{API}/albums/imm-\d+$").mock(side_effect=get_handler)
+    mock_albums(albums)
     respx.patch(url__regex=rf"{API}/albums/imm-\d+$").respond(json={"id": "imm-1"})
     respx.patch(f"{API}/assets").mock(return_value=httpx.Response(200, json=None))
     respx.get(f"{API}/tags").respond(json=[])

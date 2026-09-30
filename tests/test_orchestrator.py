@@ -11,6 +11,7 @@ from lrimmich.sync.orchestrator import run_sync
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
+from tests.fixtures.immich_api import mock_albums
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -130,9 +131,6 @@ async def test_skip_sync_when_catalog_unchanged(
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
     respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [], "albumUsers": []}
-    )
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
@@ -153,19 +151,17 @@ async def test_dry_run_ignores_fingerprint(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
-    respx.get(f"{API}/albums").respond(json=[])
+    albums: dict[str, list[str]] = {}
+    mock_albums(albums)
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
     respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    album = respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [{"id": "a1"}], "albumUsers": []}
-    )
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
-    album.respond(json={"assets": [], "albumUsers": []})
+    albums["alb1"] = []
 
     summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
 
@@ -191,9 +187,6 @@ async def test_collection_move_is_detected(
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
     respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [{"id": "a1"}], "albumUsers": []}
-    )
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
 
@@ -211,15 +204,12 @@ async def test_collection_move_is_detected(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
-    respx.get(f"{API}/albums").respond(json=[])
+    mock_albums({"alb1": ["a1"]})
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.post(f"{API}/albums").respond(json={"id": "alb2"})
     respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [{"id": "a1"}], "albumUsers": []}
-    )
     removed = respx.delete(f"{API}/albums/alb1/assets").respond(json=[])
 
     summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
@@ -244,9 +234,6 @@ async def test_force_ignores_fingerprint(
     respx.post(f"{API}/albums").respond(json={"id": "alb1"})
     respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [], "albumUsers": []}
-    )
     respx.put(url__regex=rf"{API}/albums/.*/assets").respond(json=[])
 
     await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=False)
@@ -257,19 +244,12 @@ async def test_force_ignores_fingerprint(
         json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
     )
     respx.get(f"{API}/tags").respond(json=[])
-    respx.get(f"{API}/albums").respond(json=[])
+    mock_albums({"alb1": ["a1"]})
     respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.patch(f"{API}/assets").respond(json=[])
     respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [{"id": "a1"}], "albumUsers": []}
-    )
     respx.put(url__regex=rf"{API}/albums/.*/assets").respond(json=[])
-    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
-    respx.get(url__regex=rf"{API}/albums/alb").respond(
-        json={"assets": [], "albumUsers": []}
-    )
 
     await run_sync(cfg, cfg.catalogs[0], client, state, force=True)
 

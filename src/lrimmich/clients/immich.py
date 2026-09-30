@@ -4,6 +4,7 @@ import httpx
 import stamina
 
 CHUNK_SIZE = 1000
+SEARCH_PAGE_SIZE = 1000
 MAX_RETRIES = 3
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
@@ -60,8 +61,23 @@ class ImmichClient:
     async def get_albums(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/albums", params={"isOwned": "true"}) or []
 
-    async def get_album(self, album_id: str) -> dict[str, Any]:
-        return await self._request("GET", f"/albums/{album_id}")
+    async def get_album_asset_ids(self, album_id: str) -> set[str]:
+        asset_ids: set[str] = set()
+        page: str | None = "1"
+        while page:
+            result = await self._request(
+                "POST",
+                "/search/metadata",
+                {
+                    "albumIds": [album_id],
+                    "withDeleted": True,
+                    "size": SEARCH_PAGE_SIZE,
+                    "page": int(page),
+                },
+            )
+            asset_ids.update(a["id"] for a in result["assets"]["items"])
+            page = result["assets"]["nextPage"]
+        return asset_ids
 
     async def get_asset(self, asset_id: str) -> dict[str, Any] | None:
         return await self._request("GET", f"/assets/{asset_id}")
