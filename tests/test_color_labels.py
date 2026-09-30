@@ -8,6 +8,7 @@ from lrimmich.clients.state import StateDB
 from lrimmich.sync.color_labels import (
     ColorLabelsResult,
     apply_color_labels_sync,
+    desired_color_tags,
     plan_color_labels_sync,
 )
 from lrimmich.sync.tags import TagAction
@@ -19,10 +20,30 @@ API = IMMICH_URL + "/api"
 TAG_MAP = {"red": "t-red", "blue": "t-blue", "green": "t-green"}
 
 
-def test_plan_tags_new_labels(state: StateDB) -> None:
-    labels = {"a.jpg": "Red", "b.jpg": "Blue"}
+@pytest.mark.parametrize(
+    ("label", "overrides", "expected"),
+    [
+        ("Red", {}, {"a1": "red"}),
+        ("Red", {"red": "Portfolio"}, {"a1": "Portfolio"}),
+        ("Red", {"RED": "Portfolio"}, {"a1": "Portfolio"}),
+        ("Blue", {"red": "Portfolio"}, {"a1": "blue"}),
+        ("To Print", {}, {}),
+        ("To Print", {"to print": "print"}, {"a1": "print"}),
+    ],
+)
+def test_desired_color_tags(
+    label: str, overrides: dict[str, str], expected: dict[str, str]
+) -> None:
     resolved = {"a.jpg": "a1", "b.jpg": "a2"}
-    actions = plan_color_labels_sync(labels, resolved, TAG_MAP, state)
+    assert desired_color_tags({"a.jpg": label}, resolved, overrides) == expected
+
+
+def test_desired_color_tags_skips_unresolved() -> None:
+    assert desired_color_tags({"a.jpg": "Red"}, {}, {}) == {}
+
+
+def test_plan_tags_new_labels(state: StateDB) -> None:
+    actions = plan_color_labels_sync({"a1": "red", "a2": "blue"}, TAG_MAP, state)
     tag_actions = [a for a in actions if a.kind == "tag"]
     assert len(tag_actions) == 2
     assert sum(len(a.asset_ids) for a in tag_actions) == 2
@@ -30,17 +51,13 @@ def test_plan_tags_new_labels(state: StateDB) -> None:
 
 def test_plan_no_change_idempotent(state: StateDB) -> None:
     state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
-    labels = {"a.jpg": "Red"}
-    resolved = {"a.jpg": "a1"}
-    actions = plan_color_labels_sync(labels, resolved, TAG_MAP, state)
+    actions = plan_color_labels_sync({"a1": "red"}, TAG_MAP, state)
     assert len(actions) == 0
 
 
 def test_plan_label_changed(state: StateDB) -> None:
     state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
-    labels = {"a.jpg": "Blue"}
-    resolved = {"a.jpg": "a1"}
-    actions = plan_color_labels_sync(labels, resolved, TAG_MAP, state)
+    actions = plan_color_labels_sync({"a1": "blue"}, TAG_MAP, state)
     tag_actions = [a for a in actions if a.kind == "tag"]
     untag_actions = [a for a in actions if a.kind == "untag"]
     assert len(tag_actions) == 1
@@ -49,19 +66,22 @@ def test_plan_label_changed(state: StateDB) -> None:
     assert untag_actions[0].tag_id == "t-red"
 
 
+def test_plan_override_moves_tag(state: StateDB) -> None:
+    state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
+    tag_map = {**TAG_MAP, "Portfolio": "t-portfolio"}
+    actions = plan_color_labels_sync({"a1": "Portfolio"}, tag_map, state)
+    assert [(a.kind, a.tag_name, a.asset_ids) for a in actions] == [
+        ("tag", "lr:color:Portfolio", ["a1"]),
+        ("untag", "lr:color:red", ["a1"]),
+    ]
+
+
 def test_plan_label_removed(state: StateDB) -> None:
     state.set_meta("color_labels_snapshot", json.dumps({"a1": "red"}))
-    actions = plan_color_labels_sync({}, {}, TAG_MAP, state)
+    actions = plan_color_labels_sync({}, TAG_MAP, state)
     untag_actions = [a for a in actions if a.kind == "untag"]
     assert len(untag_actions) == 1
     assert untag_actions[0].asset_ids == ["a1"]
-
-
-def test_plan_unresolved_skipped(state: StateDB) -> None:
-    labels = {"a.jpg": "Red"}
-    resolved: dict[str, str] = {}
-    actions = plan_color_labels_sync(labels, resolved, TAG_MAP, state)
-    assert len(actions) == 0
 
 
 @respx.mock
