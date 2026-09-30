@@ -5,17 +5,18 @@ from lrimmich.sync.summary import RatingsResult, SyncSummary
 from lrimmich.utils.config import Config
 
 RatingsPlan = tuple[dict[str, int], list[str]]
+SNAPSHOT_KEY = "ratings_snapshot"
 
 
 def plan_ratings_sync(
     rated: dict[str, int],
     resolved: dict[str, str],
     state: StateDB,
-) -> tuple[dict[str, int], list[str]]:
+) -> RatingsPlan:
     desired: dict[str, int] = {
         resolved[rp]: rating for rp, rating in rated.items() if rp in resolved
     }
-    previous = state.get_synced_ratings()
+    previous: dict[str, int] = state.get_snapshot(SNAPSHOT_KEY) or {}
     to_set = {aid: r for aid, r in desired.items() if previous.get(aid) != r}
     to_clear = [aid for aid in previous if aid not in desired]
     return to_set, to_clear
@@ -35,11 +36,11 @@ async def apply_ratings_sync(
     if to_clear:
         await client.bulk_update_assets(sorted(to_clear), rating=None)
     if to_set or to_clear:
-        snapshot = dict(state.get_synced_ratings())
+        snapshot: dict[str, int] = state.get_snapshot(SNAPSHOT_KEY) or {}
         snapshot.update(to_set)
         for aid in to_clear:
             snapshot.pop(aid, None)
-        state.replace_synced_ratings(snapshot)
+        state.set_snapshot(SNAPSHOT_KEY, snapshot)
         state.append_audit_log(
             "sync_ratings",
             "ratings",

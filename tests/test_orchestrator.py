@@ -430,7 +430,7 @@ async def test_spot_check_failure_is_resolved_again(
     cfg: Config, client: ImmichClient, state: StateDB
 ) -> None:
     cfg.cache.spot_check_pct = 100
-    state.upsert_path_cache_bulk([("photos/sunset.jpg", "stale", "photos/sunset.jpg")])
+    state.upsert_path_cache_bulk({"photos/sunset.jpg": "stale"})
     respx.get(f"{API}/assets/stale").respond(status_code=404)
     respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
     respx.get(f"{API}/view/folder").respond(
@@ -455,7 +455,7 @@ async def test_cache_hits_keep_their_age(
     day_ago = time.time() - 86_400
     with monkeypatch.context() as m:
         m.setattr("lrimmich.clients.state.time.time", lambda: day_ago)
-        state.upsert_path_cache_bulk([("photos/sunset.jpg", "a1", "photos/sunset.jpg")])
+        state.upsert_path_cache_bulk({"photos/sunset.jpg": "a1"})
     respx.get(f"{API}/tags").respond(json=[])
     mock_albums({})
 

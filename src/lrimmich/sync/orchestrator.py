@@ -149,7 +149,7 @@ async def run_sync(
         on_status(f"Resolved {len(resolved)}/{len(all_paths)} assets")
     summary.unresolved = len(all_paths) - len(resolved)
     state.upsert_path_cache_bulk(
-        [(rp, aid, rp) for rp, aid in resolved.items() if rp not in cache_hits]
+        {rp: aid for rp, aid in resolved.items() if rp not in cache_hits}
     )
 
     state.evict_stale_cache(cache_ttl * 2)
