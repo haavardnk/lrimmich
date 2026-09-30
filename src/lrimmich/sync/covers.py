@@ -92,9 +92,9 @@ class Step:
             ctx.collections,
             ctx.cfg,
             ctx.resolved,
-            ctx.get_flagged(),
-            ctx.get_rejected(),
-            ctx.get_rated(),
+            ctx.flagged,
+            ctx.rejected,
+            ctx.rated,
         )
         to_set, stale = plan_covers_sync(candidates, ctx.resolved, ctx.state)
         summary.covers = CoversResult(set=len(to_set))
