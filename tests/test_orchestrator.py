@@ -2,12 +2,13 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+import httpx
 import pytest
 import respx
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.sync.orchestrator import run_sync
+from lrimmich.sync.orchestrator import run_multi_sync, run_sync
 from lrimmich.sync.summary import SyncSummary
 from lrimmich.utils.config import Config
 from tests.fixtures.catalog_factory import CatalogBuilder
@@ -304,3 +305,53 @@ async def test_unresolved_paths_are_counted(
 
     assert summary.unresolved == 1
     assert not summary.has_drift
+
+
+@pytest.mark.parametrize(
+    "search_status,expected",
+    [
+        (200, "albums: Removing 9 assets (90%) from 'Travel'"),
+        (404, "albums: 404 for POST /search/metadata"),
+    ],
+)
+@respx.mock
+@pytest.mark.anyio
+async def test_step_failure_is_reported(
+    cfg: Config,
+    client: ImmichClient,
+    state: StateDB,
+    search_status: int,
+    expected: str,
+) -> None:
+    cfg.sync.album_mode = "managed"
+    state.upsert_album_ownership(1, "alb1", "Travel")
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.patch(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={})
+    search = mock_albums({"alb1": ["a1", *(f"x{i}" for i in range(9))]})
+    if search_status != 200:
+        search.mock(return_value=httpx.Response(search_status))
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state)
+
+    assert any(e.startswith(expected) for e in summary.errors)
+    assert summary.favorites.favorited == 1
+    assert state.get_meta("catalog_fingerprint") is None
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_catalog_failure_is_reported(cfg: Config, client: ImmichClient) -> None:
+    respx.get(f"{API}/view/folder/unique-paths").mock(
+        side_effect=httpx.ConnectError("refused")
+    )
+
+    summary = await run_multi_sync(cfg, client)
+
+    assert summary.errors == ["test.lrcat: refused"]
