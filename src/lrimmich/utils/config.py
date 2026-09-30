@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from platformdirs import user_config_path
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 AlbumMode = Literal["managed", "hybrid"]
 AlbumFilter = Literal["all", "flagged", "unflagged", "rejected"]
@@ -16,7 +16,7 @@ DEFAULT_CONFIG_PATH = user_config_path("lrimmich") / "config.toml"
 
 
 class BaseConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
 
 class CatalogConfig(BaseConfig):
@@ -110,7 +110,10 @@ def load_config(path: Path | None = None) -> Config:
     env_key = os.environ.get("LRIMMICH_API_KEY")
     if env_key:
         raw.setdefault("immich", {})["api_key"] = env_key
-    cfg = Config(**raw)
+    try:
+        cfg = Config(**raw)
+    except ValidationError as e:
+        raise SystemExit(f"Invalid config {config_path}:\n{e}") from e
     if not cfg.immich.api_key:
         msg = "immich.api_key required (set in config or LRIMMICH_API_KEY env var)"
         raise SystemExit(msg)

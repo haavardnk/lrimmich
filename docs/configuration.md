@@ -6,7 +6,7 @@ nav_order: 4
 
 # Configuration
 
-The config file is TOML. Run `lrimmich config init` to generate one, or `lrimmich config show` to see the resolved values (secrets redacted).
+The config file is TOML. Run `lrimmich config init` to generate one, or `lrimmich config show` to see the resolved values (secrets redacted). Unknown keys are rejected, so a misspelled option stops every command with an error naming the key.
 
 ## `[[catalogs]]`
 
