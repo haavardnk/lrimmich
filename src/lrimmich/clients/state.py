@@ -15,7 +15,7 @@ def state_path_for_catalog(catalog_key: str) -> Path:
     return DEFAULT_STATE_DIR / f"state_{catalog_key}.db"
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -85,6 +85,13 @@ DELETE FROM meta
 WHERE key IN ('keywords_snapshot', 'color_labels_snapshot', 'catalog_fingerprint');
 """
 
+SCHEMA_V5 = """
+INSERT OR REPLACE INTO meta(key, value)
+SELECT 'stacks_snapshot', json_group_object(substr(key, 7), value)
+FROM meta WHERE key LIKE 'stack:%' AND value != '';
+DELETE FROM meta WHERE key LIKE 'stack:%';
+"""
+
 
 class StateDB:
     def __init__(self, path: Path) -> None:
@@ -123,6 +130,8 @@ class StateDB:
             self._conn.executescript(SCHEMA_V3)
         if current < 4:
             self._conn.executescript(SCHEMA_V4)
+        if current < 5:
+            self._conn.executescript(SCHEMA_V5)
         self.set_meta("schema_version", str(SCHEMA_VERSION))
 
     def _get_schema_version(self) -> int:
@@ -145,13 +154,6 @@ class StateDB:
             "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
             (key, value),
         )
-
-    def get_meta_prefix(self, prefix: str) -> dict[str, str]:
-        rows = self._conn.execute(
-            "SELECT key, value FROM meta WHERE key LIKE ? || '%'",
-            (prefix,),
-        ).fetchall()
-        return {r["key"]: r["value"] for r in rows if r["value"]}
 
     def upsert_path_cache_bulk(
         self,
