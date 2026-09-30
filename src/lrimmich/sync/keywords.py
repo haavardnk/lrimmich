@@ -78,8 +78,9 @@ class Step:
         prefix = ctx.cfg.sync.keyword_prefix or ""
         kw_data = read_keywords(ctx.catalog.catalog)
         needed_kws: set[str] = set()
-        for kws in kw_data.values():
-            needed_kws.update(kws)
+        for rp, kws in kw_data.items():
+            if rp in ctx.resolved:
+                needed_kws.update(kws)
         prev_raw = ctx.state.get_meta("keywords_snapshot")
         if prev_raw:
             prev: dict[str, list[str]] = json.loads(prev_raw)

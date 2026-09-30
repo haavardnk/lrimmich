@@ -147,3 +147,36 @@ async def test_multi_domain_orchestration(
     assert state.get_album_ownership(1) is not None
     logs = state.get_audit_log()
     assert len(logs) >= 2
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_creates_tags_only_for_synced_assets(
+    tmp_path: Path, client: ImmichClient, state: StateDB
+) -> None:
+    builder = CatalogBuilder(tmp_path / "tags.lrcat")
+    builder.add_collection(1, "Vacation")
+    builder.add_image(1, "beach.jpg", "photos/", color_labels="Red")
+    builder.add_image(2, "city.jpg", "photos/", color_labels="Blue")
+    builder.add_keyword(1, "Sea").add_keyword(2, "Street")
+    builder.add_keyword_image(1, 1).add_keyword_image(2, 2)
+    builder.add_collection_image(1, 1)
+    cfg = Config(
+        catalogs=[{"catalog": builder.build()}],
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_paths": [""]},
+        cache={"spot_check_pct": 0},
+    )
+    _mock_folders({"beach.jpg": "a1", "city.jpg": "a2"})
+    _mock_album_crud()
+    created = respx.post(f"{API}/tags").mock(
+        side_effect=lambda request: httpx.Response(
+            200, json={"id": json.loads(request.content)["name"]}
+        )
+    )
+    respx.put(url__regex=rf"{API}/tags/.*/assets").respond(json=[])
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state)
+
+    assert not summary.errors
+    names = sorted(json.loads(c.request.content)["name"] for c in created.calls)
+    assert names == ["lr:color:red", "lr:keyword:Sea"]

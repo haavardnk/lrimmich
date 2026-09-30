@@ -73,10 +73,17 @@ class Step:
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
         prefix = ctx.cfg.sync.color_prefix or ""
         labels = read_color_labels(ctx.catalog.catalog)
+        previous = ctx.state.get_meta("color_labels_snapshot")
+        needed = {
+            color.lower()
+            for rp, color in labels.items()
+            if rp in ctx.resolved and color in VALID_COLORS
+        }
+        needed.update(json.loads(previous).values() if previous else [])
         tag_map = await ensure_tags(
             ctx.client,
             await ctx.get_existing_tags(),
-            {c.lower() for c in VALID_COLORS},
+            needed,
             prefix,
             create=not ctx.dry_run,
         )
