@@ -1,3 +1,6 @@
+import json
+from typing import Any
+
 import httpx
 import pytest
 import respx
@@ -5,174 +8,118 @@ import respx
 from lrimmich.clients.catalog import LrStack
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.sync.stacks import StackAction, apply_stack_sync, plan_stack_sync
+from lrimmich.sync.stacks import SNAPSHOT_KEY, apply_stack_sync, plan_stack_sync
 
 API = "http://immich.test/api"
+RESOLVED = {"a.jpg": "a", "b.jpg": "b", "c.jpg": "c"}
+
+
+def _stack(stack_id: str, *asset_ids: str) -> dict[str, Any]:
+    return {
+        "id": stack_id,
+        "primaryAssetId": asset_ids[0],
+        "assets": [{"id": a} for a in asset_ids],
+    }
 
 
 @respx.mock
 @pytest.mark.anyio
-async def test_plan_create_stack(state: StateDB, client: ImmichClient) -> None:
-    respx.get(f"{API}/stacks").mock(return_value=httpx.Response(200, json=[]))
-
-    lr_stacks = [LrStack(stack_id=1, paths=["a.jpg", "b.jpg"])]
-    resolved = {"a.jpg": "asset-a", "b.jpg": "asset-b"}
-
-    actions = await plan_stack_sync(lr_stacks, resolved, state, client)
-
-    assert len(actions) == 1
-    assert actions[0].kind == "create"
-    assert actions[0].asset_ids == ["asset-a", "asset-b"]
-
-
-@pytest.mark.parametrize("paths", [["a.jpg", "b.jpg"], ["a.jpg", "a.jpg"]])
-@respx.mock
-@pytest.mark.anyio
-async def test_plan_skip_single_resolved(
-    state: StateDB, client: ImmichClient, paths: list[str]
+@pytest.mark.parametrize(
+    ("paths", "owned", "existing", "expected"),
+    [
+        (["a.jpg", "b.jpg"], {}, [], [("create", ["a", "b"], None)]),
+        (["a.jpg", "x.jpg"], {}, [], []),
+        (["a.jpg", "a.jpg"], {}, [], []),
+        (["a.jpg", "b.jpg"], {"1": "s1"}, [_stack("s1", "a", "b")], []),
+        (
+            ["a.jpg", "b.jpg", "c.jpg"],
+            {"1": "s1"},
+            [_stack("s1", "a", "b")],
+            [("update", ["a", "b", "c"], "s1")],
+        ),
+        (
+            ["b.jpg", "a.jpg"],
+            {"1": "s1"},
+            [_stack("s1", "a", "b")],
+            [("update", ["b", "a"], "s1")],
+        ),
+        (["a.jpg", "b.jpg"], {"1": "gone"}, [], [("create", ["a", "b"], None)]),
+        (
+            ["a.jpg", "x.jpg"],
+            {"1": "s1"},
+            [_stack("s1", "a", "b")],
+            [("delete", [], "s1")],
+        ),
+        ([], {"1": "gone"}, [], []),
+    ],
+)
+async def test_plan(
+    state: StateDB,
+    client: ImmichClient,
+    paths: list[str],
+    owned: dict[str, str],
+    existing: list[dict[str, Any]],
+    expected: list[tuple[str, list[str], str | None]],
 ) -> None:
-    respx.get(f"{API}/stacks").mock(return_value=httpx.Response(200, json=[]))
+    state.set_meta(SNAPSHOT_KEY, json.dumps(owned))
+    respx.get(f"{API}/stacks").respond(json=existing)
+    lr_stacks = [LrStack(stack_id=1, paths=paths)] if paths else []
 
-    lr_stacks = [LrStack(stack_id=1, paths=paths)]
-    resolved = {"a.jpg": "asset-a"}
+    plan = await plan_stack_sync(lr_stacks, RESOLVED, state, client)
 
-    actions = await plan_stack_sync(lr_stacks, resolved, state, client)
-
-    assert actions == []
+    assert [(a.kind, a.asset_ids, a.immich_stack_id) for a in plan.actions] == expected
 
 
 @respx.mock
 @pytest.mark.anyio
-async def test_plan_no_change(state: StateDB, client: ImmichClient) -> None:
-    state.set_meta("stack:1", "immich-stack-1")
-    respx.get(f"{API}/stacks").mock(
-        return_value=httpx.Response(
-            200,
-            json=[
-                {
-                    "id": "immich-stack-1",
-                    "primaryAssetId": "asset-a",
-                    "assets": [{"id": "asset-a"}, {"id": "asset-b"}],
-                }
-            ],
-        )
+async def test_apply_replaces_and_forgets(state: StateDB, client: ImmichClient) -> None:
+    state.set_meta(SNAPSHOT_KEY, json.dumps({"1": "s1", "2": "s2", "3": "gone"}))
+    respx.get(f"{API}/stacks").respond(
+        json=[_stack("s1", "a", "b"), _stack("s2", "c", "d")]
     )
+    deleted = respx.delete(url__regex=rf"{API}/stacks/.+").respond(status_code=204)
+    respx.post(f"{API}/stacks").respond(json={"id": "new"})
+    lr_stacks = [
+        LrStack(stack_id=1, paths=["a.jpg", "b.jpg", "c.jpg"]),
+        LrStack(stack_id=4, paths=["a.jpg", "b.jpg"]),
+    ]
+    plan = await plan_stack_sync(lr_stacks, RESOLVED, state, client)
 
-    lr_stacks = [LrStack(stack_id=1, paths=["a.jpg", "b.jpg"])]
-    resolved = {"a.jpg": "asset-a", "b.jpg": "asset-b"}
+    await apply_stack_sync(plan, client, state)
 
-    actions = await plan_stack_sync(lr_stacks, resolved, state, client)
-
-    assert actions == []
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_plan_update_stack(state: StateDB, client: ImmichClient) -> None:
-    state.set_meta("stack:1", "immich-stack-1")
-    respx.get(f"{API}/stacks").mock(
-        return_value=httpx.Response(
-            200,
-            json=[
-                {
-                    "id": "immich-stack-1",
-                    "primaryAssetId": "asset-a",
-                    "assets": [{"id": "asset-a"}, {"id": "asset-b"}],
-                }
-            ],
-        )
-    )
-
-    lr_stacks = [LrStack(stack_id=1, paths=["a.jpg", "b.jpg", "c.jpg"])]
-    resolved = {"a.jpg": "asset-a", "b.jpg": "asset-b", "c.jpg": "asset-c"}
-
-    actions = await plan_stack_sync(lr_stacks, resolved, state, client)
-
-    assert len(actions) == 1
-    assert actions[0].kind == "update"
+    assert sorted(c.request.url.path for c in deleted.calls) == [
+        "/api/stacks/s1",
+        "/api/stacks/s2",
+    ]
+    assert json.loads(state.get_meta(SNAPSHOT_KEY) or "") == {"1": "new", "4": "new"}
+    assert [log["action"] for log in state.get_audit_log()] == [
+        "delete_stack",
+        "create_stack",
+        "update_stack",
+    ]
 
 
 @respx.mock
 @pytest.mark.anyio
-async def test_plan_delete_orphan(state: StateDB, client: ImmichClient) -> None:
-    state.set_meta("stack:99", "immich-stack-99")
-    respx.get(f"{API}/stacks").mock(return_value=httpx.Response(200, json=[]))
-
-    actions = await plan_stack_sync([], {}, state, client)
-
-    assert len(actions) == 1
-    assert actions[0].kind == "delete"
-    assert actions[0].immich_stack_id == "immich-stack-99"
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_apply_create(state: StateDB, client: ImmichClient) -> None:
+async def test_apply_keeps_ownership_on_failure(
+    state: StateDB, client: ImmichClient
+) -> None:
+    state.set_meta(SNAPSHOT_KEY, json.dumps({"1": "s1"}))
+    respx.get(f"{API}/stacks").respond(json=[_stack("s1", "a", "b")])
+    respx.delete(f"{API}/stacks/s1").respond(status_code=204)
     respx.post(f"{API}/stacks").mock(
-        return_value=httpx.Response(
-            200, json={"id": "new-stack", "primaryAssetId": "a1"}
-        )
+        side_effect=[
+            httpx.Response(200, json={"id": "new-2"}),
+            httpx.Response(400),
+        ]
     )
-
-    actions = [
-        StackAction(
-            kind="create",
-            lr_stack_id=1,
-            asset_ids=["a1", "a2"],
-            primary_asset_id="a1",
-        )
+    lr_stacks = [
+        LrStack(stack_id=2, paths=["b.jpg", "c.jpg"]),
+        LrStack(stack_id=1, paths=["a.jpg", "b.jpg", "c.jpg"]),
     ]
-    result = await apply_stack_sync(actions, client, state)
+    plan = await plan_stack_sync(lr_stacks, RESOLVED, state, client)
 
-    assert result.created == 1
-    assert state.get_meta("stack:1") == "new-stack"
+    with pytest.raises(httpx.HTTPStatusError):
+        await apply_stack_sync(plan, client, state)
 
-
-@respx.mock
-@pytest.mark.anyio
-async def test_apply_delete(state: StateDB, client: ImmichClient) -> None:
-    state.set_meta("stack:1", "old-stack")
-    respx.delete(f"{API}/stacks/old-stack").mock(
-        return_value=httpx.Response(200, json={})
-    )
-
-    actions = [
-        StackAction(
-            kind="delete",
-            lr_stack_id=1,
-            asset_ids=[],
-            immich_stack_id="old-stack",
-        )
-    ]
-    result = await apply_stack_sync(actions, client, state)
-
-    assert result.deleted == 1
-    assert state.get_meta("stack:1") == ""
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_apply_update(state: StateDB, client: ImmichClient) -> None:
-    state.set_meta("stack:1", "old-stack")
-    respx.delete(f"{API}/stacks/old-stack").mock(
-        return_value=httpx.Response(200, json={})
-    )
-    respx.post(f"{API}/stacks").mock(
-        return_value=httpx.Response(
-            200, json={"id": "new-stack", "primaryAssetId": "a1"}
-        )
-    )
-
-    actions = [
-        StackAction(
-            kind="update",
-            lr_stack_id=1,
-            asset_ids=["a1", "a2", "a3"],
-            immich_stack_id="old-stack",
-            primary_asset_id="a1",
-        )
-    ]
-    result = await apply_stack_sync(actions, client, state)
-
-    assert result.updated == 1
-    assert state.get_meta("stack:1") == "new-stack"
+    assert json.loads(state.get_meta(SNAPSHOT_KEY) or "") == {"2": "new-2"}
