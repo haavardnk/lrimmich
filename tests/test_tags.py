@@ -1,79 +1,48 @@
-import json
-from pathlib import Path
-
 import pytest
-import respx
 
-from lrimmich.clients.immich import ImmichClient
-from lrimmich.clients.state import StateDB
-from lrimmich.sync.tags import TagAction, TagSyncResult, apply_tag_actions, ensure_tags
-
-IMMICH_URL = "http://immich.test"
-API = IMMICH_URL + "/api"
+from lrimmich.sync.summary import TagSyncResult
+from lrimmich.sync.tags import TagAction, TagAssignments, TagPlan, diff_tags
 
 
-@respx.mock
-@pytest.mark.anyio
-async def test_ensure_tags_creates_missing(client: ImmichClient) -> None:
-    respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "pre:red"})
-    result = await ensure_tags(client, [], {"red", "blue"}, "pre:")
-    assert "red" in result
-    assert "blue" in result
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_ensure_tags_reuses_existing(client: ImmichClient) -> None:
-    existing = [{"id": "e1", "value": "pre:red"}]
-    respx.post(f"{API}/tags").respond(json={"id": "new-id", "value": "pre:blue"})
-    result = await ensure_tags(client, existing, {"red", "blue"}, "pre:")
-    assert result["red"] == "e1"
-    assert result["blue"] == "new-id"
-
-
-@pytest.mark.anyio
-async def test_ensure_tags_no_create(client: ImmichClient) -> None:
-    existing = [{"id": "e1", "value": "pre:red"}]
-    result = await ensure_tags(client, existing, {"red", "blue"}, "pre:", create=False)
-    assert result["red"] == "e1"
-    assert result["blue"] is None
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_apply_tag_actions(client: ImmichClient, tmp_path: Path) -> None:
-    state = StateDB(tmp_path / "state.db")
-    respx.put(f"{API}/tags/t1/assets").respond(json=None)
-    respx.delete(f"{API}/tags/t2/assets").respond(json=None)
-    actions = [
-        TagAction(kind="tag", tag_id="t1", tag_name="pre:a", asset_ids=["a1"]),
-        TagAction(kind="untag", tag_id="t2", tag_name="pre:b", asset_ids=["a2"]),
-    ]
-    result = await apply_tag_actions(
-        actions, {"a1": "a"}, client, state, "test_snap", "test_action"
-    )
-    assert result == TagSyncResult(tagged=1, untagged=1)
-    assert json.loads(state.get_meta("test_snap") or "{}") == {"a1": "a"}
-
-
-@respx.mock
-@pytest.mark.anyio
-async def test_apply_tag_actions_logs_audit(
-    client: ImmichClient, tmp_path: Path
+@pytest.mark.parametrize(
+    ("previous", "desired", "existing", "expected"),
+    [
+        ({}, {"a1": ["x"], "a2": ["x"]}, set(), [("tag", "x", ["a1", "a2"])]),
+        ({"a1": ["x"]}, {"a1": ["x"]}, {"x"}, []),
+        (
+            {"a1": ["x"]},
+            {"a1": ["y"]},
+            {"x"},
+            [("tag", "y", ["a1"]), ("untag", "x", ["a1"])],
+        ),
+        ({"a1": ["x", "y"]}, {"a1": ["x"]}, {"x", "y"}, [("untag", "y", ["a1"])]),
+        ({"a1": ["x"]}, {}, {"x"}, [("untag", "x", ["a1"])]),
+        ({"a1": ["x"]}, {}, set(), []),
+        (
+            {"a1": ["old:x"]},
+            {"a1": ["new:x"]},
+            {"old:x"},
+            [("tag", "new:x", ["a1"]), ("untag", "old:x", ["a1"])],
+        ),
+    ],
+)
+def test_diff_tags(
+    previous: TagAssignments,
+    desired: TagAssignments,
+    existing: set[str],
+    expected: list[tuple[str, str, list[str]]],
 ) -> None:
-    state = StateDB(tmp_path / "state.db")
-    respx.put(f"{API}/tags/t1/assets").respond(json=None)
-    actions = [
-        TagAction(kind="tag", tag_id="t1", tag_name="pre:a", asset_ids=["a1"]),
-    ]
-    await apply_tag_actions(actions, {"a1": "a"}, client, state, "snap", "my_action")
-    logs = state.get_audit_log()
-    assert len(logs) == 1
-    assert logs[0]["action"] == "my_action"
+    actions = diff_tags(previous, desired, existing)
+    assert [(a.kind, a.tag_name, a.asset_ids) for a in actions] == expected
 
 
-@pytest.mark.anyio
-async def test_apply_empty_noop(client: ImmichClient, tmp_path: Path) -> None:
-    state = StateDB(tmp_path / "state.db")
-    result = await apply_tag_actions([], {}, client, state, "snap", "noop")
-    assert result == TagSyncResult(tagged=0, untagged=0)
+def test_plan_result_counts_assets() -> None:
+    plan = TagPlan(
+        [
+            TagAction("tag", "x", ["a1", "a2"]),
+            TagAction("tag", "y", ["a1"]),
+            TagAction("untag", "z", ["a3"]),
+        ],
+        {},
+    )
+    assert plan.result == TagSyncResult(tagged=3, untagged=1)

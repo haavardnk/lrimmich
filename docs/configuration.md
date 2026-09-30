@@ -86,7 +86,7 @@ red = "portfolio"
 "To Print" = "print"
 ```
 
-Changing a name moves the tag on the next sync: assets lose the old tag and get the new one.
+Changing a name or a prefix moves the tag on the next sync: assets lose the old tag and get the new one. The old tag itself stays in Immich, empty.
 
 ## `[cache]`
 

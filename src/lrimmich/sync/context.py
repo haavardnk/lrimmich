@@ -42,7 +42,7 @@ class SyncContext:
     _flagged: set[str] | None = field(default=None, repr=False)
     _rejected: set[str] | None = field(default=None, repr=False)
     _rated: dict[str, int] | None = field(default=None, repr=False)
-    _existing_tags: list[dict[str, Any]] | None = field(default=None, repr=False)
+    _tag_ids: dict[str, str] | None = field(default=None, repr=False)
     _tags_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     def get_flagged(self) -> set[str]:
@@ -60,8 +60,16 @@ class SyncContext:
             self._rated = read_rated_images(self.catalog.catalog)
         return self._rated
 
-    async def get_existing_tags(self) -> list[dict[str, Any]]:
+    async def get_tag_ids(self) -> dict[str, str]:
         async with self._tags_lock:
-            if self._existing_tags is None:
-                self._existing_tags = await self.client.get_tags()
-            return self._existing_tags
+            if self._tag_ids is None:
+                tags = await self.client.get_tags()
+                self._tag_ids = {t["value"]: t["id"] for t in tags}
+            return self._tag_ids
+
+    async def ensure_tags(self, names: set[str]) -> dict[str, str]:
+        tag_ids = await self.get_tag_ids()
+        async with self._tags_lock:
+            for name in sorted(names - tag_ids.keys()):
+                tag_ids[name] = (await self.client.create_tag(name))["id"]
+        return tag_ids

@@ -31,10 +31,6 @@ class TagSyncResult:
     untagged: int = 0
 
 
-ColorLabelsResult = TagSyncResult
-KeywordsResult = TagSyncResult
-
-
 @dataclass
 class CaptionsResult:
     set: int = 0
@@ -58,8 +54,8 @@ class SyncSummary:
     favorites: FavoritesResult = field(default_factory=FavoritesResult)
     ratings: RatingsResult = field(default_factory=RatingsResult)
     rejects: RejectsResult = field(default_factory=RejectsResult)
-    color_labels: ColorLabelsResult = field(default_factory=ColorLabelsResult)
-    keywords: KeywordsResult = field(default_factory=KeywordsResult)
+    color_labels: TagSyncResult = field(default_factory=TagSyncResult)
+    keywords: TagSyncResult = field(default_factory=TagSyncResult)
     captions: CaptionsResult = field(default_factory=CaptionsResult)
     covers: CoversResult = field(default_factory=CoversResult)
     stacks: StacksResult = field(default_factory=StacksResult)

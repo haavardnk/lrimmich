@@ -195,3 +195,91 @@ async def test_creates_tags_only_for_synced_assets(
     assert not summary.errors
     names = sorted(json.loads(c.request.content)["name"] for c in created.calls)
     assert names == expected
+
+
+def _mock_tag_server() -> dict[str, set[str]]:
+    assigned: dict[str, set[str]] = {}
+
+    def create(request: httpx.Request) -> httpx.Response:
+        name = json.loads(request.content)["name"]
+        assigned[name] = set()
+        return httpx.Response(201, json={"id": name, "value": name})
+
+    def update(request: httpx.Request) -> httpx.Response:
+        tag = request.url.path.split("/")[-2]
+        ids = set(json.loads(request.content)["ids"])
+        if request.method == "PUT":
+            assigned[tag] |= ids
+        else:
+            assigned[tag] -= ids
+        return httpx.Response(200, json=[])
+
+    respx.get(f"{API}/tags").mock(
+        side_effect=lambda _: httpx.Response(
+            200, json=[{"id": n, "value": n} for n in assigned]
+        )
+    )
+    respx.post(f"{API}/tags").mock(side_effect=create)
+    respx.route(url__regex=rf"{API}/tags/.+/assets").mock(side_effect=update)
+    return assigned
+
+
+@pytest.fixture()
+def tagged_catalog(tmp_path: Path) -> Path:
+    builder = CatalogBuilder(tmp_path / "tags.lrcat")
+    builder.add_collection(1, "Vacation")
+    builder.add_image(1, "beach.jpg", "photos/", color_labels="Red")
+    builder.add_keyword(1, "Sea").add_keyword_image(1, 1)
+    builder.add_collection_image(1, 1)
+    return builder.build()
+
+
+def _tag_config(catalog: Path, sync: dict[str, object]) -> Config:
+    return Config(
+        catalogs=[{"catalog": catalog}],
+        immich={"url": IMMICH_URL, "api_key": "test-key", "library_paths": [""]},
+        cache={"spot_check_pct": 0},
+        sync=sync,
+    )
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_dry_run_counts_tags_not_yet_created(
+    tagged_catalog: Path, client: ImmichClient, state: StateDB
+) -> None:
+    cfg = _tag_config(tagged_catalog, {})
+    _mock_folders({"beach.jpg": "a1"})
+    _mock_album_crud()
+    assigned = _mock_tag_server()
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+
+    assert summary.keywords.tagged == 1
+    assert summary.color_labels.tagged == 1
+    assert assigned == {}
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_prefix_change_moves_tags(
+    tagged_catalog: Path, client: ImmichClient, state: StateDB
+) -> None:
+    _mock_folders({"beach.jpg": "a1"})
+    _mock_album_crud()
+    assigned = _mock_tag_server()
+    before = _tag_config(tagged_catalog, {})
+    await run_sync(before, before.catalogs[0], client, state)
+
+    after = _tag_config(tagged_catalog, {"keyword_prefix": "kw:", "color_prefix": ""})
+    summary = await run_sync(after, after.catalogs[0], client, state)
+
+    assert not summary.errors
+    assert summary.keywords.untagged == 1
+    assert summary.color_labels.untagged == 1
+    assert assigned == {
+        "lr:keyword:Sea": set(),
+        "lr:color:red": set(),
+        "kw:Sea": {"a1"},
+        "red": {"a1"},
+    }
