@@ -210,7 +210,7 @@ def reset(
             " Next sync will rebuild from scratch.",
             abort=True,
         )
-    for f in state_files:
+    for f in DEFAULT_STATE_DIR.glob("state*.db*"):
         f.unlink()
     typer.echo("State cleared.")
 
