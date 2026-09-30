@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+import time
 from collections.abc import Callable
 from hashlib import sha256
 from typing import Any
@@ -97,13 +98,14 @@ async def run_sync(
     config_hash = sha256(cfg.model_dump_json().encode()).hexdigest()[:16]
     combined_fingerprint = f"{fingerprint}:{config_hash}"
     last_fingerprint = state.get_meta("catalog_fingerprint")
-    if (
+    retry_at = int(state.get_meta("unresolved_retry_at") or 0)
+    unchanged = (
         not force
         and not dry_run
         and not refresh_cache
-        and last_fingerprint
         and combined_fingerprint == last_fingerprint
-    ):
+    )
+    if unchanged and (not retry_at or time.time() < retry_at):
         logger.debug("catalog_unchanged", fingerprint=combined_fingerprint)
         summary.skipped_unchanged = True
         return summary
@@ -143,6 +145,16 @@ async def run_sync(
             logger.info("cache_spot_check", invalidated=invalidated)
 
     state.evict_stale_cache(cache_ttl * 2)
+
+    unresolved_digest = sha256(
+        "\n".join(sorted(all_paths - resolved.keys())).encode()
+    ).hexdigest()[:16]
+    next_retry_at = int(time.time()) + cfg.cache.miss_ttl_minutes * 60
+    if unchanged and unresolved_digest == state.get_meta("unresolved_digest"):
+        logger.debug("unresolved_unchanged", unresolved=summary.unresolved)
+        state.set_meta("unresolved_retry_at", str(next_retry_at))
+        summary.skipped_unchanged = True
+        return summary
 
     if cfg.sync.albums:
         unowned_cols = [
@@ -198,6 +210,10 @@ async def run_sync(
 
     if not dry_run and not summary.errors:
         state.set_meta("catalog_fingerprint", combined_fingerprint)
+        state.set_meta("unresolved_digest", unresolved_digest)
+        state.set_meta(
+            "unresolved_retry_at", str(next_retry_at) if summary.unresolved else ""
+        )
 
     return summary
 
