@@ -8,7 +8,7 @@ nav_order: 2
 
 ## Requirements
 
-- Python 3.11 or newer
+- Python 3.12 or newer
 - Immich 3.0 or newer, with an [API key](https://docs.immich.app/features/command-line-interface/#obtain-the-api-key)
 - Your Lightroom Classic catalog (`.lrcat` file) accessible from the machine running lrimmich
 - Photo files mounted in Immich as an external library
