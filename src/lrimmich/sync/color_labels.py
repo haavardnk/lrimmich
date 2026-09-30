@@ -14,13 +14,27 @@ from lrimmich.sync.tags import (
 )
 from lrimmich.utils.config import Config
 
-VALID_COLORS = {"Red", "Yellow", "Green", "Blue", "Purple"}
+DEFAULT_COLORS = ("red", "yellow", "green", "blue", "purple")
 ColorLabelsPlan = tuple[list[TagAction], dict[str, str]]
 
 
-def plan_color_labels_sync(
+def desired_color_tags(
     labels: dict[str, str],
     resolved: dict[str, str],
+    overrides: dict[str, str],
+) -> dict[str, str]:
+    names = {c: c for c in DEFAULT_COLORS} | {
+        label.lower(): tag for label, tag in overrides.items()
+    }
+    return {
+        resolved[rp]: names[label.lower()]
+        for rp, label in labels.items()
+        if rp in resolved and label.lower() in names
+    }
+
+
+def plan_color_labels_sync(
+    desired: dict[str, str],
     tag_map: TagMap,
     state: StateDB,
     prefix: str = "lr:color:",
@@ -28,26 +42,20 @@ def plan_color_labels_sync(
     previous = state.get_meta("color_labels_snapshot")
     prev_assignments: dict[str, str] = json.loads(previous) if previous else {}
 
-    desired: dict[str, str] = {}
-    for rp, color in labels.items():
-        key = color.lower()
-        if rp in resolved and key in tag_map:
-            desired[resolved[rp]] = key
-
     by_tag_add: dict[str, list[str]] = {}
     by_tag_remove: dict[str, list[str]] = {}
 
-    for asset_id, color in desired.items():
-        old_color = prev_assignments.get(asset_id)
-        if old_color == color:
+    for asset_id, tag in desired.items():
+        old_tag = prev_assignments.get(asset_id)
+        if old_tag == tag:
             continue
-        if old_color and old_color in tag_map:
-            by_tag_remove.setdefault(old_color, []).append(asset_id)
-        by_tag_add.setdefault(color, []).append(asset_id)
+        if old_tag:
+            by_tag_remove.setdefault(old_tag, []).append(asset_id)
+        by_tag_add.setdefault(tag, []).append(asset_id)
 
-    for asset_id, old_color in prev_assignments.items():
-        if asset_id not in desired and old_color in tag_map:
-            by_tag_remove.setdefault(old_color, []).append(asset_id)
+    for asset_id, old_tag in prev_assignments.items():
+        if asset_id not in desired:
+            by_tag_remove.setdefault(old_tag, []).append(asset_id)
 
     return build_tag_actions(by_tag_add, by_tag_remove, tag_map, prefix)
 
@@ -72,13 +80,13 @@ class Step:
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> ColorLabelsPlan:
         prefix = ctx.cfg.sync.color_prefix or ""
-        labels = read_color_labels(ctx.catalog.catalog)
+        desired = desired_color_tags(
+            read_color_labels(ctx.catalog.catalog),
+            ctx.resolved,
+            ctx.cfg.sync.color_tags,
+        )
         previous = ctx.state.get_meta("color_labels_snapshot")
-        needed = {
-            color.lower()
-            for rp, color in labels.items()
-            if rp in ctx.resolved and color in VALID_COLORS
-        }
+        needed = set(desired.values())
         needed.update(json.loads(previous).values() if previous else [])
         tag_map = await ensure_tags(
             ctx.client,
@@ -87,14 +95,7 @@ class Step:
             prefix,
             create=not ctx.dry_run,
         )
-        actions = plan_color_labels_sync(
-            labels, ctx.resolved, tag_map, ctx.state, prefix
-        )
-        desired = {
-            ctx.resolved[rp]: color.lower()
-            for rp, color in labels.items()
-            if rp in ctx.resolved and color.lower() in tag_map
-        }
+        actions = plan_color_labels_sync(desired, tag_map, ctx.state, prefix)
         summary.color_labels = ColorLabelsResult(
             tagged=sum(len(a.asset_ids) for a in actions if a.kind == "tag"),
             untagged=sum(len(a.asset_ids) for a in actions if a.kind == "untag"),

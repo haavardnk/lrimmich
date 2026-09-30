@@ -2,7 +2,7 @@ import os
 import tomllib
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from platformdirs import user_config_path
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -58,6 +58,7 @@ class SyncConfig(BaseConfig):
     share_albums_with: list[str] = []
     keyword_prefix: str | None = "lr:keyword:"
     color_prefix: str | None = "lr:color:"
+    color_tags: dict[str, Annotated[str, Field(min_length=1)]] = {}
 
 
 class AlbumRule(BaseConfig):

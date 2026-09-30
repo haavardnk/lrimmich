@@ -75,7 +75,18 @@ exclude_patterns = ["Exports/*"]
 |-----|------|---------|-------------|
 | `keyword_prefix` | string \| null | `"lr:keyword:"` | Prefix for synced keyword tags. Set to `null` to sync without a prefix. |
 | `color_prefix` | string \| null | `"lr:color:"` | Prefix for synced color label tags. Set to `null` to sync without a prefix. |
+| `color_tags` | table | `{}` | Tag name to use per Lightroom color label, replacing the default lowercase color name. Keys match label names case-insensitively. The prefix is still added. |
 | `share_albums_with` | list[string] | `[]` | Immich user IDs to share every synced album with. Overridable per album rule. |
+
+By default the labels Red, Yellow, Green, Blue, and Purple become `red`, `yellow`, `green`, `blue`, and `purple`. Labels with any other name are skipped unless they appear in `color_tags`, so a custom Lightroom label set can be synced by listing its names:
+
+```toml
+[sync.color_tags]
+red = "portfolio"
+"To Print" = "print"
+```
+
+Changing a name moves the tag on the next sync: assets lose the old tag and get the new one.
 
 ## `[cache]`
 
