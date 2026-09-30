@@ -56,7 +56,7 @@ class Step:
         return cfg.sync.ratings
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> RatingsPlan:
-        to_set, to_clear = plan_ratings_sync(ctx.get_rated(), ctx.resolved, ctx.state)
+        to_set, to_clear = plan_ratings_sync(ctx.rated, ctx.resolved, ctx.state)
         summary.ratings = RatingsResult(set=len(to_set), cleared=len(to_clear))
         return to_set, to_clear
 
