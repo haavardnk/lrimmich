@@ -52,9 +52,7 @@ class Step:
         return cfg.sync.rejects
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> RejectsPlan:
-        to_arch, to_unarch = plan_rejects_sync(
-            ctx.get_rejected(), ctx.resolved, ctx.state
-        )
+        to_arch, to_unarch = plan_rejects_sync(ctx.rejected, ctx.resolved, ctx.state)
         summary.rejects = RejectsResult(
             archived=len(to_arch), unarchived=len(to_unarch)
         )

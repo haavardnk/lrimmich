@@ -7,14 +7,7 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.context import SyncContext
 from lrimmich.sync.summary import SyncSummary
-from lrimmich.utils.config import (
-    AlbumFilter,
-    AlbumMode,
-    AlbumRule,
-    AssetOrder,
-    Config,
-    SafetyConfig,
-)
+from lrimmich.utils.config import AlbumFilter, AlbumRule, AssetOrder, Config
 
 ALBUM_CONCURRENCY = 10
 
@@ -101,28 +94,6 @@ def album_paths(
     return paths
 
 
-@dataclass
-class AlbumPlanContext:
-    collections: list[LrCollection]
-    resolved: dict[str, str]
-    state: StateDB
-    client: ImmichClient
-    share_with: list[str]
-    safety: SafetyConfig
-    force: bool
-    no_delete: bool
-    skip_empty: bool
-    album_name_format: str
-    album_mode: AlbumMode
-    album_filter: AlbumFilter
-    album_min_rating: int
-    album_rules: list[AlbumRule]
-    flagged_paths: set[str]
-    rejected_paths: set[str]
-    rated_paths: dict[str, int]
-    album_assets: dict[str, set[str]]
-
-
 async def _fetch_album_assets(
     album_ids: list[str], client: ImmichClient
 ) -> dict[str, set[str]]:
@@ -141,18 +112,20 @@ async def _fetch_album_assets(
 
 def _plan_collection(
     collection: LrCollection,
-    ctx: AlbumPlanContext,
+    ctx: SyncContext,
     all_albums: dict[str, dict],
+    album_assets: dict[str, set[str]],
     rule: AlbumRuleResult,
     asset_ids: list[str],
-) -> tuple[list[AlbumAction], bool]:
-    album_name = format_album_name(collection, ctx.album_name_format)
-    effective_share = rule.share_with if rule.share_with is not None else ctx.share_with
+) -> list[AlbumAction]:
+    album_name = format_album_name(collection, ctx.cfg.sync.album_name_format)
+    effective_share = (
+        rule.share_with
+        if rule.share_with is not None
+        else ctx.cfg.sync.share_albums_with
+    )
     ownership = ctx.state.get_album_ownership(collection.id)
     actions: list[AlbumAction] = []
-
-    if ctx.skip_empty and not asset_ids:
-        return actions, True
 
     if ownership is None or ownership["immich_album_id"] not in all_albums:
         actions.append(
@@ -175,7 +148,7 @@ def _plan_collection(
                     user_ids=list(effective_share),
                 )
             )
-        return actions, False
+        return actions
 
     immich_album_id = ownership["immich_album_id"]
 
@@ -214,7 +187,16 @@ def _plan_collection(
             )
         )
 
-    actions.extend(_plan_diff(collection, ctx, immich_album_id, album_name, asset_ids))
+    actions.extend(
+        _plan_diff(
+            collection,
+            ctx,
+            immich_album_id,
+            album_name,
+            album_assets.get(immich_album_id, set()),
+            asset_ids,
+        )
+    )
 
     if effective_share:
         actions.extend(
@@ -223,23 +205,23 @@ def _plan_collection(
             )
         )
 
-    return actions, False
+    return actions
 
 
 def _plan_diff(
     collection: LrCollection,
-    ctx: AlbumPlanContext,
+    ctx: SyncContext,
     immich_album_id: str,
     album_name: str,
+    current_ids: set[str],
     asset_ids: list[str],
 ) -> list[AlbumAction]:
     actions: list[AlbumAction] = []
-    current_ids = ctx.album_assets.get(immich_album_id, set())
     desired_ids = set(asset_ids)
 
     to_add = sorted(desired_ids - current_ids)
 
-    if ctx.album_mode == "hybrid":
+    if ctx.cfg.sync.album_mode == "hybrid":
         tracked_ids = ctx.state.get_synced_album_assets(immich_album_id)
         if not tracked_ids:
             actions.append(
@@ -271,7 +253,7 @@ def _plan_diff(
     if to_remove:
         total = len(current_ids)
         pct = len(to_remove) * 100 // total if total > 0 else 0
-        limit = ctx.safety.remove_percent_limit
+        limit = ctx.cfg.safety.remove_percent_limit
         if pct > limit and not ctx.force:
             raise AlbumSyncError(
                 f"Removing {len(to_remove)} assets ({pct}%) from "
@@ -314,8 +296,9 @@ def _plan_share(
 
 
 def _plan_delete_orphans(
-    ctx: AlbumPlanContext, lr_ids: set[int], all_albums: dict[str, dict]
+    ctx: SyncContext, lr_ids: set[int], all_albums: dict[str, dict]
 ) -> list[AlbumAction]:
+    safety = ctx.cfg.safety
     orphans = [
         o
         for o in ctx.state.get_all_owned_albums()
@@ -332,12 +315,12 @@ def _plan_delete_orphans(
         if o["immich_album_id"] not in all_albums
     ]
     to_delete = [o for o in orphans if o["immich_album_id"] in all_albums]
-    if not to_delete or ctx.no_delete or ctx.safety.disable_deletes:
+    if not to_delete or ctx.no_delete or safety.disable_deletes:
         return actions
-    if len(to_delete) > ctx.safety.delete_threshold and not ctx.force:
+    if len(to_delete) > safety.delete_threshold and not ctx.force:
         raise AlbumSyncError(
             f"Deleting {len(to_delete)} albums exceeds threshold of "
-            f"{ctx.safety.delete_threshold}"
+            f"{safety.delete_threshold}"
         )
     return actions + [
         AlbumAction(
@@ -350,95 +333,47 @@ def _plan_delete_orphans(
     ]
 
 
-async def plan_album_sync(
-    collections: list[LrCollection],
-    resolved: dict[str, str],
-    state: StateDB,
-    client: ImmichClient,
-    album_filter: AlbumFilter = "all",
-    album_min_rating: int = 0,
-    album_mode: AlbumMode = "managed",
-    album_name_format: str = "{path}",
-    album_rules: list[AlbumRule] | None = None,
-    flagged_paths: set[str] | None = None,
-    force: bool = False,
-    no_delete: bool = False,
-    rated_paths: dict[str, int] | None = None,
-    rejected_paths: set[str] | None = None,
-    safety: SafetyConfig | None = None,
-    share_with: list[str] | None = None,
-    skip_empty: bool = True,
-) -> list[AlbumAction]:
-    ctx = AlbumPlanContext(
-        collections=collections,
-        resolved=resolved,
-        state=state,
-        client=client,
-        share_with=share_with or [],
-        safety=safety or SafetyConfig(),
-        force=force,
-        no_delete=no_delete,
-        skip_empty=skip_empty,
-        album_name_format=album_name_format,
-        album_mode=album_mode,
-        album_filter=album_filter,
-        album_min_rating=album_min_rating,
-        album_rules=album_rules or [],
-        flagged_paths=flagged_paths or set(),
-        rejected_paths=rejected_paths or set(),
-        rated_paths=rated_paths or {},
-        album_assets={},
-    )
-
-    all_albums = {a["id"]: a for a in await client.get_albums()}
-
+async def plan_album_sync(ctx: SyncContext) -> list[AlbumAction]:
+    sync = ctx.cfg.sync
     rules = {
         c.id: resolve_album_rule(
-            c, ctx.album_filter, ctx.album_min_rating, ctx.album_rules
+            c, sync.album_filter, sync.album_min_rating, ctx.cfg.album_rules
         )
-        for c in collections
+        for c in ctx.collections
     }
-    asset_ids_by_collection = {
+    filters = {r.filter for r in rules.values()}
+    flagged = ctx.flagged if "flagged" in filters else set()
+    rejected = ctx.rejected if filters & {"unflagged", "rejected"} else set()
+    rated = ctx.rated if any(r.min_rating for r in rules.values()) else {}
+    asset_ids = {
         c.id: [
             ctx.resolved[p]
-            for p in album_paths(
-                c,
-                rules[c.id],
-                ctx.flagged_paths,
-                ctx.rejected_paths,
-                ctx.rated_paths,
-            )
+            for p in album_paths(c, rules[c.id], flagged, rejected, rated)
             if p in ctx.resolved
         ]
-        for c in collections
+        for c in ctx.collections
     }
-    ctx.album_assets = await _fetch_album_assets(
+    kept = [c for c in ctx.collections if asset_ids[c.id] or not sync.skip_empty]
+
+    all_albums = {a["id"]: a for a in await ctx.client.get_albums()}
+    album_assets = await _fetch_album_assets(
         [
             ownership["immich_album_id"]
-            for c in collections
-            if (asset_ids_by_collection[c.id] or not ctx.skip_empty)
-            and (ownership := state.get_album_ownership(c.id)) is not None
+            for c in kept
+            if (ownership := ctx.state.get_album_ownership(c.id)) is not None
             and all_albums.get(ownership["immich_album_id"], {}).get("assetCount")
         ],
-        client,
+        ctx.client,
     )
 
-    actions: list[AlbumAction] = []
-    lr_ids = {c.id for c in collections}
-
-    for collection in collections:
-        col_actions, empty = _plan_collection(
-            collection,
-            ctx,
-            all_albums,
-            rules[collection.id],
-            asset_ids_by_collection[collection.id],
+    actions = [
+        action
+        for c in kept
+        for action in _plan_collection(
+            c, ctx, all_albums, album_assets, rules[c.id], asset_ids[c.id]
         )
-        if empty:
-            lr_ids.discard(collection.id)
-        actions.extend(col_actions)
-
-    actions.extend(_plan_delete_orphans(ctx, lr_ids, all_albums))
+    ]
+    actions.extend(_plan_delete_orphans(ctx, {c.id for c in kept}, all_albums))
     return actions
 
 
@@ -468,112 +403,73 @@ async def _apply_create(
 
 
 async def _apply_rename(
-    action: AlbumAction, client: ImmichClient, state: StateDB
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    if not action.immich_album_id:
-        return
-    await client.update_album(action.immich_album_id, albumName=action.album_name)
-    state.upsert_album_ownership(
-        action.lr_collection_id, action.immich_album_id, action.album_name
-    )
+    await client.update_album(album_id, albumName=action.album_name)
+    state.upsert_album_ownership(action.lr_collection_id, album_id, action.album_name)
     state.append_audit_log(
         "rename_album",
         "album",
-        action.immich_album_id,
+        album_id,
         {"old": action.old_name, "new": action.album_name},
     )
 
 
 async def _apply_add_assets(
-    action: AlbumAction, client: ImmichClient, state: StateDB
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    if not action.immich_album_id:
-        return
-    await client.add_album_assets(action.immich_album_id, action.asset_ids)
-    state.add_synced_album_assets(action.immich_album_id, set(action.asset_ids))
+    await client.add_album_assets(album_id, action.asset_ids)
+    state.add_synced_album_assets(album_id, set(action.asset_ids))
     state.append_audit_log(
-        "add_assets",
-        "album",
-        action.immich_album_id,
-        {"count": len(action.asset_ids)},
+        "add_assets", "album", album_id, {"count": len(action.asset_ids)}
     )
 
 
 async def _apply_remove_assets(
-    action: AlbumAction, client: ImmichClient, state: StateDB
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    if not action.immich_album_id:
-        return
-    await client.remove_album_assets(action.immich_album_id, action.asset_ids)
-    state.remove_synced_album_assets(action.immich_album_id, set(action.asset_ids))
+    await client.remove_album_assets(album_id, action.asset_ids)
+    state.remove_synced_album_assets(album_id, set(action.asset_ids))
     state.append_audit_log(
-        "remove_assets",
-        "album",
-        action.immich_album_id,
-        {"count": len(action.asset_ids)},
+        "remove_assets", "album", album_id, {"count": len(action.asset_ids)}
     )
 
 
 async def _apply_share(
-    action: AlbumAction,
-    client: ImmichClient,
-    state: StateDB,
-    created: dict[int, str],
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    album_id = action.immich_album_id or created.get(action.lr_collection_id)
-    if not album_id:
-        return
     await client.add_album_users(album_id, action.user_ids)
     state.append_audit_log("share_album", "album", album_id, {"users": action.user_ids})
 
 
 async def _apply_delete(
-    action: AlbumAction, client: ImmichClient, state: StateDB
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    if not action.immich_album_id:
-        return
-    await client.delete_album(action.immich_album_id)
+    await client.delete_album(album_id)
+    _apply_forget(action, album_id, state, "delete_album")
+
+
+def _apply_forget(
+    action: AlbumAction, album_id: str, state: StateDB, audit_action: str
+) -> None:
     state.remove_album_ownership(action.lr_collection_id)
-    state.clear_synced_album_assets(action.immich_album_id)
-    state.append_audit_log(
-        "delete_album", "album", action.immich_album_id, {"name": action.album_name}
-    )
-
-
-def _apply_forget(action: AlbumAction, state: StateDB) -> None:
-    if not action.immich_album_id:
-        return
-    state.remove_album_ownership(action.lr_collection_id)
-    state.clear_synced_album_assets(action.immich_album_id)
-    state.append_audit_log(
-        "forget_album", "album", action.immich_album_id, {"name": action.album_name}
-    )
-
-
-def _apply_track_assets(action: AlbumAction, state: StateDB) -> None:
-    if not action.immich_album_id:
-        return
-    state.replace_synced_album_assets(action.immich_album_id, set(action.asset_ids))
+    state.clear_synced_album_assets(album_id)
+    state.append_audit_log(audit_action, "album", album_id, {"name": action.album_name})
 
 
 async def _apply_set_description(
-    action: AlbumAction, client: ImmichClient, state: StateDB
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    if not action.immich_album_id:
-        return
-    await client.update_album(
-        action.immich_album_id, description=action.description or ""
-    )
-    meta_key = f"album_desc:{action.lr_collection_id}"
-    state.set_meta(meta_key, action.description or "")
+    await client.update_album(album_id, description=action.description or "")
+    state.set_meta(f"album_desc:{action.lr_collection_id}", action.description or "")
 
 
 async def _apply_set_order(
-    action: AlbumAction, client: ImmichClient, state: StateDB
+    action: AlbumAction, album_id: str, client: ImmichClient, state: StateDB
 ) -> None:
-    if not action.immich_album_id or not action.order:
+    if not action.order:
         return
-    await client.update_album(action.immich_album_id, order=action.order)
+    await client.update_album(album_id, order=action.order)
     state.set_meta(f"album_order:{action.lr_collection_id}", action.order)
 
 
@@ -585,52 +481,33 @@ async def apply_album_sync(
     created: dict[int, str] = {}
 
     for action in actions:
+        if action.kind == "create":
+            created[action.lr_collection_id] = await _apply_create(
+                action, client, state
+            )
+            continue
+        album_id = action.immich_album_id or created.get(action.lr_collection_id)
+        if not album_id:
+            continue
         match action.kind:
-            case "create":
-                created[action.lr_collection_id] = await _apply_create(
-                    action, client, state
-                )
             case "rename":
-                await _apply_rename(action, client, state)
+                await _apply_rename(action, album_id, client, state)
             case "add_assets":
-                await _apply_add_assets(action, client, state)
+                await _apply_add_assets(action, album_id, client, state)
             case "remove_assets":
-                await _apply_remove_assets(action, client, state)
+                await _apply_remove_assets(action, album_id, client, state)
             case "share":
-                await _apply_share(action, client, state, created)
+                await _apply_share(action, album_id, client, state)
             case "delete":
-                await _apply_delete(action, client, state)
+                await _apply_delete(action, album_id, client, state)
             case "forget":
-                _apply_forget(action, state)
+                _apply_forget(action, album_id, state, "forget_album")
             case "track_assets":
-                _apply_track_assets(action, state)
+                state.replace_synced_album_assets(album_id, set(action.asset_ids))
             case "set_description":
-                await _apply_set_description(action, client, state)
+                await _apply_set_description(action, album_id, client, state)
             case "set_order":
-                await _apply_set_order(action, client, state)
-
-
-def count_album_actions(actions: list[AlbumAction]) -> dict[str, int]:
-    counts: dict[str, int] = {
-        "created": 0,
-        "renamed": 0,
-        "deleted": 0,
-        "assets_added": 0,
-        "assets_removed": 0,
-    }
-    for a in actions:
-        match a.kind:
-            case "create":
-                counts["created"] += 1
-            case "rename":
-                counts["renamed"] += 1
-            case "delete":
-                counts["deleted"] += 1
-            case "add_assets":
-                counts["assets_added"] += len(a.asset_ids)
-            case "remove_assets":
-                counts["assets_removed"] += len(a.asset_ids)
-    return counts
+                await _apply_set_order(action, album_id, client, state)
 
 
 class Step:
@@ -641,41 +518,17 @@ class Step:
         return cfg.sync.albums
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> list[AlbumAction]:
-        needs_flagged = ctx.cfg.sync.album_filter == "flagged" or any(
-            r.filter == "flagged" for r in ctx.cfg.album_rules
+        actions = await plan_album_sync(ctx)
+        kinds = [a.kind for a in actions]
+        summary.albums_created = kinds.count("create")
+        summary.albums_renamed = kinds.count("rename")
+        summary.albums_deleted = kinds.count("delete")
+        summary.assets_added = sum(
+            len(a.asset_ids) for a in actions if a.kind == "add_assets"
         )
-        needs_rejected = ctx.cfg.sync.album_filter in (
-            "unflagged",
-            "rejected",
-        ) or any(r.filter in ("unflagged", "rejected") for r in ctx.cfg.album_rules)
-        needs_rated = ctx.cfg.sync.album_min_rating > 0 or any(
-            (r.min_rating or 0) > 0 for r in ctx.cfg.album_rules
+        summary.assets_removed = sum(
+            len(a.asset_ids) for a in actions if a.kind == "remove_assets"
         )
-        actions = await plan_album_sync(
-            ctx.collections,
-            ctx.resolved,
-            ctx.state,
-            ctx.client,
-            album_filter=ctx.cfg.sync.album_filter,
-            album_min_rating=ctx.cfg.sync.album_min_rating,
-            album_mode=ctx.cfg.sync.album_mode,
-            album_name_format=ctx.cfg.sync.album_name_format,
-            album_rules=ctx.cfg.album_rules,
-            flagged_paths=ctx.get_flagged() if needs_flagged else None,
-            force=ctx.force,
-            no_delete=ctx.no_delete,
-            rated_paths=ctx.get_rated() if needs_rated else None,
-            rejected_paths=ctx.get_rejected() if needs_rejected else None,
-            safety=ctx.cfg.safety,
-            share_with=ctx.cfg.sync.share_albums_with,
-            skip_empty=ctx.cfg.sync.skip_empty,
-        )
-        counts = count_album_actions(actions)
-        summary.albums_created = counts["created"]
-        summary.albums_renamed = counts["renamed"]
-        summary.albums_deleted = counts["deleted"]
-        summary.assets_added = counts["assets_added"]
-        summary.assets_removed = counts["assets_removed"]
         return actions
 
     async def apply(self, plan: list[AlbumAction], ctx: SyncContext) -> None:
