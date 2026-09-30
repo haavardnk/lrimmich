@@ -8,7 +8,6 @@ from typing import Any, Self
 
 from platformdirs import user_state_path
 
-DEFAULT_STATE_PATH = user_state_path("lrimmich") / "state.db"
 DEFAULT_STATE_DIR = user_state_path("lrimmich")
 
 
@@ -88,7 +87,7 @@ WHERE key IN ('keywords_snapshot', 'color_labels_snapshot', 'catalog_fingerprint
 
 
 class StateDB:
-    def __init__(self, path: Path = DEFAULT_STATE_PATH) -> None:
+    def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(path), isolation_level=None)
         self._conn.row_factory = sqlite3.Row
@@ -124,7 +123,7 @@ class StateDB:
             self._conn.executescript(SCHEMA_V3)
         if current < 4:
             self._conn.executescript(SCHEMA_V4)
-        self._set_meta("schema_version", str(SCHEMA_VERSION))
+        self.set_meta("schema_version", str(SCHEMA_VERSION))
 
     def _get_schema_version(self) -> int:
         try:
@@ -135,12 +134,6 @@ class StateDB:
         except sqlite3.OperationalError:
             return 0
 
-    def _set_meta(self, key: str, value: str) -> None:
-        self._conn.execute(
-            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
-            (key, value),
-        )
-
     def get_meta(self, key: str) -> str | None:
         row = self._conn.execute(
             "SELECT value FROM meta WHERE key = ?", (key,)
@@ -148,7 +141,10 @@ class StateDB:
         return row["value"] if row else None
 
     def set_meta(self, key: str, value: str) -> None:
-        self._set_meta(key, value)
+        self._conn.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+            (key, value),
+        )
 
     def get_meta_prefix(self, prefix: str) -> dict[str, str]:
         rows = self._conn.execute(
@@ -211,13 +207,12 @@ class StateDB:
                     [(rp, now) for rp in missed],
                 )
 
-    def evict_stale_cache(self, max_age: int) -> int:
+    def evict_stale_cache(self, max_age: int) -> None:
         cutoff = int(time.time()) - max_age
-        cursor = self._conn.execute(
+        self._conn.execute(
             "DELETE FROM path_cache WHERE last_verified_at < ?",
             (cutoff,),
         )
-        return cursor.rowcount
 
     def invalidate_cache_entries(self, relative_paths: list[str]) -> None:
         if not relative_paths:

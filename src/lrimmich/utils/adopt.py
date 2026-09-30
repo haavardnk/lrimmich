@@ -12,7 +12,6 @@ class AdoptCandidate:
     collection_name: str
     immich_album_id: str
     conflict: bool = False
-    conflict_owner: int | None = None
 
 
 async def find_adopt_candidates(
@@ -50,7 +49,6 @@ async def find_adopt_candidates(
                 collection_name=album_name,
                 immich_album_id=immich_id,
                 conflict=conflict,
-                conflict_owner=owner,
             )
         )
 

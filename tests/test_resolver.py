@@ -250,8 +250,5 @@ def test_evict_stale_cache(tmp_path: Path) -> None:
         "UPDATE path_cache SET last_verified_at = last_verified_at - 999999"
     )
     state.upsert_path_cache_bulk([("new.jpg", "a2", "new.jpg")])
-    evicted = state.evict_stale_cache(3600)
-    assert evicted == 1
-    remaining = state.get_all_cached_paths()
-    assert "old.jpg" not in remaining
-    assert "new.jpg" in remaining
+    state.evict_stale_cache(3600)
+    assert state.get_all_cached_paths() == {"new.jpg": "a2"}
