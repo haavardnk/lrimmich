@@ -53,8 +53,8 @@ async def test_match_uses_album_name_format(
 @pytest.mark.parametrize(
     "album_ids,collection_ids,expected",
     [
-        (["imm-1"], [10, 11], [(10, False, None), (11, True, 10)]),
-        (["imm-1", "imm-2"], [10], [(10, True, None)]),
+        (["imm-1"], [10, 11], [(10, False), (11, True)]),
+        (["imm-1", "imm-2"], [10], [(10, True)]),
     ],
 )
 async def test_ambiguous_names_are_conflicts(
@@ -62,7 +62,7 @@ async def test_ambiguous_names_are_conflicts(
     client: ImmichClient,
     album_ids: list[str],
     collection_ids: list[int],
-    expected: list[tuple[int, bool, int | None]],
+    expected: list[tuple[int, bool]],
 ) -> None:
     respx.get(f"{API}/albums").mock(
         return_value=httpx.Response(
@@ -75,9 +75,7 @@ async def test_ambiguous_names_are_conflicts(
 
     candidates = await find_adopt_candidates(cols, client, state, "{name}")
 
-    assert [
-        (c.lr_collection_id, c.conflict, c.conflict_owner) for c in candidates
-    ] == expected
+    assert [(c.lr_collection_id, c.conflict) for c in candidates] == expected
 
 
 @respx.mock
@@ -129,7 +127,6 @@ async def test_conflict_state_owner(state: StateDB, client: ImmichClient) -> Non
 
     assert len(candidates) == 1
     assert candidates[0].conflict
-    assert candidates[0].conflict_owner == 99
 
 
 def test_apply_adopt(state: StateDB) -> None:
@@ -155,7 +152,6 @@ def test_apply_skips_conflicts(state: StateDB) -> None:
             collection_name="Travel",
             immich_album_id="imm-1",
             conflict=True,
-            conflict_owner=99,
         ),
     ]
 
