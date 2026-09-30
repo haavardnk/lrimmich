@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -389,3 +390,44 @@ async def test_catalog_failure_is_reported(cfg: Config, client: ImmichClient) ->
     summary = await run_multi_sync(cfg, client)
 
     assert summary.errors == ["test.lrcat: refused"]
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_spot_check_failure_is_resolved_again(
+    cfg: Config, client: ImmichClient, state: StateDB
+) -> None:
+    cfg.cache.spot_check_pct = 100
+    state.upsert_path_cache_bulk([("photos/sunset.jpg", "stale", "photos/sunset.jpg")])
+    respx.get(f"{API}/assets/stale").respond(status_code=404)
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    mock_albums({})
+
+    await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+
+    assert state.get_all_cached_paths() == {"photos/sunset.jpg": "a1"}
+
+
+@respx.mock
+@pytest.mark.anyio
+async def test_cache_hits_keep_their_age(
+    cfg: Config,
+    client: ImmichClient,
+    state: StateDB,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    day_ago = time.time() - 86_400
+    with monkeypatch.context() as m:
+        m.setattr("lrimmich.clients.state.time.time", lambda: day_ago)
+        state.upsert_path_cache_bulk([("photos/sunset.jpg", "a1", "photos/sunset.jpg")])
+    respx.get(f"{API}/tags").respond(json=[])
+    mock_albums({})
+
+    await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+
+    assert state.get_all_cached_paths() == {"photos/sunset.jpg": "a1"}
+    assert state.get_all_cached_paths(max_age=3600) == {}
