@@ -43,13 +43,16 @@ Per-collection overrides use `[[album_rules]]` entries. First matching rule wins
 ## Fingerprint and incremental syncs
 
 The catalog fingerprint is a hash of the image count and newest edit timestamp,
-plus digests of collection membership, keyword assignments, and the collection
-list itself. Moving a photo between two collections changes the fingerprint even
-though the total number of photos stays the same.
+plus digests of collection membership, keyword assignments, stacks, and the
+collection list itself. Moving a photo between two collections changes the
+fingerprint even though the total number of photos stays the same.
 
 When the fingerprint hasn't changed since the last sync, lrimmich skips all API
 work, prints `catalog unchanged since last sync, nothing to do`, and exits. Use
-`--force` to bypass this check.
+`--force` to bypass this check. If the last sync left photos unresolved,
+lrimmich looks for them again once `cache.miss_ttl_minutes` has passed, so
+photos that Immich picks up later still get synced. The rest of the sync only
+runs when at least one of them is found.
 
 Dry runs ignore the fingerprint entirely. `lrimmich status` and
 `lrimmich sync --dry-run` always compare Lightroom against Immich, so they still
