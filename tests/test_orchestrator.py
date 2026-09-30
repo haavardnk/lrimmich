@@ -308,6 +308,40 @@ async def test_unresolved_paths_are_counted(
 
 
 @pytest.mark.parametrize(
+    "miss_ttl,found_later,skipped",
+    [(60, True, True), (0, False, True), (0, True, False)],
+)
+@respx.mock
+@pytest.mark.anyio
+async def test_unresolved_paths_retry_after_miss_ttl(
+    cfg: Config,
+    client: ImmichClient,
+    state: StateDB,
+    miss_ttl: int,
+    found_later: bool,
+    skipped: bool,
+) -> None:
+    cfg.cache.miss_ttl_minutes = miss_ttl
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    folder = respx.get(f"{API}/view/folder").respond(json=[])
+    respx.get(f"{API}/tags").respond(json=[])
+    respx.get(f"{API}/albums").respond(json=[])
+    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "x"})
+    respx.put(f"{API}/tags/t1/assets").respond(json=[])
+    respx.post(f"{API}/albums").respond(json={"id": "alb1"})
+    respx.patch(f"{API}/assets").respond(json=[])
+    respx.patch(url__regex=rf"{API}/albums/.*").respond(json={"id": "alb1"})
+
+    await run_sync(cfg, cfg.catalogs[0], client, state)
+    if found_later:
+        folder.respond(json=[{"id": "a1", "originalPath": "photos/sunset.jpg"}])
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state)
+
+    assert summary.skipped_unchanged is skipped
+    assert not summary.errors
+
+
+@pytest.mark.parametrize(
     "search_status,expected",
     [
         (200, "albums: Removing 9 assets (90%) from 'Travel'"),
