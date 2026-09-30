@@ -1,3 +1,4 @@
+from itertools import batched
 from typing import Any, Self
 
 import httpx
@@ -131,11 +132,8 @@ class ImmichClient:
             raise
 
     async def bulk_update_assets(self, asset_ids: list[str], **fields: Any) -> None:
-        if not asset_ids:
-            return
-        for i in range(0, len(asset_ids), CHUNK_SIZE):
-            chunk = asset_ids[i : i + CHUNK_SIZE]
-            await self._request("PATCH", "/assets", {"ids": chunk, **fields})
+        for chunk in batched(asset_ids, CHUNK_SIZE):
+            await self._request("PATCH", "/assets", {"ids": list(chunk), **fields})
 
     async def get_tags(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/tags") or []
