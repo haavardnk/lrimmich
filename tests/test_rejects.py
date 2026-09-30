@@ -6,7 +6,12 @@ import respx
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.sync.rejects import RejectsResult, apply_rejects_sync, plan_rejects_sync
+from lrimmich.sync.rejects import (
+    SNAPSHOT_KEY,
+    RejectsResult,
+    apply_rejects_sync,
+    plan_rejects_sync,
+)
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -31,7 +36,7 @@ def test_plan_new_rejects(tmp_path: Path) -> None:
 
 def test_plan_skips_unchanged(tmp_path: Path) -> None:
     state = _state(tmp_path)
-    state.replace_synced_rejects({"a1"})
+    state.set_snapshot(SNAPSHOT_KEY, ["a1"])
     to_arch, to_unarch = plan_rejects_sync({"a.jpg"}, {"a.jpg": "a1"}, state)
     assert to_arch == []
     assert to_unarch == []
@@ -39,7 +44,7 @@ def test_plan_skips_unchanged(tmp_path: Path) -> None:
 
 def test_plan_detects_unreject(tmp_path: Path) -> None:
     state = _state(tmp_path)
-    state.replace_synced_rejects({"a1"})
+    state.set_snapshot(SNAPSHOT_KEY, ["a1"])
     to_arch, to_unarch = plan_rejects_sync(set(), {"a.jpg": "a1"}, state)
     assert to_arch == []
     assert to_unarch == ["a1"]
@@ -67,7 +72,7 @@ async def test_apply_archives_and_unarchives(tmp_path: Path) -> None:
     respx.patch(f"{API}/assets").respond(json=None)
     result = await apply_rejects_sync(["a1"], ["a2"], client, state)
     assert result == RejectsResult(archived=1, unarchived=1)
-    assert state.get_synced_rejects() == {"a1"}
+    assert state.get_snapshot(SNAPSHOT_KEY) == ["a1"]
     payloads = [json.loads(c.request.content) for c in respx.calls]
     assert [p["visibility"] for p in payloads] == ["archive", "timeline"]
 
@@ -77,10 +82,10 @@ async def test_apply_archives_and_unarchives(tmp_path: Path) -> None:
 async def test_apply_updates_state(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
-    state.replace_synced_rejects({"a2"})
+    state.set_snapshot(SNAPSHOT_KEY, ["a2"])
     respx.patch(f"{API}/assets").respond(json=None)
     await apply_rejects_sync(["a1"], ["a2"], client, state)
-    assert state.get_synced_rejects() == {"a1"}
+    assert state.get_snapshot(SNAPSHOT_KEY) == ["a1"]
 
 
 @pytest.mark.anyio

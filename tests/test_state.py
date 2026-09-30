@@ -4,9 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from lrimmich.clients.state import SCHEMA_V1, SCHEMA_VERSION, StateDB
+from lrimmich.clients.state import (
+    SCHEMA_V1,
+    SCHEMA_V2,
+    SCHEMA_V3,
+    SCHEMA_V4,
+    SCHEMA_V5,
+    SCHEMA_VERSION,
+    StateDB,
+)
 
 CURRENT_VERSION = str(SCHEMA_VERSION)
+LEGACY_SCHEMAS = [SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5]
 
 
 @pytest.fixture()
@@ -45,20 +54,14 @@ def test_path_cache_miss(db: StateDB) -> None:
 
 
 def test_get_all_cached_paths(db: StateDB) -> None:
-    db.upsert_path_cache_bulk([("a.jpg", "x1", "/ext/a.jpg")])
-    db.upsert_path_cache_bulk([("b.jpg", "x2", "/ext/b.jpg")])
+    db.upsert_path_cache_bulk({"a.jpg": "x1"})
+    db.upsert_path_cache_bulk({"b.jpg": "x2"})
     result = db.get_all_cached_paths()
     assert result == {"a.jpg": "x1", "b.jpg": "x2"}
 
 
 def test_upsert_path_cache_bulk(db: StateDB) -> None:
-    db.upsert_path_cache_bulk(
-        [
-            ("a.jpg", "id-a", "/ext/a.jpg"),
-            ("b.jpg", "id-b", "/ext/b.jpg"),
-            ("c.jpg", "id-c", "/ext/c.jpg"),
-        ]
-    )
+    db.upsert_path_cache_bulk({"a.jpg": "id-a", "b.jpg": "id-b", "c.jpg": "id-c"})
     assert db.get_all_cached_paths() == {
         "a.jpg": "id-a",
         "b.jpg": "id-b",
@@ -67,13 +70,13 @@ def test_upsert_path_cache_bulk(db: StateDB) -> None:
 
 
 def test_upsert_path_cache_bulk_overwrites(db: StateDB) -> None:
-    db.upsert_path_cache_bulk([("a.jpg", "old", "/ext/a.jpg")])
-    db.upsert_path_cache_bulk([("a.jpg", "new", "/ext/a.jpg")])
+    db.upsert_path_cache_bulk({"a.jpg": "old"})
+    db.upsert_path_cache_bulk({"a.jpg": "new"})
     assert db.get_all_cached_paths() == {"a.jpg": "new"}
 
 
 def test_upsert_path_cache_bulk_empty(db: StateDB) -> None:
-    db.upsert_path_cache_bulk([])
+    db.upsert_path_cache_bulk({})
     assert db.get_all_cached_paths() == {}
 
 
@@ -148,15 +151,23 @@ def test_creates_parent_dir(tmp_path: Path) -> None:
     db.close()
 
 
-def test_schema_v1_migrates_to_latest(tmp_path: Path) -> None:
-    path = tmp_path / "v1.db"
+def _legacy_db(path: Path, version: int, *statements: str) -> None:
     conn = sqlite3.connect(str(path))
-    conn.executescript(SCHEMA_V1)
+    for script in LEGACY_SCHEMAS[:version]:
+        conn.executescript(script)
     conn.execute(
-        "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', '1')"
+        "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)",
+        (str(version),),
     )
+    for statement in statements:
+        conn.execute(statement)
     conn.commit()
     conn.close()
+
+
+def test_schema_v1_migrates_to_latest(tmp_path: Path) -> None:
+    path = tmp_path / "v1.db"
+    _legacy_db(path, 1)
     db = StateDB(path)
     assert db.get_meta("schema_version") == CURRENT_VERSION
     db.get_synced_album_assets("anything")
@@ -166,13 +177,14 @@ def test_schema_v1_migrates_to_latest(tmp_path: Path) -> None:
 
 def test_schema_v4_drops_unprefixed_tag_snapshots(tmp_path: Path) -> None:
     path = tmp_path / "v3.db"
-    db = StateDB(path)
-    db.set_meta("schema_version", "3")
-    db.set_meta("keywords_snapshot", '{"a1": ["Sea"]}')
-    db.set_meta("color_labels_snapshot", '{"a1": "red"}')
-    db.set_meta("catalog_fingerprint", "fp")
-    db.set_meta("custom", "kept")
-    db.close()
+    _legacy_db(
+        path,
+        3,
+        "INSERT INTO meta VALUES ('keywords_snapshot', '{}')",
+        "INSERT INTO meta VALUES ('color_labels_snapshot', '{}')",
+        "INSERT INTO meta VALUES ('catalog_fingerprint', 'fp')",
+        "INSERT INTO meta VALUES ('custom', 'kept')",
+    )
     db = StateDB(path)
     assert [
         db.get_meta(k)
@@ -188,15 +200,40 @@ def test_schema_v4_drops_unprefixed_tag_snapshots(tmp_path: Path) -> None:
 
 def test_schema_v5_collects_stack_rows(tmp_path: Path) -> None:
     path = tmp_path / "v4.db"
+    _legacy_db(
+        path,
+        4,
+        "INSERT INTO meta VALUES ('stack:1', 's1')",
+        "INSERT INTO meta VALUES ('stack:2', '')",
+        "INSERT INTO meta VALUES ('stack:12', 's12')",
+    )
     db = StateDB(path)
-    db.set_meta("schema_version", "4")
-    db.set_meta("stack:1", "s1")
-    db.set_meta("stack:2", "")
-    db.set_meta("stack:12", "s12")
-    db.close()
-    db = StateDB(path)
-    assert json.loads(db.get_meta("stacks_snapshot") or "") == {"1": "s1", "12": "s12"}
+    assert db.get_snapshot("stacks_snapshot") == {"1": "s1", "12": "s12"}
     assert db.get_meta("stack:1") is None
+    db.close()
+
+
+def test_schema_v6_moves_snapshot_tables(tmp_path: Path) -> None:
+    path = tmp_path / "v5.db"
+    _legacy_db(
+        path,
+        5,
+        "INSERT INTO synced_ratings VALUES ('a1', 4)",
+        "INSERT INTO synced_covers VALUES ('album-1', 'a1')",
+        "INSERT INTO synced_favorites VALUES ('a2')",
+        "INSERT INTO path_cache VALUES ('x.jpg', 'a1', '/lib/x.jpg', 0)",
+    )
+    db = StateDB(path)
+    assert [
+        db.get_snapshot(k)
+        for k in (
+            "ratings_snapshot",
+            "covers_snapshot",
+            "favorites_snapshot",
+            "rejects_snapshot",
+        )
+    ] == [{"a1": 4}, {"album-1": "a1"}, ["a2"], []]
+    assert db.get_all_cached_paths() == {"x.jpg": "a1"}
     db.close()
 
 

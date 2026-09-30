@@ -7,6 +7,7 @@ from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.covers import (
+    SNAPSHOT_KEY,
     CoversResult,
     apply_covers_sync,
     pick_cover_candidates,
@@ -44,7 +45,7 @@ def test_plan_sets_cover(
     state = _state(tmp_path)
     state.upsert_album_ownership(1, "imm-1", "Travel")
     if previous:
-        state.replace_synced_covers({"imm-1": previous})
+        state.set_snapshot(SNAPSHOT_KEY, {"imm-1": previous})
     to_set, stale = plan_covers_sync(
         {1: candidates}, {"p/a.jpg": "a1", "p/b.jpg": "a2"}, state
     )
@@ -57,7 +58,7 @@ def test_plan_forgets_cover_without_candidates(tmp_path: Path, owned: bool) -> N
     state = _state(tmp_path)
     if owned:
         state.upsert_album_ownership(1, "imm-1", "Travel")
-    state.replace_synced_covers({"imm-1": "a1"})
+    state.set_snapshot(SNAPSHOT_KEY, {"imm-1": "a1"})
     to_set, stale = plan_covers_sync({}, {}, state)
     assert to_set == {}
     assert stale == ["imm-1"]
@@ -134,10 +135,10 @@ async def test_apply_sets_cover(tmp_path: Path) -> None:
 async def test_apply_stale_only_forgets_cover(tmp_path: Path) -> None:
     client = _client()
     state = _state(tmp_path)
-    state.replace_synced_covers({"imm-1": "a1"})
+    state.set_snapshot(SNAPSHOT_KEY, {"imm-1": "a1"})
     result = await apply_covers_sync({}, ["imm-1"], client, state)
     assert result == CoversResult(set=0)
-    assert state.get_synced_covers() == {}
+    assert state.get_snapshot(SNAPSHOT_KEY) == {}
     assert not respx.calls
 
 
@@ -148,7 +149,7 @@ async def test_apply_updates_state(tmp_path: Path) -> None:
     state = _state(tmp_path)
     respx.patch(f"{API}/albums/imm-1").respond(json={"id": "imm-1"})
     await apply_covers_sync({"imm-1": "a1"}, [], client, state)
-    assert state.get_synced_covers() == {"imm-1": "a1"}
+    assert state.get_snapshot(SNAPSHOT_KEY) == {"imm-1": "a1"}
 
 
 @respx.mock
