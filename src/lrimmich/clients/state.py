@@ -16,7 +16,7 @@ def state_path_for_catalog(catalog_key: str) -> Path:
     return DEFAULT_STATE_DIR / f"state_{catalog_key}.db"
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -81,6 +81,11 @@ CREATE TABLE IF NOT EXISTS path_cache_misses (
 );
 """
 
+SCHEMA_V4 = """
+DELETE FROM meta
+WHERE key IN ('keywords_snapshot', 'color_labels_snapshot', 'catalog_fingerprint');
+"""
+
 
 class StateDB:
     def __init__(self, path: Path = DEFAULT_STATE_PATH) -> None:
@@ -117,6 +122,8 @@ class StateDB:
             self._conn.executescript(SCHEMA_V2)
         if current < 3:
             self._conn.executescript(SCHEMA_V3)
+        if current < 4:
+            self._conn.executescript(SCHEMA_V4)
         self._set_meta("schema_version", str(SCHEMA_VERSION))
 
     def _get_schema_version(self) -> int:
