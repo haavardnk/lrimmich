@@ -7,6 +7,7 @@ from lrimmich.sync.summary import CoversResult, SyncSummary
 from lrimmich.utils.config import Config
 
 CoversPlan = tuple[dict[str, str], list[str]]
+SNAPSHOT_KEY = "covers_snapshot"
 
 
 def pick_cover_candidates(
@@ -40,8 +41,8 @@ def plan_covers_sync(
     cover_candidates: dict[int, list[str]],
     resolved: dict[str, str],
     state: StateDB,
-) -> tuple[dict[str, str], list[str]]:
-    previous = state.get_synced_covers()
+) -> CoversPlan:
+    previous: dict[str, str] = state.get_snapshot(SNAPSHOT_KEY) or {}
     desired: dict[str, str] = {}
     for lr_id, paths in cover_candidates.items():
         asset_ids = [resolved[p] for p in paths if p in resolved]
@@ -67,11 +68,11 @@ async def apply_covers_sync(
     for album_id, asset_id in sorted(to_set.items()):
         await client.update_album(album_id, albumThumbnailAssetId=asset_id)
     if to_set or stale:
-        snapshot = dict(state.get_synced_covers())
+        snapshot: dict[str, str] = state.get_snapshot(SNAPSHOT_KEY) or {}
         snapshot.update(to_set)
         for aid in stale:
             snapshot.pop(aid, None)
-        state.replace_synced_covers(snapshot)
+        state.set_snapshot(SNAPSHOT_KEY, snapshot)
         state.append_audit_log(
             "sync_covers",
             "albums",

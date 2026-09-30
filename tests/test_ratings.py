@@ -5,7 +5,12 @@ import respx
 
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
-from lrimmich.sync.ratings import RatingsResult, apply_ratings_sync, plan_ratings_sync
+from lrimmich.sync.ratings import (
+    SNAPSHOT_KEY,
+    RatingsResult,
+    apply_ratings_sync,
+    plan_ratings_sync,
+)
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
@@ -20,7 +25,7 @@ def test_plan_new_ratings(state: StateDB) -> None:
 
 
 def test_plan_skips_unchanged(state: StateDB) -> None:
-    state.replace_synced_ratings({"a1": 3})
+    state.set_snapshot(SNAPSHOT_KEY, {"a1": 3})
     rated = {"photos/a.jpg": 3}
     resolved = {"photos/a.jpg": "a1"}
     to_set, to_clear = plan_ratings_sync(rated, resolved, state)
@@ -29,7 +34,7 @@ def test_plan_skips_unchanged(state: StateDB) -> None:
 
 
 def test_plan_detects_changed(state: StateDB) -> None:
-    state.replace_synced_ratings({"a1": 3})
+    state.set_snapshot(SNAPSHOT_KEY, {"a1": 3})
     rated = {"photos/a.jpg": 5}
     resolved = {"photos/a.jpg": "a1"}
     to_set, to_clear = plan_ratings_sync(rated, resolved, state)
@@ -38,7 +43,7 @@ def test_plan_detects_changed(state: StateDB) -> None:
 
 
 def test_plan_detects_removed(state: StateDB) -> None:
-    state.replace_synced_ratings({"a1": 3, "a2": 5})
+    state.set_snapshot(SNAPSHOT_KEY, {"a1": 3, "a2": 5})
     rated = {"photos/a.jpg": 3}
     resolved = {"photos/a.jpg": "a1"}
     to_set, to_clear = plan_ratings_sync(rated, resolved, state)
@@ -68,10 +73,10 @@ async def test_apply_batches_by_rating(client: ImmichClient, state: StateDB) -> 
 @pytest.mark.anyio
 async def test_apply_clears_removed(client: ImmichClient, state: StateDB) -> None:
     respx.patch(f"{API}/assets").respond(json=None)
-    state.replace_synced_ratings({"a1": 3})
+    state.set_snapshot(SNAPSHOT_KEY, {"a1": 3})
     result = await apply_ratings_sync({}, ["a1"], client, state)
     assert result == RatingsResult(set=0, cleared=1)
-    assert state.get_synced_ratings() == {}
+    assert state.get_snapshot(SNAPSHOT_KEY) == {}
     assert json.loads(respx.calls.last.request.content)["rating"] is None
 
 
@@ -86,7 +91,7 @@ async def test_apply_empty_noop(client: ImmichClient, state: StateDB) -> None:
 async def test_apply_updates_state(client: ImmichClient, state: StateDB) -> None:
     respx.patch(f"{API}/assets").respond(json=None)
     await apply_ratings_sync({"a1": 4}, [], client, state)
-    assert state.get_synced_ratings() == {"a1": 4}
+    assert state.get_snapshot(SNAPSHOT_KEY) == {"a1": 4}
 
 
 @respx.mock

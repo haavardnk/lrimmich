@@ -5,13 +5,14 @@ from lrimmich.sync.summary import FavoritesResult, SyncSummary
 from lrimmich.utils.config import Config
 
 FavoritesPlan = tuple[list[str], list[str]]
+SNAPSHOT_KEY = "favorites_snapshot"
 
 
 def plan_favorites_sync(
     flagged: set[str],
     resolved: dict[str, str],
     state: StateDB,
-) -> tuple[list[str], list[str]]:
+) -> FavoritesPlan:
     desired: set[str] = set()
     undesired: set[str] = set()
     for rp, asset_id in resolved.items():
@@ -19,7 +20,7 @@ def plan_favorites_sync(
             desired.add(asset_id)
         else:
             undesired.add(asset_id)
-    previous = state.get_synced_favorites()
+    previous = set(state.get_snapshot(SNAPSHOT_KEY) or [])
     return sorted(desired - previous), sorted(undesired & previous)
 
 
@@ -34,8 +35,10 @@ async def apply_favorites_sync(
     if to_remove:
         await client.bulk_update_assets(to_remove, isFavorite=False)
     if to_add or to_remove:
-        updated = (state.get_synced_favorites() | set(to_add)) - set(to_remove)
-        state.replace_synced_favorites(updated)
+        previous = set(state.get_snapshot(SNAPSHOT_KEY) or [])
+        state.set_snapshot(
+            SNAPSHOT_KEY, sorted((previous | set(to_add)) - set(to_remove))
+        )
         state.append_audit_log(
             "sync_favorites",
             "favorites",
