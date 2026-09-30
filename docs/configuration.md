@@ -57,7 +57,7 @@ exclude_patterns = ["Exports/*"]
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `scope` | `"collections"` \| `"all"` | `"collections"` | `"collections"` syncs metadata only for assets in synced collections. `"all"` syncs metadata for every resolved asset in the catalog. |
+| `scope` | `"collections"` \| `"all"` | `"collections"` | `"collections"` syncs metadata only for assets in synced collections. `"all"` also resolves images outside collections and syncs metadata for every image in the catalog. |
 | `skip_empty` | bool | `true` | Skip creating albums for collections with no resolved assets. |
 
 ### Album settings

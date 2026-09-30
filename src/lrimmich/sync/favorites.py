@@ -1,4 +1,3 @@
-from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.context import SyncContext
@@ -8,30 +7,14 @@ from lrimmich.utils.config import Config
 FavoritesPlan = tuple[list[str], list[str]]
 
 
-def _scoped_asset_ids(
-    scope: str,
-    collections: list[LrCollection],
-    state: StateDB,
-) -> dict[str, str]:
-    cached = state.get_all_cached_paths()
-    if scope == "all":
-        return cached
-    collection_paths: set[str] = set()
-    for col in collections:
-        collection_paths.update(col.relative_paths)
-    return {rp: aid for rp, aid in cached.items() if rp in collection_paths}
-
-
 def plan_favorites_sync(
     flagged: set[str],
-    scope: str,
-    collections: list[LrCollection],
+    resolved: dict[str, str],
     state: StateDB,
 ) -> tuple[list[str], list[str]]:
-    scoped = _scoped_asset_ids(scope, collections, state)
     desired: set[str] = set()
     undesired: set[str] = set()
-    for rp, asset_id in scoped.items():
+    for rp, asset_id in resolved.items():
         if rp in flagged:
             desired.add(asset_id)
         else:
@@ -70,7 +53,7 @@ class Step:
 
     async def plan(self, ctx: SyncContext, summary: SyncSummary) -> FavoritesPlan:
         to_fav, to_unfav = plan_favorites_sync(
-            ctx.get_flagged(), ctx.cfg.sync.scope, ctx.collections, ctx.state
+            ctx.get_flagged(), ctx.resolved, ctx.state
         )
         summary.favorites = FavoritesResult(
             favorited=len(to_fav), unfavorited=len(to_unfav)

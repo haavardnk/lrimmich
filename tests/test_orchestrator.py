@@ -11,7 +11,7 @@ from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.orchestrator import run_multi_sync, run_sync
 from lrimmich.sync.summary import SyncSummary
-from lrimmich.utils.config import Config
+from lrimmich.utils.config import Config, SyncScope
 from tests.fixtures.catalog_factory import CatalogBuilder
 from tests.fixtures.immich_api import mock_albums
 
@@ -24,6 +24,8 @@ def catalog(tmp_path: Path) -> Path:
     builder = CatalogBuilder(tmp_path / "test.lrcat")
     builder.add_collection(1, "Travel")
     builder.add_image(1, "sunset.jpg", "photos/", pick=1)
+    builder.add_image(2, "beach.jpg", "photos/", pick=1)
+    builder.add_image(3, "lost.jpg", "photos/", pick=1)
     builder.add_collection_image(1, 1)
     return builder.build()
 
@@ -390,6 +392,36 @@ async def test_catalog_failure_is_reported(cfg: Config, client: ImmichClient) ->
     summary = await run_multi_sync(cfg, client)
 
     assert summary.errors == ["test.lrcat: refused"]
+
+
+@respx.mock
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "scope,favorited,unresolved", [("collections", 1, 0), ("all", 2, 1)]
+)
+async def test_scope_all_covers_uncollected_images(
+    cfg: Config,
+    client: ImmichClient,
+    state: StateDB,
+    scope: SyncScope,
+    favorited: int,
+    unresolved: int,
+) -> None:
+    cfg.sync.scope = scope
+    respx.get(f"{API}/view/folder/unique-paths").respond(json=["photos"])
+    respx.get(f"{API}/view/folder").respond(
+        json=[
+            {"id": "a1", "originalPath": "photos/sunset.jpg"},
+            {"id": "a2", "originalPath": "photos/beach.jpg"},
+        ]
+    )
+    respx.get(f"{API}/tags").respond(json=[])
+    mock_albums({})
+
+    summary = await run_sync(cfg, cfg.catalogs[0], client, state, dry_run=True)
+
+    assert summary.favorites.favorited == favorited
+    assert summary.unresolved == unresolved
 
 
 @respx.mock

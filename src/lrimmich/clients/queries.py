@@ -71,6 +71,8 @@ COLLECTION_FILES = """
     WHERE ci.collection IN ({placeholders})
 """
 
+ALL_IMAGES = f"{SELECT_PATH}{IMAGE_PATH_JOIN}"
+
 FLAGGED_IMAGES = f"{SELECT_PATH}{IMAGE_PATH_JOIN}    WHERE ai.pick = 1"
 
 REJECTED_IMAGES = f"{SELECT_PATH}{IMAGE_PATH_JOIN}    WHERE ai.pick = -1"

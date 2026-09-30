@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 import respx
 
-from lrimmich.clients.catalog import LrCollection
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.favorites import (
@@ -14,102 +13,55 @@ from lrimmich.sync.favorites import (
 
 IMMICH_URL = "http://immich.test"
 API = IMMICH_URL + "/api"
+RESOLVED = {"a.jpg": "asset-a", "b.jpg": "asset-b"}
 
 
 @pytest.fixture()
 def state(tmp_path: Path) -> StateDB:
-    db = StateDB(tmp_path / "state.db")
-    db.upsert_path_cache_bulk(
-        [
-            ("a.jpg", "asset-a", "/img/a.jpg"),
-            ("b.jpg", "asset-b", "/img/b.jpg"),
-            ("c.jpg", "asset-c", "/img/c.jpg"),
-        ]
-    )
-    return db
+    return StateDB(tmp_path / "state.db")
 
 
-def _col(
-    id: int = 1,
-    relative_paths: list[str] | None = None,
-) -> LrCollection:
-    return LrCollection(
-        id=id,
-        name="Album",
-        full_name="Album",
-        relative_paths=relative_paths or [],
-    )
-
-
-@pytest.mark.parametrize("scope", ["collections", "all"])
-def test_scope_filtering_first_sync(scope: str, state: StateDB) -> None:
-    col = _col(relative_paths=["a.jpg", "b.jpg"])
-    flagged = {"a.jpg"}
-
-    to_fav, to_unfav = plan_favorites_sync(flagged, scope, [col], state)
+def test_favorite_added(state: StateDB) -> None:
+    to_fav, to_unfav = plan_favorites_sync({"a.jpg"}, RESOLVED, state)
 
     assert to_fav == ["asset-a"]
     assert to_unfav == []
 
 
-def test_favorite_added(state: StateDB) -> None:
-    col = _col(relative_paths=["a.jpg"])
-    flagged = {"a.jpg"}
-
-    to_fav, _ = plan_favorites_sync(flagged, "collections", [col], state)
-
-    assert to_fav == ["asset-a"]
-
-
 def test_unfavorite_previously_synced(state: StateDB) -> None:
-    col = _col(relative_paths=["a.jpg", "b.jpg"])
     state.replace_synced_favorites({"asset-a", "asset-b"})
-    flagged: set[str] = set()
 
-    _, to_unfav = plan_favorites_sync(flagged, "collections", [col], state)
+    _, to_unfav = plan_favorites_sync(set(), RESOLVED, state)
 
     assert sorted(to_unfav) == ["asset-a", "asset-b"]
 
 
 def test_unfavorite_skips_never_synced(state: StateDB) -> None:
-    col = _col(relative_paths=["a.jpg", "b.jpg"])
-    flagged: set[str] = set()
-
-    _, to_unfav = plan_favorites_sync(flagged, "collections", [col], state)
+    _, to_unfav = plan_favorites_sync(set(), RESOLVED, state)
 
     assert to_unfav == []
 
 
 def test_no_drift_when_already_synced(state: StateDB) -> None:
-    col = _col(relative_paths=["a.jpg", "b.jpg"])
     state.replace_synced_favorites({"asset-a"})
-    flagged = {"a.jpg"}
 
-    to_fav, to_unfav = plan_favorites_sync(flagged, "collections", [col], state)
+    to_fav, to_unfav = plan_favorites_sync({"a.jpg"}, RESOLVED, state)
 
     assert to_fav == []
     assert to_unfav == []
 
 
-def test_unfavorite_does_not_touch_out_of_scope(
-    state: StateDB,
-) -> None:
-    col = _col(relative_paths=["a.jpg"])
+def test_unfavorite_does_not_touch_out_of_scope(state: StateDB) -> None:
     state.replace_synced_favorites({"asset-a", "asset-c"})
-    flagged: set[str] = set()
 
-    _, to_unfav = plan_favorites_sync(flagged, "collections", [col], state)
+    _, to_unfav = plan_favorites_sync(set(), RESOLVED, state)
 
     assert to_unfav == ["asset-a"]
-    assert "asset-c" not in to_unfav
 
 
 @respx.mock
 def test_dry_run_no_mutations(state: StateDB) -> None:
-    col = _col(relative_paths=["a.jpg"])
-    flagged = {"a.jpg"}
-
-    to_fav, _to_unfav = plan_favorites_sync(flagged, "collections", [col], state)
+    to_fav, _to_unfav = plan_favorites_sync({"a.jpg"}, RESOLVED, state)
 
     assert to_fav == ["asset-a"]
     assert respx.calls.call_count == 0
