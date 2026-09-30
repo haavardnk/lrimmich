@@ -22,9 +22,22 @@ CREATE TABLE Adobe_images (
     pick INTEGER DEFAULT 0,
     rating INTEGER DEFAULT 0,
     colorLabels TEXT DEFAULT '',
-    touchTime REAL DEFAULT 0.0,
-    stack INTEGER,
-    stackPosition INTEGER DEFAULT 0
+    touchTime REAL DEFAULT 0.0
+);
+
+CREATE TABLE AgLibraryFolderStack (
+    id_local INTEGER PRIMARY KEY,
+    id_global UNIQUE NOT NULL,
+    collapsed INTEGER NOT NULL DEFAULT 0,
+    text NOT NULL DEFAULT ''
+);
+
+CREATE TABLE AgLibraryFolderStackImage (
+    id_local INTEGER PRIMARY KEY,
+    collapsed INTEGER NOT NULL DEFAULT 0,
+    image INTEGER NOT NULL DEFAULT 0,
+    position NOT NULL DEFAULT '',
+    stack INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE AgLibraryIPTC (
@@ -132,20 +145,21 @@ class CatalogBuilder:
         )
         self._conn.execute(
             "INSERT INTO Adobe_images"
-            "(id_local, rootFile, pick, rating, colorLabels,"
-            " touchTime, stack, stackPosition) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                id,
-                file_id,
-                pick,
-                rating,
-                color_labels,
-                touch_time,
-                stack,
-                stack_position,
-            ),
+            "(id_local, rootFile, pick, rating, colorLabels, touchTime) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (id, file_id, pick, rating, color_labels, touch_time),
         )
+        if stack is not None:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO AgLibraryFolderStack(id_local, id_global) "
+                "VALUES (?, ?)",
+                (stack, f"stack-{stack}"),
+            )
+            self._conn.execute(
+                "INSERT INTO AgLibraryFolderStackImage(image, position, stack) "
+                "VALUES (?, ?, ?)",
+                (id, stack_position, stack),
+            )
         if caption:
             self._conn.execute(
                 "INSERT INTO AgLibraryIPTC(image, caption) VALUES (?, ?)",

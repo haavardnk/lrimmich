@@ -29,7 +29,7 @@ def detect_schema(conn: sqlite3.Connection) -> LrSchema:
     }
     has_caption = "AgLibraryIPTC" in tables
     has_touch_time = "touchTime" in columns
-    has_stack = "stack" in columns
+    has_stack = "AgLibraryFolderStackImage" in tables
     version = LrVersion.V7_PLUS if has_touch_time else LrVersion.V6
     return LrSchema(
         version=version,
@@ -101,13 +101,19 @@ KEYWORD_IMAGES = """
 """
 
 STACKS = """
-    SELECT ai.stack, COALESCE(af.pathFromRoot, '') || lf.idx_filename AS path,
-           ai.stackPosition
-    FROM Adobe_images ai
+    SELECT si.stack, COALESCE(af.pathFromRoot, '') || lf.idx_filename AS path
+    FROM AgLibraryFolderStackImage si
+    JOIN Adobe_images ai ON si.image = ai.id_local
     JOIN AgLibraryFile lf ON ai.rootFile = lf.id_local
     JOIN AgLibraryFolder af ON lf.folder = af.id_local
-    WHERE ai.stack IS NOT NULL
-    ORDER BY ai.stack, ai.stackPosition
+    ORDER BY si.stack, si.position
+"""
+
+STACK_DIGEST = """
+    SELECT COUNT(*) AS cnt,
+           COALESCE(SUM(stack * 31 + image), 0) AS digest,
+           COALESCE(SUM(position * image), 0) AS positions
+    FROM AgLibraryFolderStackImage
 """
 
 FINGERPRINT_COUNTS = """
