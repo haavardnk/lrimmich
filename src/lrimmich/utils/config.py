@@ -7,7 +7,6 @@ from typing import Literal
 from platformdirs import user_config_path
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-AlbumCollision = Literal["merge", "prefix"]
 AlbumMode = Literal["managed", "hybrid"]
 AlbumFilter = Literal["all", "flagged", "unflagged", "rejected"]
 AssetOrder = Literal["asc", "desc"]
@@ -52,7 +51,6 @@ class SyncConfig(BaseConfig):
     stacks: bool = False
     scope: SyncScope = "collections"
     album_mode: AlbumMode = "managed"
-    album_collision: AlbumCollision = "merge"
     album_filter: AlbumFilter = "all"
     album_min_rating: int = Field(default=0, ge=0, le=5)
     album_name_format: str = "{path}"

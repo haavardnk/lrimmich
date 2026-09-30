@@ -65,7 +65,6 @@ exclude_patterns = ["Exports/*"]
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `album_mode` | `"managed"` \| `"hybrid"` | `"managed"` | `"managed"` means Lightroom fully controls album contents — assets not in the matching collection get removed. `"hybrid"` preserves assets added manually in Immich. See [How It Works](how-it-works#album-modes). |
-| `album_collision` | `"merge"` \| `"prefix"` | `"merge"` | How to handle album name collisions across catalogs. `"merge"` combines collections with the same name into one Immich album. `"prefix"` prepends the catalog filename to each album name to keep them separate. |
 | `album_filter` | `"all"` \| `"flagged"` \| `"unflagged"` \| `"rejected"` | `"all"` | Global album membership filter. |
 | `album_min_rating` | int (0–5) | `0` | Minimum star rating for album membership. 0 disables the filter. |
 | `album_name_format` | string | `"{path}"` | Album naming format. Placeholders: `{path}` (full hierarchy), `{name}` (leaf collection name), `{parent}` (parent set name). |
