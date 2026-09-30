@@ -101,10 +101,9 @@ def resolve_album_rule(
     )
 
 
-def _filtered_asset_ids(
+def album_paths(
     collection: LrCollection,
     rule: AlbumRuleResult,
-    resolved: dict[str, str],
     flagged_paths: set[str],
     rejected_paths: set[str],
     rated_paths: dict[str, int],
@@ -118,7 +117,7 @@ def _filtered_asset_ids(
         paths = [p for p in paths if p in rejected_paths]
     if rule.min_rating > 0:
         paths = [p for p in paths if rated_paths.get(p, 0) >= rule.min_rating]
-    return [resolved[p] for p in paths if p in resolved]
+    return paths
 
 
 @dataclass
@@ -417,14 +416,17 @@ async def plan_album_sync(
         for c in collections
     }
     asset_ids_by_collection = {
-        c.id: _filtered_asset_ids(
-            c,
-            rules[c.id],
-            ctx.resolved,
-            ctx.flagged_paths,
-            ctx.rejected_paths,
-            ctx.rated_paths,
-        )
+        c.id: [
+            ctx.resolved[p]
+            for p in album_paths(
+                c,
+                rules[c.id],
+                ctx.flagged_paths,
+                ctx.rejected_paths,
+                ctx.rated_paths,
+            )
+            if p in ctx.resolved
+        ]
         for c in collections
     }
     ctx.album_assets = await _fetch_album_assets(

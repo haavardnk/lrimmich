@@ -8,7 +8,6 @@ from pathlib import Path
 
 from lrimmich.clients.queries import (
     CAPTIONS,
-    COLLECTION_COVERS,
     COLLECTION_DIGEST,
     COLLECTION_FILES,
     COLLECTION_MEMBERSHIP_DIGEST,
@@ -172,34 +171,6 @@ def _read_collections_inner(
         )
         for row, full_name in kept_rows
     ]
-
-
-def read_collection_covers(catalog: Path, collection_ids: list[int]) -> dict[int, str]:
-    if not collection_ids:
-        return {}
-    placeholders = ",".join("?" * len(collection_ids))
-    with closing(_connect(catalog)) as conn:
-        rows = conn.execute(
-            COLLECTION_COVERS.format(placeholders=placeholders),
-            collection_ids,
-        ).fetchall()
-
-        best: dict[int, tuple[str, int, int]] = {}
-        for r in rows:
-            col_id: int = r["collection"]
-            path: str = r["path"]
-            rating: int = r["rating"]
-            pick: int = r["pick"]
-            prev = best.get(col_id)
-            if prev is None or (rating, pick) > (prev[1], prev[2]):
-                best[col_id] = (path, rating, pick)
-
-        result: dict[int, str] = {}
-        for col_id, (path, rating, pick) in best.items():
-            if rating > 0 or pick > 0:
-                result[col_id] = path
-
-        return result
 
 
 def _query_rows(catalog: Path, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
