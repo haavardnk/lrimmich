@@ -136,12 +136,13 @@ def test_log_json(tmp_path: Path) -> None:
 
 
 def test_reset_deletes_state(tmp_path: Path) -> None:
-    db_path = tmp_path / "state_abc123.db"
-    db_path.write_text("fake")
+    files = [tmp_path / f"state_abc123.db{s}" for s in ("", "-wal", "-shm")]
+    for f in files:
+        f.write_text("fake")
     result = runner.invoke(app, ["reset", "--force"])
     assert result.exit_code == 0
     assert "State cleared" in result.output
-    assert not db_path.exists()
+    assert not any(f.exists() for f in files)
 
 
 def test_reset_no_db() -> None:
