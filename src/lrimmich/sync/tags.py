@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 
 from lrimmich.sync.context import SyncContext
@@ -46,7 +45,7 @@ def diff_tags(
 async def plan_tags(
     ctx: SyncContext, desired: TagAssignments, snapshot_key: str
 ) -> TagPlan:
-    previous: TagAssignments = json.loads(ctx.state.get_meta(snapshot_key) or "{}")
+    previous: TagAssignments = ctx.state.get_snapshot(snapshot_key) or {}
     existing = set(await ctx.get_tag_ids())
     return TagPlan(diff_tags(previous, desired, existing), desired)
 
@@ -60,7 +59,7 @@ async def apply_tags(
             await ctx.client.tag_assets(tag_ids[action.tag_name], action.asset_ids)
         else:
             await ctx.client.untag_assets(tag_ids[action.tag_name], action.asset_ids)
-    ctx.state.set_meta(snapshot_key, json.dumps(plan.desired))
+    ctx.state.set_snapshot(snapshot_key, plan.desired)
     result = plan.result
     if result.tagged or result.untagged:
         ctx.state.append_audit_log(

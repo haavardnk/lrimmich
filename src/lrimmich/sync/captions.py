@@ -1,5 +1,3 @@
-import json
-
 from lrimmich.clients.catalog import read_captions
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
@@ -8,24 +6,20 @@ from lrimmich.sync.summary import CaptionsResult, SyncSummary
 from lrimmich.utils.config import Config
 
 CaptionsPlan = tuple[dict[str, str], list[str]]
+SNAPSHOT_KEY = "captions_snapshot"
 
 
 def plan_captions_sync(
     captions: dict[str, str],
     resolved: dict[str, str],
     state: StateDB,
-) -> tuple[dict[str, str], list[str]]:
-    previous = state.get_meta("captions_snapshot")
-    prev_assignments: dict[str, str] = json.loads(previous) if previous else {}
-
+) -> CaptionsPlan:
+    previous: dict[str, str] = state.get_snapshot(SNAPSHOT_KEY) or {}
     desired: dict[str, str] = {
         resolved[rp]: cap for rp, cap in captions.items() if rp in resolved
     }
-
-    to_set = {
-        aid: cap for aid, cap in desired.items() if prev_assignments.get(aid) != cap
-    }
-    to_clear = [aid for aid in prev_assignments if aid not in desired]
+    to_set = {aid: cap for aid, cap in desired.items() if previous.get(aid) != cap}
+    to_clear = [aid for aid in previous if aid not in desired]
     return to_set, to_clear
 
 
@@ -43,11 +37,11 @@ async def apply_captions_sync(
     if to_clear:
         await client.bulk_update_assets(sorted(to_clear), description="")
     if to_set or to_clear:
-        snapshot = dict(json.loads(state.get_meta("captions_snapshot") or "{}"))
+        snapshot: dict[str, str] = state.get_snapshot(SNAPSHOT_KEY) or {}
         snapshot.update(to_set)
         for aid in to_clear:
             snapshot.pop(aid, None)
-        state.set_meta("captions_snapshot", json.dumps(snapshot))
+        state.set_snapshot(SNAPSHOT_KEY, snapshot)
         state.append_audit_log(
             "sync_captions",
             "captions",

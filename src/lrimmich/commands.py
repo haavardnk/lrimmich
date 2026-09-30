@@ -29,6 +29,7 @@ from lrimmich.app import (
 from lrimmich.clients.catalog import LrCollectionTreeNode, read_collection_tree
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import DEFAULT_STATE_DIR, StateDB, state_path_for_catalog
+from lrimmich.sync.covers import SNAPSHOT_KEY as COVERS_SNAPSHOT_KEY
 from lrimmich.utils.config import DEFAULT_CONFIG_PATH, load_config
 from lrimmich.utils.doctor import DoctorReport, run_doctor
 from lrimmich.utils.notify import send_notification
@@ -287,7 +288,7 @@ def albums_purge(
                             {"name": a["last_name"]},
                         )
                         deleted += 1
-                    state.replace_synced_covers({})
+                    state.set_snapshot(COVERS_SNAPSHOT_KEY, {})
                     state.set_meta("catalog_fingerprint", "")
                 finally:
                     state.close()

@@ -6,6 +6,7 @@ import respx
 from lrimmich.clients.immich import ImmichClient
 from lrimmich.clients.state import StateDB
 from lrimmich.sync.favorites import (
+    SNAPSHOT_KEY,
     FavoritesResult,
     apply_favorites_sync,
     plan_favorites_sync,
@@ -29,7 +30,7 @@ def test_favorite_added(state: StateDB) -> None:
 
 
 def test_unfavorite_previously_synced(state: StateDB) -> None:
-    state.replace_synced_favorites({"asset-a", "asset-b"})
+    state.set_snapshot(SNAPSHOT_KEY, ["asset-a", "asset-b"])
 
     _, to_unfav = plan_favorites_sync(set(), RESOLVED, state)
 
@@ -43,7 +44,7 @@ def test_unfavorite_skips_never_synced(state: StateDB) -> None:
 
 
 def test_no_drift_when_already_synced(state: StateDB) -> None:
-    state.replace_synced_favorites({"asset-a"})
+    state.set_snapshot(SNAPSHOT_KEY, ["asset-a"])
 
     to_fav, to_unfav = plan_favorites_sync({"a.jpg"}, RESOLVED, state)
 
@@ -52,7 +53,7 @@ def test_no_drift_when_already_synced(state: StateDB) -> None:
 
 
 def test_unfavorite_does_not_touch_out_of_scope(state: StateDB) -> None:
-    state.replace_synced_favorites({"asset-a", "asset-c"})
+    state.set_snapshot(SNAPSHOT_KEY, ["asset-a", "asset-c"])
 
     _, to_unfav = plan_favorites_sync(set(), RESOLVED, state)
 
@@ -78,7 +79,7 @@ async def test_apply(state: StateDB, client: ImmichClient) -> None:
 
     assert result == FavoritesResult(favorited=1, unfavorited=1)
     assert respx.calls.call_count == 2
-    assert state.get_synced_favorites() == {"asset-a"}
+    assert state.get_snapshot(SNAPSHOT_KEY) == ["asset-a"]
     logs = state.get_audit_log()
     assert len(logs) == 1
     assert logs[0]["action"] == "sync_favorites"
@@ -87,14 +88,14 @@ async def test_apply(state: StateDB, client: ImmichClient) -> None:
 @respx.mock
 @pytest.mark.anyio
 async def test_apply_updates_state(state: StateDB, client: ImmichClient) -> None:
-    state.replace_synced_favorites({"asset-b"})
+    state.set_snapshot(SNAPSHOT_KEY, ["asset-b"])
     respx.patch(f"{API}/assets").mock(
         return_value=__import__("httpx").Response(200, json=None)
     )
 
     await apply_favorites_sync(["asset-a"], ["asset-b"], client, state)
 
-    assert state.get_synced_favorites() == {"asset-a"}
+    assert state.get_snapshot(SNAPSHOT_KEY) == ["asset-a"]
 
 
 @respx.mock

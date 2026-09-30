@@ -15,7 +15,7 @@ def state_path_for_catalog(catalog_key: str) -> Path:
     return DEFAULT_STATE_DIR / f"state_{catalog_key}.db"
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -92,6 +92,23 @@ FROM meta WHERE key LIKE 'stack:%' AND value != '';
 DELETE FROM meta WHERE key LIKE 'stack:%';
 """
 
+SCHEMA_V6 = """
+INSERT OR REPLACE INTO meta(key, value)
+SELECT 'ratings_snapshot', json_group_object(asset_id, rating) FROM synced_ratings;
+INSERT OR REPLACE INTO meta(key, value)
+SELECT 'covers_snapshot', json_group_object(immich_album_id, asset_id)
+FROM synced_covers;
+INSERT OR REPLACE INTO meta(key, value)
+SELECT 'favorites_snapshot', json_group_array(asset_id) FROM synced_favorites;
+INSERT OR REPLACE INTO meta(key, value)
+SELECT 'rejects_snapshot', json_group_array(asset_id) FROM synced_rejects;
+DROP TABLE synced_ratings;
+DROP TABLE synced_covers;
+DROP TABLE synced_favorites;
+DROP TABLE synced_rejects;
+ALTER TABLE path_cache DROP COLUMN original_path;
+"""
+
 
 class StateDB:
     def __init__(self, path: Path) -> None:
@@ -132,6 +149,8 @@ class StateDB:
             self._conn.executescript(SCHEMA_V4)
         if current < 5:
             self._conn.executescript(SCHEMA_V5)
+        if current < 6:
+            self._conn.executescript(SCHEMA_V6)
         self.set_meta("schema_version", str(SCHEMA_VERSION))
 
     def _get_schema_version(self) -> int:
@@ -155,17 +174,20 @@ class StateDB:
             (key, value),
         )
 
-    def upsert_path_cache_bulk(
-        self,
-        entries: list[tuple[str, str, str]],
-    ) -> None:
+    def get_snapshot(self, key: str) -> Any:
+        value = self.get_meta(key)
+        return json.loads(value) if value else None
+
+    def set_snapshot(self, key: str, value: object) -> None:
+        self.set_meta(key, json.dumps(value))
+
+    def upsert_path_cache_bulk(self, entries: dict[str, str]) -> None:
         now = int(time.time())
         with self.transaction():
             self._conn.executemany(
                 "INSERT OR REPLACE INTO path_cache"
-                "(relative_path, asset_id, original_path, last_verified_at) "
-                "VALUES (?, ?, ?, ?)",
-                [(rp, aid, op, now) for rp, aid, op in entries],
+                "(relative_path, asset_id, last_verified_at) VALUES (?, ?, ?)",
+                [(rp, aid, now) for rp, aid in entries.items()],
             )
 
     def get_all_cached_paths(self, max_age: int | None = None) -> dict[str, str]:
@@ -262,58 +284,6 @@ class StateDB:
             "DELETE FROM album_ownership WHERE lr_collection_id = ?",
             (lr_collection_id,),
         )
-
-    def get_synced_ratings(self) -> dict[str, int]:
-        rows = self._conn.execute(
-            "SELECT asset_id, rating FROM synced_ratings"
-        ).fetchall()
-        return {r["asset_id"]: r["rating"] for r in rows}
-
-    def replace_synced_ratings(self, ratings: dict[str, int]) -> None:
-        with self.transaction():
-            self._conn.execute("DELETE FROM synced_ratings")
-            self._conn.executemany(
-                "INSERT INTO synced_ratings(asset_id, rating) VALUES (?, ?)",
-                ratings.items(),
-            )
-
-    def get_synced_covers(self) -> dict[str, str]:
-        rows = self._conn.execute(
-            "SELECT immich_album_id, asset_id FROM synced_covers"
-        ).fetchall()
-        return {r["immich_album_id"]: r["asset_id"] for r in rows}
-
-    def replace_synced_covers(self, covers: dict[str, str]) -> None:
-        with self.transaction():
-            self._conn.execute("DELETE FROM synced_covers")
-            self._conn.executemany(
-                "INSERT INTO synced_covers(immich_album_id, asset_id) VALUES (?, ?)",
-                covers.items(),
-            )
-
-    def get_synced_favorites(self) -> set[str]:
-        rows = self._conn.execute("SELECT asset_id FROM synced_favorites").fetchall()
-        return {r["asset_id"] for r in rows}
-
-    def replace_synced_favorites(self, asset_ids: set[str]) -> None:
-        with self.transaction():
-            self._conn.execute("DELETE FROM synced_favorites")
-            self._conn.executemany(
-                "INSERT INTO synced_favorites(asset_id) VALUES (?)",
-                [(aid,) for aid in asset_ids],
-            )
-
-    def get_synced_rejects(self) -> set[str]:
-        rows = self._conn.execute("SELECT asset_id FROM synced_rejects").fetchall()
-        return {r["asset_id"] for r in rows}
-
-    def replace_synced_rejects(self, asset_ids: set[str]) -> None:
-        with self.transaction():
-            self._conn.execute("DELETE FROM synced_rejects")
-            self._conn.executemany(
-                "INSERT INTO synced_rejects(asset_id) VALUES (?)",
-                [(aid,) for aid in asset_ids],
-            )
 
     def append_audit_log(
         self,

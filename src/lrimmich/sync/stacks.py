@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -48,7 +47,7 @@ async def plan_stack_sync(
     client: ImmichClient,
 ) -> StackPlan:
     existing = {s["id"]: s for s in await client.get_stacks()}
-    previous: dict[str, str] = json.loads(state.get_meta(SNAPSHOT_KEY) or "{}")
+    previous: dict[str, str] = state.get_snapshot(SNAPSHOT_KEY) or {}
     live = {k: existing[v] for k, v in previous.items() if v in existing}
     grouped = {
         str(s.stack_id): list(
@@ -93,7 +92,7 @@ async def apply_stack_sync(
                 {"assets": len(action.asset_ids)},
             )
     finally:
-        state.set_meta(SNAPSHOT_KEY, json.dumps(owned))
+        state.set_snapshot(SNAPSHOT_KEY, owned)
 
 
 class Step:
