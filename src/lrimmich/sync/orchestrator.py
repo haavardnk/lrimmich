@@ -1,4 +1,3 @@
-import asyncio
 import sqlite3
 import time
 from collections.abc import Callable
@@ -34,12 +33,9 @@ from lrimmich.utils.resolver import resolve_paths, spot_check_cache
 
 logger = structlog.get_logger(__name__)
 
-SERIAL_STEPS: list[SyncStep[Any]] = [
+STEPS: list[SyncStep[Any]] = [
     albums.Step(),
     covers.Step(),
-]
-
-PARALLEL_STEPS: list[SyncStep[Any]] = [
     favorites.Step(),
     ratings.Step(),
     rejects.Step(),
@@ -56,22 +52,28 @@ async def _run_step(
     step: SyncStep[Any],
     ctx: SyncContext,
     summary: SyncSummary,
-    dry_run: bool,
-    on_confirm: Callable[[str, str], bool] | None = None,
+    on_confirm: Callable[[str, SyncSummary], bool] | None = None,
     on_status: Callable[[str], None] | None = None,
 ) -> None:
     logger.debug("step_start", step=step.name)
     if on_status:
         on_status(step.status_msg)
-    if on_confirm and not dry_run and not on_confirm(step.name, step.status_msg):
-        return
+    planned = SyncSummary()
     try:
-        plan = await step.plan(ctx, summary)
-        if not dry_run:
+        plan = await step.plan(ctx, planned)
+        if (
+            on_confirm
+            and not ctx.dry_run
+            and planned.has_drift
+            and not on_confirm(step.name, planned)
+        ):
+            return
+        if not ctx.dry_run:
             await step.apply(plan, ctx)
     except* (httpx.HTTPError, sqlite3.Error, albums.AlbumSyncError) as eg:
         logger.exception("step_failed", step=step.name)
         summary.errors.extend(f"{step.name}: {e}" for e in eg.exceptions)
+    summary.merge(planned)
 
 
 async def run_sync(
@@ -83,7 +85,7 @@ async def run_sync(
     force: bool = False,
     no_delete: bool = False,
     adopt_existing: bool = False,
-    on_confirm: Callable[[str, str], bool] | None = None,
+    on_confirm: Callable[[str, SyncSummary], bool] | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
     refresh_cache: bool = False,
@@ -202,21 +204,9 @@ async def run_sync(
         no_delete=no_delete,
     )
 
-    for step in SERIAL_STEPS:
+    for step in STEPS:
         if step.enabled(cfg):
-            await _run_step(step, ctx, summary, dry_run, on_confirm, on_status)
-
-    enabled_parallel = [s for s in PARALLEL_STEPS if s.enabled(cfg)]
-    if enabled_parallel:
-        if on_confirm:
-            for step in enabled_parallel:
-                await _run_step(step, ctx, summary, dry_run, on_confirm, on_status)
-        else:
-            if on_status:
-                on_status("Syncing metadata...")
-            await asyncio.gather(
-                *(_run_step(step, ctx, summary, dry_run) for step in enabled_parallel)
-            )
+            await _run_step(step, ctx, summary, on_confirm, on_status)
 
     if not dry_run and not summary.errors:
         state.set_meta("catalog_fingerprint", combined_fingerprint)
@@ -235,7 +225,7 @@ async def run_multi_sync(
     force: bool = False,
     no_delete: bool = False,
     adopt_existing: bool = False,
-    on_confirm: Callable[[str, str], bool] | None = None,
+    on_confirm: Callable[[str, SyncSummary], bool] | None = None,
     on_progress: Callable[[int, int], None] | None = None,
     on_status: Callable[[str], None] | None = None,
     refresh_cache: bool = False,

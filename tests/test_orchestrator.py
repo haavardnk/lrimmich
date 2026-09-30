@@ -109,14 +109,17 @@ async def test_partial_failure(
     assert isinstance(summary, SyncSummary)
 
 
-def test_summary_no_drift() -> None:
-    s = SyncSummary()
-    assert not s.has_drift
-
-
-def test_summary_has_drift() -> None:
-    s = SyncSummary(albums_created=1)
-    assert s.has_drift
+@pytest.mark.parametrize(
+    ("summary", "expected"),
+    [
+        (SyncSummary(), {}),
+        (SyncSummary(unresolved=3, skipped_unchanged=True), {}),
+        (SyncSummary(albums_created=1), {"albums_created": 1}),
+    ],
+)
+def test_summary_changes(summary: SyncSummary, expected: dict[str, int]) -> None:
+    assert summary.changes() == expected
+    assert summary.has_drift == bool(expected)
 
 
 @respx.mock
@@ -275,15 +278,16 @@ async def test_on_confirm_skips_rejected_steps(
     respx.put(f"{API}/tags/t1/assets").respond(json=[])
     respx.patch(f"{API}/assets").respond(json=[])
 
-    confirmed: list[str] = []
+    confirmed: dict[str, dict[str, int]] = {}
 
-    def on_confirm(name: str, msg: str) -> bool:
-        confirmed.append(name)
+    def on_confirm(name: str, planned: SyncSummary) -> bool:
+        confirmed[name] = planned.changes()
         return name != "albums"
 
     summary = await run_sync(cfg, cfg.catalogs[0], client, state, on_confirm=on_confirm)
 
-    assert "albums" in confirmed
+    assert confirmed["albums"] == {"albums_created": 1}
+    assert all(confirmed.values())
     album_creates = [
         c
         for c in respx.calls

@@ -159,8 +159,9 @@ async def _run_with_progress(
                     )
                 resolve_progress.update(resolve_task, completed=current, total=total)
 
-            def on_confirm(step_name: str, step_msg: str) -> bool:
-                return typer.confirm(f"Apply {step_name}?", default=True)
+            def on_confirm(step_name: str, planned: SyncSummary) -> bool:
+                changes = ", ".join(f"{k} {v}" for k, v in planned.changes().items())
+                return typer.confirm(f"Apply {step_name} ({changes})?", default=True)
 
             summary = await run_multi_sync(
                 cfg,
