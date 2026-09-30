@@ -58,6 +58,8 @@ class SyncContext:
 
     async def ensure_tags(self, names: set[str]) -> dict[str, str]:
         tag_ids = await self.get_tag_ids()
-        for name in sorted(names - tag_ids.keys()):
-            tag_ids[name] = (await self.client.create_tag(name))["id"]
+        missing = sorted(names - tag_ids.keys())
+        if missing:
+            created = await self.client.upsert_tags(missing)
+            tag_ids.update(zip(missing, (t["id"] for t in created), strict=True))
         return tag_ids

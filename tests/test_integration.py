@@ -60,7 +60,6 @@ def _mock_album_crud() -> dict[str, list[str]]:
     respx.patch(url__regex=rf"{API}/albums/imm-\d+$").respond(json={"id": "imm-1"})
     respx.patch(f"{API}/assets").mock(return_value=httpx.Response(200, json=None))
     respx.get(f"{API}/tags").respond(json=[])
-    respx.post(f"{API}/tags").respond(json={"id": "t1", "value": "created"})
     return albums
 
 
@@ -183,9 +182,10 @@ async def test_creates_tags_only_for_synced_assets(
     )
     _mock_folders({"beach.jpg": "a1", "city.jpg": "a2"})
     _mock_album_crud()
-    created = respx.post(f"{API}/tags").mock(
+    created = respx.put(f"{API}/tags").mock(
         side_effect=lambda request: httpx.Response(
-            200, json={"id": json.loads(request.content)["name"]}
+            200,
+            json=[{"id": n, "value": n} for n in json.loads(request.content)["tags"]],
         )
     )
     respx.put(url__regex=rf"{API}/tags/.*/assets").respond(json=[])
@@ -193,33 +193,40 @@ async def test_creates_tags_only_for_synced_assets(
     summary = await run_sync(cfg, cfg.catalogs[0], client, state)
 
     assert not summary.errors
-    names = sorted(json.loads(c.request.content)["name"] for c in created.calls)
+    names = sorted(
+        n for c in created.calls for n in json.loads(c.request.content)["tags"]
+    )
     assert names == expected
 
 
 def _mock_tag_server() -> dict[str, set[str]]:
     assigned: dict[str, set[str]] = {}
+    ids: dict[str, str] = {}
 
-    def create(request: httpx.Request) -> httpx.Response:
-        name = json.loads(request.content)["name"]
-        assigned[name] = set()
-        return httpx.Response(201, json={"id": name, "value": name})
+    def upsert(request: httpx.Request) -> httpx.Response:
+        names = json.loads(request.content)["tags"]
+        for name in names:
+            if name not in ids.values():
+                ids[f"t{len(ids)}"] = name
+                assigned[name] = set()
+        by_name = {n: i for i, n in ids.items()}
+        return httpx.Response(200, json=[{"id": by_name[n], "value": n} for n in names])
 
     def update(request: httpx.Request) -> httpx.Response:
-        tag = request.url.path.split("/")[-2]
-        ids = set(json.loads(request.content)["ids"])
+        tag = ids[request.url.path.split("/")[-2]]
+        asset_ids = set(json.loads(request.content)["ids"])
         if request.method == "PUT":
-            assigned[tag] |= ids
+            assigned[tag] |= asset_ids
         else:
-            assigned[tag] -= ids
+            assigned[tag] -= asset_ids
         return httpx.Response(200, json=[])
 
     respx.get(f"{API}/tags").mock(
         side_effect=lambda _: httpx.Response(
-            200, json=[{"id": n, "value": n} for n in assigned]
+            200, json=[{"id": i, "value": n} for i, n in ids.items()]
         )
     )
-    respx.post(f"{API}/tags").mock(side_effect=create)
+    respx.put(f"{API}/tags").mock(side_effect=upsert)
     respx.route(url__regex=rf"{API}/tags/.+/assets").mock(side_effect=update)
     return assigned
 

@@ -138,8 +138,8 @@ class ImmichClient:
     async def get_tags(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/tags") or []
 
-    async def create_tag(self, name: str) -> dict[str, Any]:
-        return await self._request("POST", "/tags", {"name": name})
+    async def upsert_tags(self, names: list[str]) -> list[dict[str, Any]]:
+        return await self._request("PUT", "/tags", {"tags": names}) or []
 
     async def tag_assets(self, tag_id: str, asset_ids: list[str]) -> None:
         if not asset_ids:
