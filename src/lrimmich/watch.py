@@ -20,6 +20,8 @@ from lrimmich.utils.config import load_config
 
 logger = structlog.get_logger(__name__)
 
+MAX_FAILURES: int = 5
+
 
 @app.command()
 def watch(
@@ -33,15 +35,15 @@ def watch(
 ) -> None:
     cfg = load_config(config)
 
-    watched: list[str] = []
-    for catalog in cfg.catalogs:
-        if not catalog.catalog.exists():
-            typer.echo(f"Catalog not found: {catalog.catalog}", err=True)
-            raise typer.Exit(1)
-        for suffix in ("", "-wal", "-shm"):
-            watched.append(
-                str(catalog.catalog.with_name(catalog.catalog.name + suffix))
-            )
+    missing = [c.catalog for c in cfg.catalogs if not c.catalog.exists()]
+    if missing:
+        typer.echo(f"Catalog not found: {missing[0]}", err=True)
+        raise typer.Exit(1)
+    watched = [
+        str(c.catalog.with_name(c.catalog.name + suffix))
+        for c in cfg.catalogs
+        for suffix in ("", "-wal", "-shm")
+    ]
 
     def _log(msg: str) -> None:
         if not quiet:
@@ -53,7 +55,6 @@ def watch(
         typer.echo(f"Watching {names} (debounce={debounce}ms)")
 
     failures = 0
-    MAX_FAILURES = 5
 
     async def _do_sync() -> list[str]:
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:

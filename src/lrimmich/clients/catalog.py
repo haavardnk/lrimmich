@@ -46,7 +46,7 @@ class LrCollectionTreeNode(BaseConfig):
     children: list["LrCollectionTreeNode"]
 
 
-def _connect(catalog: Path) -> sqlite3.Connection:
+def connect(catalog: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(f"file:{catalog}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     return conn
@@ -71,12 +71,12 @@ def read_collections(
     catalog: Path,
     cat_cfg: CatalogConfig | None = None,
 ) -> list[LrCollection]:
-    with closing(_connect(catalog)) as conn:
+    with closing(connect(catalog)) as conn:
         return _read_collections_inner(conn, cat_cfg)
 
 
 def read_collection_tree(catalog: Path) -> list[LrCollectionTreeNode]:
-    with closing(_connect(catalog)) as conn:
+    with closing(connect(catalog)) as conn:
         rows = conn.execute(COLLECTION_TREE).fetchall()
 
     all_items: dict[int, tuple[str | None, int | None]] = {
@@ -169,7 +169,7 @@ def _read_collections_inner(
 
 
 def _query_rows(catalog: Path, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
-    with closing(_connect(catalog)) as conn:
+    with closing(connect(catalog)) as conn:
         return conn.execute(sql, params).fetchall()
 
 
@@ -204,7 +204,7 @@ def read_captions(catalog: Path) -> dict[str, str]:
 
 
 def read_keywords(catalog: Path) -> dict[str, list[str]]:
-    with closing(_connect(catalog)) as conn:
+    with closing(connect(catalog)) as conn:
         return _read_keywords_inner(conn)
 
 
@@ -232,7 +232,7 @@ class LrStack:
 
 
 def read_stacks(catalog: Path) -> list[LrStack]:
-    with closing(_connect(catalog)) as conn:
+    with closing(connect(catalog)) as conn:
         rows = conn.execute(STACKS).fetchall()
 
     groups: dict[int, list[str]] = {}
@@ -247,7 +247,7 @@ def read_stacks(catalog: Path) -> list[LrStack]:
 
 
 def read_catalog_fingerprint(catalog: Path) -> str:
-    with closing(_connect(catalog)) as conn:
+    with closing(connect(catalog)) as conn:
         images = conn.execute(FINGERPRINT_COUNTS).fetchone()
         members = conn.execute(COLLECTION_MEMBERSHIP_DIGEST).fetchone()
         keywords = conn.execute(KEYWORD_MEMBERSHIP_DIGEST).fetchone()
