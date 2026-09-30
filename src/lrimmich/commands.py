@@ -10,6 +10,9 @@ from typing import Annotated
 import httpx
 import tomli_w
 import typer
+from rich.console import Console
+from rich.text import Text
+from rich.tree import Tree
 
 import lrimmich.utils as lrimmich_utils
 from lrimmich.app import (
@@ -222,25 +225,26 @@ def collections(
 ) -> None:
     cfg = load_config(config)
 
-    all_nodes: list[dict] = []
-    for catalog in cfg.catalogs:
-        tree = read_collection_tree(catalog.catalog)
-        if json_output:
-            all_nodes.extend(n.model_dump() for n in tree)
-        else:
-            if len(cfg.catalogs) > 1:
-                typer.echo(f"\n{catalog.catalog.name}:")
-
-            def _print_tree(nodes: list[LrCollectionTreeNode], indent: int = 0) -> None:
-                for node in nodes:
-                    pfx = "  " * indent
-                    label = "set" if node.kind == "set" else "col"
-                    typer.echo(f"{pfx}[{label}] {node.name}  (id={node.id})")
-                    _print_tree(node.children, indent + 1)
-
-            _print_tree(tree)
     if json_output:
-        typer.echo(json.dumps(all_nodes, indent=2))
+        nodes = [
+            n.model_dump()
+            for catalog in cfg.catalogs
+            for n in read_collection_tree(catalog.catalog)
+        ]
+        typer.echo(json.dumps(nodes, indent=2))
+        return
+    console = Console()
+    for catalog in cfg.catalogs:
+        tree = Tree(Text(catalog.catalog.name))
+        _add_tree_nodes(tree, read_collection_tree(catalog.catalog))
+        console.print(tree)
+
+
+def _add_tree_nodes(parent: Tree, nodes: list[LrCollectionTreeNode]) -> None:
+    for node in nodes:
+        label = "set" if node.kind == "set" else "col"
+        branch = parent.add(Text(f"[{label}] {node.name}  (id={node.id})"))
+        _add_tree_nodes(branch, node.children)
 
 
 @albums_app.command("purge")
