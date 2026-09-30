@@ -124,8 +124,7 @@ def doctor(
     async def _run() -> DoctorReport:
         cfg = load_config(config)
         async with ImmichClient(cfg.immich.url, cfg.immich.api_key) as client:
-            config_path = config or DEFAULT_CONFIG_PATH
-            return await run_doctor(cfg, client, config_path=config_path)
+            return await run_doctor(cfg, client)
 
     report = asyncio.run(_run())
     for check in report.checks:

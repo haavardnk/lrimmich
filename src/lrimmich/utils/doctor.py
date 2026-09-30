@@ -1,12 +1,9 @@
 import sqlite3
-import tomllib
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, get_args, get_origin
 
 import httpx
-from pydantic import BaseModel
 
 from lrimmich.clients.catalog import connect
 from lrimmich.clients.immich import ImmichClient
@@ -140,51 +137,8 @@ def check_state_db(state: StateDB) -> CheckResult:
         return CheckResult("state_db", False, str(e))
 
 
-def _find_unknown_keys(raw: dict[str, Any]) -> list[str]:
-    unknown: list[str] = []
-    for key in raw:
-        if key not in Config.model_fields:
-            unknown.append(key)
-            continue
-        ann = Config.model_fields[key].annotation
-        if isinstance(ann, type) and issubclass(ann, BaseModel):
-            if isinstance(raw[key], dict):
-                for sub_key in raw[key]:
-                    if sub_key not in ann.model_fields:
-                        unknown.append(f"{key}.{sub_key}")
-        elif get_origin(ann) is list and isinstance(raw[key], list):
-            args = get_args(ann)
-            if args and isinstance(args[0], type) and issubclass(args[0], BaseModel):
-                item_model = args[0]
-                for index, item in enumerate(raw[key]):
-                    if not isinstance(item, dict):
-                        continue
-                    for sub_key in item:
-                        if sub_key not in item_model.model_fields:
-                            unknown.append(f"{key}[{index}].{sub_key}")
-    return unknown
-
-
-def check_config_keys(config_path: Path) -> CheckResult:
-    try:
-        with open(config_path, "rb") as f:
-            raw = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError) as e:
-        return CheckResult("config", False, f"Failed to read: {e}")
-    unknown = _find_unknown_keys(raw)
-    if unknown:
-        return CheckResult("config", False, f"Unknown keys: {', '.join(unknown)}")
-    return CheckResult("config", True, "Valid")
-
-
-async def run_doctor(
-    cfg: Config,
-    client: ImmichClient,
-    config_path: Path | None = None,
-) -> DoctorReport:
+async def run_doctor(cfg: Config, client: ImmichClient) -> DoctorReport:
     report = DoctorReport()
-    if config_path:
-        report.checks.append(check_config_keys(config_path))
     report.checks.extend(await check_immich(client))
     report.checks.append(await check_api_permissions(client))
     for catalog in cfg.catalogs:
