@@ -1,6 +1,7 @@
 title: lrimmich
 description: Sync Lightroom Classic to Immich
 remote_theme: just-the-docs/just-the-docs
+color_scheme: dark
 
 url: https://haavardnk.github.io/lrimmich
 
