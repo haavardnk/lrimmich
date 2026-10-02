@@ -8,6 +8,67 @@ nav_order: 4
 
 The config file is TOML. Run `lrimmich config init` to generate one, or `lrimmich config show` to see the resolved values (secrets redacted). Unknown keys are rejected, so a misspelled option stops every command with an error naming the key.
 
+## Full example
+
+Every setting at its default value. Only `[[catalogs]]` and `[immich]` are required; omitted keys take the defaults shown here. Commented lines are optional settings with no default; the `[[album_rules]]` block shows one example rule.
+
+```toml
+[[catalogs]]
+catalog = "~/Pictures/Lightroom/Lightroom.lrcat"
+# strip = "raw/"
+exclude_collections = []
+exclude_patterns = []
+
+[immich]
+url = "http://localhost:2283"
+api_key = "your-api-key-here"
+library_paths = ["/external/images/"]
+
+[sync]
+albums = true
+favorites = true
+ratings = true
+tags = true
+captions = true
+rejects = false
+stacks = false
+scope = "collections"
+skip_empty = true
+album_mode = "managed"
+album_filter = "all"
+album_min_rating = 0
+album_name_format = "{path}"
+keyword_prefix = "lr:keyword:"
+color_prefix = "lr:color:"
+reject_mode = "archive"
+reject_tag = "lr:reject"
+share_albums_with = []
+
+[sync.color_tags]
+# red = "portfolio"
+
+[cache]
+ttl_days = 90
+spot_check_pct = 5
+miss_ttl_minutes = 60
+
+# [[album_rules]]
+# match = "Travel/*"
+# filter = "flagged"
+# min_rating = 3
+# description = "Travel photos from trips"
+# order = "desc"
+# share_with = ["user-uuid-here"]
+
+[safety]
+delete_threshold = 100
+remove_percent_limit = 50
+disable_deletes = false
+
+[notification]
+# url = "https://ntfy.sh/your-topic"
+```
+
 ## `[[catalogs]]`
 
 Each `[[catalogs]]` entry defines a Lightroom catalog to sync. Add multiple entries to sync multiple catalogs into the same Immich server.
@@ -73,8 +134,8 @@ exclude_patterns = ["Exports/*"]
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `keyword_prefix` | string \| null | `"lr:keyword:"` | Prefix for synced keyword tags. Set to `null` to sync without a prefix. |
-| `color_prefix` | string \| null | `"lr:color:"` | Prefix for synced color label tags. Set to `null` to sync without a prefix. |
+| `keyword_prefix` | string | `"lr:keyword:"` | Prefix for synced keyword tags. Set to `""` to sync without a prefix. |
+| `color_prefix` | string | `"lr:color:"` | Prefix for synced color label tags. Set to `""` to sync without a prefix. |
 | `color_tags` | table | `{}` | Tag name to use per Lightroom color label, replacing the default lowercase color name. Keys match label names case-insensitively. The prefix is still added. |
 | `reject_mode` | `"archive"` \| `"tag"` | `"archive"` | Archive rejects, or tag them with `reject_tag`. |
 | `reject_tag` | string | `"lr:reject"` | Tag for rejects when `reject_mode = "tag"`. |
